@@ -17,6 +17,7 @@ class Usuario extends Authenticatable
 
     protected $fillable = [
         'id_rol',
+        'id_empresa',        // <--- AGREGAR ESTE CAMPO
         'nombre',
         'correo',
         'contrasena',
@@ -34,5 +35,11 @@ class Usuario extends Authenticatable
     public function rol()
     {
         return $this->belongsTo(Rol::class, 'id_rol');
+    }
+
+    // <--- AGREGAR ESTA RELACIÓN
+    public function empresa()
+    {
+        return $this->belongsTo(Empresa::class, 'id_empresa');
     }
 }

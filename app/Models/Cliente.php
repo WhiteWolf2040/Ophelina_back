@@ -13,16 +13,36 @@ class Cliente extends Model
     public $timestamps = false;
 
     protected $fillable = [
+       'id_usuario',        
+        'id_empresa',        
         'nombre',
         'apellido',
         'telefono',
         'correo',
         'direccion',
-        'fecha_registro'
+        'codigo_postal',
+        'ciudad',
+        'estado',
+        'fecha_registro',
+        'activo',
+        'tipo_identificacion',
+        'numero_identificacion',
+        'foto_perfil',
+        'foto_ine'
     ];
-
+  public function usuario()
+    {
+        return $this->belongsTo(Usuario::class, 'id_usuario');
+    }
+    
     public function empenos()
     {
-        return $this->hasMany(Empeno::class,'id_cliente');
+        return $this->hasMany(Empeno::class, 'id_cliente');
+    }
+
+    // <--- AGREGAR ESTA RELACIÓN
+    public function empresa()
+    {
+        return $this->belongsTo(Empresa::class, 'id_empresa');
     }
 }
