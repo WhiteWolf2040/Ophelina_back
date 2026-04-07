@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Log;
 class RolController extends Controller
 {
     /**
-     * Obtener todos los roles
+     * Obtener todos los roles (SOLO DE LA EMPRESA DEL USUARIO)
      * GET /api/roles
      */
     public function index(Request $request)
@@ -21,7 +21,9 @@ class RolController extends Controller
         try {
             $user = $request->user();
             
-            $roles = Rol::with(['usuarios', 'permisos'])
+            // Filtrar roles por la empresa del usuario
+            $roles = Rol::where('id_empresa', $user->id_empresa)
+                ->with(['usuarios', 'permisos'])
                 ->orderBy('nivel', 'asc')
                 ->get()
                 ->map(function ($rol) {
@@ -52,13 +54,17 @@ class RolController extends Controller
     }
 
     /**
-     * Obtener un rol específico
+     * Obtener un rol específico (VERIFICANDO EMPRESA)
      * GET /api/roles/{id}
      */
-    public function show($id)
+    public function show(Request $request, $id)
     {
         try {
-            $rol = Rol::with(['usuarios', 'permisos'])->findOrFail($id);
+            $user = $request->user();
+            
+            $rol = Rol::where('id_empresa', $user->id_empresa)
+                ->with(['usuarios', 'permisos'])
+                ->findOrFail($id);
             
             return response()->json([
                 'success' => true,
@@ -89,32 +95,53 @@ class RolController extends Controller
     }
 
     /**
-     * Crear un nuevo rol
+     * Crear un nuevo rol (ASIGNANDO LA EMPRESA DEL USUARIO)
      * POST /api/roles
      */
     public function store(Request $request)
     {
         try {
+            $user = $request->user();
+            
             $request->validate([
-                'nombre' => 'required|string|max:50|unique:rol,nombre',
+                'nombre' => 'required|string|max:50',
                 'nivel' => 'required|integer|min:1|max:10',
                 'descripcion' => 'nullable|string',
                 'permisos' => 'nullable|array'
             ]);
             
+            // Verificar que el nombre del rol no exista en la misma empresa
+            $existe = Rol::where('id_empresa', $user->id_empresa)
+                ->where('nombre', $request->nombre)
+                ->exists();
+                
+            if ($existe) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ya existe un rol con este nombre en tu empresa'
+                ], 400);
+            }
+            
             DB::beginTransaction();
             
-            // Crear el rol
+            // Crear el rol con la empresa del usuario
             $rol = Rol::create([
+                'id_empresa' => $user->id_empresa,
                 'nombre' => $request->nombre,
                 'nivel' => $request->nivel,
                 'descripcion' => $request->descripcion ?? ''
             ]);
             
-            // Asignar permisos si existen
+            // Asignar permisos si existen (filtrando por permisos de la misma empresa)
             if ($request->has('permisos') && is_array($request->permisos)) {
+                // Verificar que los permisos pertenezcan a la empresa
+                $permisosValidos = Permiso::where('id_empresa', $user->id_empresa)
+                    ->whereIn('id_permiso', $request->permisos)
+                    ->pluck('id_permiso')
+                    ->toArray();
+                
                 $permisosData = [];
-                foreach ($request->permisos as $permisoId) {
+                foreach ($permisosValidos as $permisoId) {
                     $permisosData[$permisoId] = ['permitido' => 1];
                 }
                 $rol->permisos()->attach($permisosData);
@@ -138,20 +165,36 @@ class RolController extends Controller
     }
 
     /**
-     * Actualizar un rol
+     * Actualizar un rol (VERIFICANDO EMPRESA)
      * PUT /api/roles/{id}
      */
     public function update(Request $request, $id)
     {
         try {
-            $rol = Rol::findOrFail($id);
+            $user = $request->user();
+            
+            $rol = Rol::where('id_empresa', $user->id_empresa)
+                ->findOrFail($id);
             
             $request->validate([
-                'nombre' => 'required|string|max:50|unique:rol,nombre,' . $id . ',id_rol',
+                'nombre' => 'required|string|max:50',
                 'nivel' => 'required|integer|min:1|max:10',
                 'descripcion' => 'nullable|string',
                 'permisos' => 'nullable|array'
             ]);
+            
+            // Verificar que el nombre no esté siendo usado por otro rol en la misma empresa
+            $existe = Rol::where('id_empresa', $user->id_empresa)
+                ->where('nombre', $request->nombre)
+                ->where('id_rol', '!=', $id)
+                ->exists();
+                
+            if ($existe) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ya existe otro rol con este nombre en tu empresa'
+                ], 400);
+            }
             
             DB::beginTransaction();
             
@@ -162,10 +205,16 @@ class RolController extends Controller
                 'descripcion' => $request->descripcion ?? ''
             ]);
             
-            // Actualizar permisos
+            // Actualizar permisos (solo los de la misma empresa)
             if ($request->has('permisos')) {
+                // Verificar que los permisos pertenezcan a la empresa
+                $permisosValidos = Permiso::where('id_empresa', $user->id_empresa)
+                    ->whereIn('id_permiso', $request->permisos)
+                    ->pluck('id_permiso')
+                    ->toArray();
+                
                 $permisosData = [];
-                foreach ($request->permisos as $permisoId) {
+                foreach ($permisosValidos as $permisoId) {
                     $permisosData[$permisoId] = ['permitido' => 1];
                 }
                 $rol->permisos()->sync($permisosData);
@@ -189,13 +238,16 @@ class RolController extends Controller
     }
 
     /**
-     * Eliminar un rol
+     * Eliminar un rol (VERIFICANDO EMPRESA)
      * DELETE /api/roles/{id}
      */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         try {
-            $rol = Rol::findOrFail($id);
+            $user = $request->user();
+            
+            $rol = Rol::where('id_empresa', $user->id_empresa)
+                ->findOrFail($id);
             
             // Verificar si tiene usuarios asignados
             if ($rol->usuarios()->count() > 0) {

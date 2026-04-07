@@ -23,8 +23,8 @@ class AuthController extends Controller
             'contrasena' => 'required'
         ]);
 
-        // Cargar relación con rol y empresa
-        $usuario = Usuario::with(['rol', 'empresa'])
+        // Cargar relación con rol, empresa y permisos del rol
+        $usuario = Usuario::with(['rol', 'rol.permisos', 'empresa'])
             ->where('correo', $request->correo)
             ->where('activo', 1)
             ->first();
@@ -45,6 +45,12 @@ class AuthController extends Controller
         }
 
         $token = $usuario->createToken("auth_token")->plainTextToken;
+        
+        // Obtener permisos del rol
+        $permisos = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
+        
+        // Obtener módulos a los que tiene acceso (módulos únicos)
+        $modulos = $usuario->rol ? $usuario->rol->permisos->pluck('modulo')->unique()->toArray() : [];
 
         return response()->json([
             "success" => true,
@@ -55,7 +61,10 @@ class AuthController extends Controller
                     "nombre" => $usuario->nombre,
                     "correo" => $usuario->correo,
                     "rol" => $usuario->rol->nombre ?? null,
+                    "rol_id" => $usuario->id_rol,
                     "id_empresa" => $usuario->id_empresa,
+                    "permisos" => $permisos,
+                    "modulos" => $modulos,
                     "empresa" => [
                         "id" => $usuario->empresa->id_empresa,
                         "nombre" => $usuario->empresa->nombre,
@@ -75,7 +84,13 @@ class AuthController extends Controller
 
     public function user(Request $request)
     {
-        $usuario = $request->user()->load(['rol', 'empresa']);
+        $usuario = $request->user()->load(['rol', 'rol.permisos', 'empresa']);
+        
+        // Obtener permisos del rol
+        $permisos = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
+        
+        // Obtener módulos a los que tiene acceso
+        $modulos = $usuario->rol ? $usuario->rol->permisos->pluck('modulo')->unique()->toArray() : [];
 
         return response()->json([
             "success" => true,
@@ -86,7 +101,10 @@ class AuthController extends Controller
                     "correo" => $usuario->correo,
                     "telefono" => $usuario->telefono,
                     "rol" => $usuario->rol->nombre ?? null,
+                    "rol_id" => $usuario->id_rol,
                     "id_empresa" => $usuario->id_empresa,
+                    "permisos" => $permisos,
+                    "modulos" => $modulos,
                     "empresa" => $usuario->empresa ? [
                         "id" => $usuario->empresa->id_empresa,
                         "nombre" => $usuario->empresa->nombre,

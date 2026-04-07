@@ -4,7 +4,7 @@ require 'vendor/autoload.php';
 
 $faker = Faker\Factory::create('es_MX');
 
-$pdo = new PDO("mysql:host=localhost;dbname=ophelina_v4", "root", "diego2040");
+$pdo = new PDO("mysql:host=localhost;dbname=ophelina_v5", "root", "diego2040");
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 echo "Seeding database...\n\n";
@@ -87,122 +87,211 @@ foreach ($empresas as $empresa) {
 echo "Empresas creadas: " . count($empresaIds) . "\n";
 
 /* =====================
-   ROLES
+   ROLES (CON id_empresa)
 =====================*/
 
-$roles = ["Administrador", "Gerente", "Cajero", "Cliente"];
-$rolIds = [];
-foreach ($roles as $i => $rol) {
-    $stmt = $pdo->prepare("INSERT INTO rol(nombre, descripcion, nivel) VALUES (?,?,?)");
-    $stmt->execute([$rol, substr($faker->sentence(3), 0, 255), $i + 1]);
-    $rolIds[] = $pdo->lastInsertId();
+$rolesBase = ["Administrador", "Gerente", "Cajero", "Cliente"];
+$rolIds = []; // Almacenar ids de roles por empresa
+
+foreach ($empresaIds as $empresaId) {
+    foreach ($rolesBase as $nivel => $nombre) {
+        $stmt = $pdo->prepare("INSERT INTO rol(id_empresa, nombre, descripcion, nivel) VALUES (?,?,?,?)");
+        $descripcion = match($nombre) {
+            'Administrador' => 'Acceso total al sistema',
+            'Gerente' => 'Gestión de clientes y empeños',
+            'Cajero' => 'Solo ventas y pagos',
+            'Cliente' => 'Portal de clientes',
+            default => 'Rol del sistema'
+        };
+        $stmt->execute([
+            $empresaId,
+            $nombre,
+            substr($descripcion . " - " . $faker->sentence(2), 0, 255),
+            $nivel + 1
+        ]);
+        
+        if (!isset($rolIds[$empresaId])) {
+            $rolIds[$empresaId] = [];
+        }
+        $rolIds[$empresaId][$nombre] = $pdo->lastInsertId();
+    }
 }
-echo "Roles creados: 4\n";
+echo "Roles creados por empresa: " . (count($empresaIds) * count($rolesBase)) . "\n";
 
 /* =====================
-   PERMISOS
+   PERMISOS (CON id_empresa)
 =====================*/
 
-$permisos = [
-    "ver_clientes", "crear_clientes", "editar_clientes", "eliminar_clientes",
+$permisosBase = [
+    "ver_dashboard", "ver_clientes", "crear_clientes", "editar_clientes", "eliminar_clientes",
     "ver_empenos", "crear_empenos", "editar_empenos", "cancelar_empenos",
     "ver_pagos", "registrar_pagos",
     "ver_tienda", "crear_productos", "editar_productos",
     "ver_caja", "registrar_movimientos",
-    "ver_reportes", "ver_dashboard"
+    "ver_reportes"
 ];
 
-foreach ($permisos as $perm) {
-    $stmt = $pdo->prepare("INSERT INTO permisos(nombre, descripcion, modulo) VALUES (?,?,?)");
-    $stmt->execute([$perm, substr($faker->sentence(3), 0, 255), "general"]);
+$permisoIds = []; // Almacenar ids de permisos por empresa
+
+foreach ($empresaIds as $empresaId) {
+    foreach ($permisosBase as $permiso) {
+        $modulo = match(true) {
+            str_contains($permiso, 'clientes') => 'clientes',
+            str_contains($permiso, 'empenos') => 'empenos',
+            str_contains($permiso, 'pagos') => 'pagos',
+            str_contains($permiso, 'tienda') || str_contains($permiso, 'productos') => 'tienda',
+            str_contains($permiso, 'caja') => 'caja',
+            str_contains($permiso, 'reportes') => 'reportes',
+            str_contains($permiso, 'dashboard') => 'dashboard',
+            default => 'general'
+        };
+        
+        $stmt = $pdo->prepare("INSERT INTO permisos(id_empresa, nombre, descripcion, modulo, estado) VALUES (?,?,?,?,?)");
+        $descripcion = "Permiso para " . str_replace('_', ' ', $permiso);
+        $stmt->execute([
+            $empresaId,
+            $permiso,
+            substr($descripcion, 0, 255),
+            $modulo,
+            'activo'
+        ]);
+        
+        if (!isset($permisoIds[$empresaId])) {
+            $permisoIds[$empresaId] = [];
+        }
+        $permisoIds[$empresaId][$permiso] = $pdo->lastInsertId();
+    }
 }
-echo "Permisos creados: " . count($permisos) . "\n";
+echo "Permisos creados por empresa: " . (count($empresaIds) * count($permisosBase)) . "\n";
+
+/* =====================
+   ROL_PERMISO (ASIGNAR PERMISOS A ROLES)
+=====================*/
+
+foreach ($empresaIds as $empresaId) {
+    // Administrador tiene todos los permisos
+    $adminRolId = $rolIds[$empresaId]['Administrador'];
+    foreach ($permisoIds[$empresaId] as $permisoId) {
+        $stmt = $pdo->prepare("INSERT INTO rol_permiso(id_empresa, id_rol, id_permiso, permitido) VALUES (?,?,?,1)");
+        $stmt->execute([$empresaId, $adminRolId, $permisoId]);
+    }
+    
+    // Gerente tiene permisos de clientes, empeños, pagos, tienda, reportes
+    $gerenteRolId = $rolIds[$empresaId]['Gerente'];
+    $permisosGerente = ['ver_clientes', 'crear_clientes', 'editar_clientes', 'ver_empenos', 'crear_empenos', 
+                        'ver_pagos', 'registrar_pagos', 'ver_tienda', 'ver_reportes'];
+    foreach ($permisosGerente as $permiso) {
+        if (isset($permisoIds[$empresaId][$permiso])) {
+            $stmt = $pdo->prepare("INSERT INTO rol_permiso(id_empresa, id_rol, id_permiso, permitido) VALUES (?,?,?,1)");
+            $stmt->execute([$empresaId, $gerenteRolId, $permisoIds[$empresaId][$permiso]]);
+        }
+    }
+    
+    // Cajero tiene permisos de pagos y caja
+    $cajeroRolId = $rolIds[$empresaId]['Cajero'];
+    $permisosCajero = ['ver_pagos', 'registrar_pagos', 'ver_caja', 'registrar_movimientos'];
+    foreach ($permisosCajero as $permiso) {
+        if (isset($permisoIds[$empresaId][$permiso])) {
+            $stmt = $pdo->prepare("INSERT INTO rol_permiso(id_empresa, id_rol, id_permiso, permitido) VALUES (?,?,?,1)");
+            $stmt->execute([$empresaId, $cajeroRolId, $permisoIds[$empresaId][$permiso]]);
+        }
+    }
+    
+    // Cliente tiene permisos de visualización básicos
+    $clienteRolId = $rolIds[$empresaId]['Cliente'];
+    $permisosCliente = ['ver_dashboard', 'ver_clientes', 'ver_empenos', 'ver_pagos', 'ver_tienda'];
+    foreach ($permisosCliente as $permiso) {
+        if (isset($permisoIds[$empresaId][$permiso])) {
+            $stmt = $pdo->prepare("INSERT INTO rol_permiso(id_empresa, id_rol, id_permiso, permitido) VALUES (?,?,?,1)");
+            $stmt->execute([$empresaId, $clienteRolId, $permisoIds[$empresaId][$permiso]]);
+        }
+    }
+}
+echo "Permisos asignados a roles\n";
 
 /* =====================
    USUARIOS
 =====================*/
 
-// Crear usuarios administradores
-$admins = [];
-foreach ($empresaIds as $index => $empresaId) {
-    $nombreEmpresa = $empresas[$index]['nombre_comercial'];
-    $email = strtolower(str_replace(' ', '', $nombreEmpresa)) . '@admin.com';
-    
-    $stmt = $pdo->prepare("INSERT INTO usuario (id_rol, id_empresa, nombre, correo, contrasena, telefono, activo, fecha_registro) VALUES (?,?,?,?,?,?,?,NOW())");
-    $stmt->execute([
-        $rolIds[0], 
-        $empresaId, 
-        substr("Admin $nombreEmpresa", 0, 100), 
-        substr($email, 0, 100), 
-        password_hash("123456", PASSWORD_BCRYPT), 
-        substr($faker->phoneNumber(), 0, 20), 
-        1
-    ]);
-    $admins[] = $pdo->lastInsertId();
-}
-
-// Crear usuarios gerentes
-$gerentes = [];
-for ($i = 0; $i < count($empresaIds) * 2; $i++) {
-    $empresaId = $empresaIds[$i % count($empresaIds)];
-    $stmt = $pdo->prepare("INSERT INTO usuario (id_rol, id_empresa, nombre, correo, contrasena, telefono, activo, fecha_registro) VALUES (?,?,?,?,?,?,?,NOW())");
-    $stmt->execute([
-        $rolIds[1],
-        $empresaId,
-        substr($faker->name(), 0, 100),
-        substr($faker->unique()->safeEmail(), 0, 100),
-        password_hash("123456", PASSWORD_BCRYPT),
-        substr($faker->phoneNumber(), 0, 20),
-        1
-    ]);
-    $gerentes[] = $pdo->lastInsertId();
-}
-
-// Crear usuarios cajeros
-$cajeros = [];
-for ($i = 0; $i < count($empresaIds) * 3; $i++) {
-    $empresaId = $empresaIds[$i % count($empresaIds)];
-    $stmt = $pdo->prepare("INSERT INTO usuario (id_rol, id_empresa, nombre, correo, contrasena, telefono, activo, fecha_registro) VALUES (?,?,?,?,?,?,?,NOW())");
-    $stmt->execute([
-        $rolIds[2],
-        $empresaId,
-        substr($faker->name(), 0, 100),
-        substr($faker->unique()->safeEmail(), 0, 100),
-        password_hash("123456", PASSWORD_BCRYPT),
-        substr($faker->phoneNumber(), 0, 20),
-        1
-    ]);
-    $cajeros[] = $pdo->lastInsertId();
-}
-
-// Crear usuarios clientes
+$todosUsuarios = [];
 $clientesUsuarios = [];
-for ($i = 0; $i < 100; $i++) {
-    $empresaId = $empresaIds[array_rand($empresaIds)];
-    $email = $faker->unique()->safeEmail();
-    $nombre = $faker->firstName();
-    $apellido = $faker->lastName();
-    
+
+foreach ($empresaIds as $empresaId) {
+    // Administrador de la empresa
+    $adminRolId = $rolIds[$empresaId]['Administrador'];
     $stmt = $pdo->prepare("INSERT INTO usuario (id_rol, id_empresa, nombre, correo, contrasena, telefono, activo, fecha_registro) VALUES (?,?,?,?,?,?,?,NOW())");
+    $email = strtolower(str_replace(' ', '', $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'])) . '@admin.com';
     $stmt->execute([
-        $rolIds[3],
+        $adminRolId,
         $empresaId,
-        substr("$nombre $apellido", 0, 100),
+        substr("Admin " . $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'], 0, 100),
         substr($email, 0, 100),
         password_hash("123456", PASSWORD_BCRYPT),
         substr($faker->phoneNumber(), 0, 20),
         1
     ]);
-    $clientesUsuarios[] = [
-        'id_usuario' => $pdo->lastInsertId(),
-        'nombre' => $nombre,
-        'apellido' => $apellido,
-        'email' => $email,
-        'id_empresa' => $empresaId
-    ];
+    $todosUsuarios[] = $pdo->lastInsertId();
+    
+    // Gerentes (2 por empresa)
+    $gerenteRolId = $rolIds[$empresaId]['Gerente'];
+    for ($i = 0; $i < 2; $i++) {
+        $stmt = $pdo->prepare("INSERT INTO usuario (id_rol, id_empresa, nombre, correo, contrasena, telefono, activo, fecha_registro) VALUES (?,?,?,?,?,?,?,NOW())");
+        $stmt->execute([
+            $gerenteRolId,
+            $empresaId,
+            substr($faker->name(), 0, 100),
+            substr($faker->unique()->safeEmail(), 0, 100),
+            password_hash("123456", PASSWORD_BCRYPT),
+            substr($faker->phoneNumber(), 0, 20),
+            1
+        ]);
+        $todosUsuarios[] = $pdo->lastInsertId();
+    }
+    
+    // Cajeros (3 por empresa)
+    $cajeroRolId = $rolIds[$empresaId]['Cajero'];
+    for ($i = 0; $i < 3; $i++) {
+        $stmt = $pdo->prepare("INSERT INTO usuario (id_rol, id_empresa, nombre, correo, contrasena, telefono, activo, fecha_registro) VALUES (?,?,?,?,?,?,?,NOW())");
+        $stmt->execute([
+            $cajeroRolId,
+            $empresaId,
+            substr($faker->name(), 0, 100),
+            substr($faker->unique()->safeEmail(), 0, 100),
+            password_hash("123456", PASSWORD_BCRYPT),
+            substr($faker->phoneNumber(), 0, 20),
+            1
+        ]);
+        $todosUsuarios[] = $pdo->lastInsertId();
+    }
+    
+    // Clientes (15 por empresa)
+    $clienteRolId = $rolIds[$empresaId]['Cliente'];
+    for ($i = 0; $i < 15; $i++) {
+        $nombre = $faker->firstName();
+        $apellido = $faker->lastName();
+        $email = $faker->unique()->safeEmail();
+        
+        $stmt = $pdo->prepare("INSERT INTO usuario (id_rol, id_empresa, nombre, correo, contrasena, telefono, activo, fecha_registro) VALUES (?,?,?,?,?,?,?,NOW())");
+        $stmt->execute([
+            $clienteRolId,
+            $empresaId,
+            substr("$nombre $apellido", 0, 100),
+            substr($email, 0, 100),
+            password_hash("123456", PASSWORD_BCRYPT),
+            substr($faker->phoneNumber(), 0, 20),
+            1
+        ]);
+        $idUsuario = $pdo->lastInsertId();
+        $todosUsuarios[] = $idUsuario;
+        $clientesUsuarios[] = [
+            'id_usuario' => $idUsuario,
+            'nombre' => $nombre,
+            'apellido' => $apellido,
+            'email' => $email,
+            'id_empresa' => $empresaId
+        ];
+    }
 }
-
-$todosUsuarios = array_merge($admins, $gerentes, $cajeros, array_column($clientesUsuarios, 'id_usuario'));
 echo "Usuarios creados: " . count($todosUsuarios) . "\n";
 
 /* =====================
@@ -235,11 +324,11 @@ foreach ($clientesUsuarios as $clienteUsuario) {
 echo "Clientes creados: " . count($clientes) . "\n";
 
 /* =====================
-   AVALES
+   AVALES (CON id_empresa)
 =====================*/
 
 $avales = [];
-for ($i = 0; $i < 30; $i++) {
+for ($i = 0; $i < 60; $i++) {
     $idEmpresa = $empresaIds[array_rand($empresaIds)];
     
     $stmt = $pdo->prepare("INSERT INTO aval (id_empresa, nombre, apellido, telefono, direccion, email) VALUES (?,?,?,?,?,?)");
@@ -259,7 +348,7 @@ for ($i = 0; $i < 30; $i++) {
 echo "Avales creados: " . count($avales) . "\n";
 
 /* =====================
-   PRENDAS
+   PRENDAS (CON id_empresa)
 =====================*/
 
 $tipos = ["Joyería", "Electrónica", "Relojes", "Herramientas", "Instrumentos", "Otros"];
@@ -267,7 +356,7 @@ $materiales = ["oro", "plata", "acero", "platino", "madera", "plástico"];
 $estadosPrenda = ["Disponible", "En Empeño", "Vendido", "Vencido", "Apartado"];
 
 $prendas = [];
-for ($i = 0; $i < 150; $i++) {
+for ($i = 0; $i < 200; $i++) {
     $idEmpresa = $empresaIds[array_rand($empresaIds)];
     $tipo = $tipos[array_rand($tipos)];
     $material = $materiales[array_rand($materiales)];
@@ -317,14 +406,14 @@ foreach ($tasasInteres as $tasa) {
 echo "Tasas de interés creadas: " . count($tasas) . "\n";
 
 /* =====================
-   EMPEÑOS, AMORTIZACIONES Y PAGOS - CORREGIDO
+   EMPEÑOS, AMORTIZACIONES Y PAGOS
 =====================*/
 
 $empenos = [];
 $amortizacionesTotales = 0;
 $pagosRegistrados = 0;
 
-for ($i = 0; $i < 100; $i++) {  // Aumentado a 100 empeños
+for ($i = 0; $i < 150; $i++) {
     $cliente = $clientes[array_rand($clientes)];
     $prenda = $prendas[array_rand($prendas)];
     $aval = $avales[array_rand($avales)];
@@ -342,23 +431,21 @@ for ($i = 0; $i < 100; $i++) {  // Aumentado a 100 empeños
     $ivaInteres = $interesMonto * 0.16;
     $montoTotal = $montoPrestado + $interesMonto + $ivaInteres;
     
-    // Distribución de estados: 40% activos, 30% pagados, 30% vencidos
     $randomEstado = rand(1, 10);
-    if ($randomEstado <= 4) { // 40% activos
+    if ($randomEstado <= 4) {
         $fechaEmpeno = $faker->dateTimeBetween('-30 days', 'now')->format('Y-m-d');
         $fechaVencimiento = (new DateTime($fechaEmpeno))->modify("+$plazoDias days")->format('Y-m-d');
         $estado = 'activo';
-    } elseif ($randomEstado <= 7) { // 30% pagados
+    } elseif ($randomEstado <= 7) {
         $fechaEmpeno = $faker->dateTimeBetween('-90 days', '-30 days')->format('Y-m-d');
         $fechaVencimiento = (new DateTime($fechaEmpeno))->modify("+$plazoDias days")->format('Y-m-d');
         $estado = 'pagado';
-    } else { // 30% vencidos
+    } else {
         $fechaEmpeno = $faker->dateTimeBetween('-60 days', '-15 days')->format('Y-m-d');
         $fechaVencimiento = (new DateTime($fechaEmpeno))->modify("+$plazoDias days")->format('Y-m-d');
         $estado = 'vencido';
     }
     
-    // Insertar empeño
     $stmt = $pdo->prepare("INSERT INTO empeno (id_empresa, id_cliente, id_prenda, id_aval, id_tasa, fecha_empeno, monto_prestado, intereses, iva_porcentaje, fecha_vencimiento, estado, folio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
     $stmt->execute([
         $cliente['id_empresa'],
@@ -377,7 +464,6 @@ for ($i = 0; $i < 100; $i++) {  // Aumentado a 100 empeños
     
     $idEmpeno = $pdo->lastInsertId();
     
-    // Crear amortización (SIEMPRE se crea una amortización por empeño)
     $fechaPagoProgramado = (new DateTime($fechaEmpeno))->modify("+$plazoDias days")->format('Y-m-d');
     
     $stmt = $pdo->prepare("INSERT INTO amortizacion (id_empeno, saldo_inicial, saldo_final, numero_pago, fecha_pago_programado, capital, interes, iva_interes, monto_total, monto_pagado, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
@@ -397,9 +483,7 @@ for ($i = 0; $i < 100; $i++) {  // Aumentado a 100 empeños
     $idAmortizacion = $pdo->lastInsertId();
     $amortizacionesTotales++;
     
-    // Crear pagos según el estado del empeño
     if ($estado == 'pagado') {
-        // Pago completo
         $fechaPago = $faker->dateTimeBetween($fechaEmpeno, $fechaVencimiento)->format('Y-m-d');
         
         $stmt = $pdo->prepare("INSERT INTO pagos (id_empeno, id_amortizacion, fecha_pago, capital_pagado, interes_pagado, iva_pagado, monto_total, tipo_pago, metodo_pago, fecha_registro) VALUES (?,?,?,?,?,?,?,?,?,NOW())");
@@ -416,13 +500,11 @@ for ($i = 0; $i < 100; $i++) {  // Aumentado a 100 empeños
         ]);
         $pagosRegistrados++;
         
-        // Actualizar amortización como pagada
         $stmt = $pdo->prepare("UPDATE amortizacion SET monto_pagado = monto_total, saldo_final = 0, estado = 'pagado', fecha_pago_real = ? WHERE id_amortizacion = ?");
         $stmt->execute([$fechaPago, $idAmortizacion]);
         
     } elseif ($estado == 'activo') {
-        // Para empeños activos, crear pagos parciales en algunos casos
-        $numPagos = rand(0, 2); // 0, 1 o 2 pagos parciales
+        $numPagos = rand(0, 2);
         $montoRestante = $montoTotal;
         $totalPagado = 0;
         
@@ -431,7 +513,6 @@ for ($i = 0; $i < 100; $i++) {  // Aumentado a 100 empeños
             
             $porcentajePago = rand(10, 40) / 100;
             if ($p == $numPagos) {
-                // Último pago parcial, no pagar más del 70% del total
                 $porcentajePago = min($porcentajePago, 0.7);
             }
             
@@ -468,33 +549,14 @@ for ($i = 0; $i < 100; $i++) {  // Aumentado a 100 empeños
             $montoRestante = $montoTotal - $totalPagado;
         }
         
-        // Actualizar amortización con el total pagado
         if ($totalPagado > 0) {
             $stmt = $pdo->prepare("UPDATE amortizacion SET monto_pagado = ?, saldo_final = ? WHERE id_amortizacion = ?");
             $stmt->execute([$totalPagado, $montoRestante, $idAmortizacion]);
         }
         
-        $empenos[] = [
-            'id' => $idEmpeno,
-            'estado' => $estado,
-            'monto_pagado' => $totalPagado
-        ];
+        $empenos[] = ['id' => $idEmpeno, 'estado' => $estado];
     } else {
-        // Empeños vencidos - no tienen pagos
-        $empenos[] = [
-            'id' => $idEmpeno,
-            'estado' => $estado,
-            'monto_pagado' => 0
-        ];
-    }
-    
-    // Para empeños pagados, también agregar al array
-    if ($estado == 'pagado') {
-        $empenos[] = [
-            'id' => $idEmpeno,
-            'estado' => $estado,
-            'monto_pagado' => $montoTotal
-        ];
+        $empenos[] = ['id' => $idEmpeno, 'estado' => $estado];
     }
 }
 
@@ -502,19 +564,12 @@ echo "Empeños creados: " . count($empenos) . "\n";
 echo "Amortizaciones creadas: $amortizacionesTotales\n";
 echo "Pagos registrados: $pagosRegistrados\n";
 
-// Verificar que se crearon amortizaciones
-$checkAmortizaciones = $pdo->query("SELECT COUNT(*) FROM amortizacion")->fetchColumn();
-echo "Verificación - Amortizaciones en BD: $checkAmortizaciones\n";
-
-$checkPagos = $pdo->query("SELECT COUNT(*) FROM pagos")->fetchColumn();
-echo "Verificación - Pagos en BD: $checkPagos\n";
-
 /* =====================
    PRODUCTOS TIENDA
 =====================*/
 
 $productos = [];
-for ($i = 0; $i < 60; $i++) {
+for ($i = 0; $i < 80; $i++) {
     $prenda = $prendas[array_rand($prendas)];
     $precioVenta = round($prenda['valor_estimado'] * (rand(70, 130) / 100), 2);
     $estadosProducto = ['Nuevo', 'Como nuevo', 'Buen estado', 'Aceptable'];
@@ -540,7 +595,7 @@ echo "Productos tienda creados: " . count($productos) . "\n";
 =====================*/
 
 $ventasIds = [];
-for ($i = 0; $i < 50; $i++) {
+for ($i = 0; $i < 60; $i++) {
     $cliente = $clientes[array_rand($clientes)];
     $totalVenta = rand(500, 15000);
     
@@ -556,7 +611,7 @@ for ($i = 0; $i < 50; $i++) {
 echo "Ventas creadas: " . count($ventasIds) . "\n";
 
 $detallesCount = 0;
-for ($i = 0; $i < 120; $i++) {
+for ($i = 0; $i < 150; $i++) {
     $venta = $ventasIds[array_rand($ventasIds)];
     $producto = $productos[array_rand($productos)];
     $cantidad = rand(1, 5);
@@ -579,7 +634,7 @@ $usuariosLista = $pdo->query("SELECT id_usuario FROM usuario")->fetchAll(PDO::FE
 $movimientos = 0;
 $tiposMovimiento = ['prestamo', 'pago', 'venta', 'gasto'];
 
-for ($i = 0; $i < 150; $i++) {
+for ($i = 0; $i < 200; $i++) {
     $usuario = $usuariosLista[array_rand($usuariosLista)];
     $pago = !empty($pagosExistentes) && rand(1, 3) == 1 ? $pagosExistentes[array_rand($pagosExistentes)] : null;
     $tipo = $tiposMovimiento[array_rand($tiposMovimiento)];
@@ -612,8 +667,8 @@ echo " DATABASE SEEDED SUCCESSFULLY! \n";
 echo "========================================\n";
 echo "\nRESUMEN FINAL:\n";
 echo "├─ Empresas: " . count($empresaIds) . "\n";
-echo "├─ Roles: 4\n";
-echo "├─ Permisos: " . count($permisos) . "\n";
+echo "├─ Roles por empresa: " . count($rolesBase) . "\n";
+echo "├─ Permisos por empresa: " . count($permisosBase) . "\n";
 echo "├─ Usuarios: " . count($todosUsuarios) . "\n";
 echo "├─ Clientes: " . count($clientes) . "\n";
 echo "├─ Avales: " . count($avales) . "\n";
@@ -630,10 +685,4 @@ echo "\nCREDENCIALES DE ACCESO:\n";
 foreach ($empresas as $index => $empresa) {
     $email = strtolower(str_replace(' ', '', $empresa['nombre_comercial'])) . '@admin.com';
     echo "├─ {$empresa['nombre_comercial']}: $email / 123456\n";
-}
-echo "\nCREDENCIALES CLIENTES DE PRUEBA:\n";
-for ($i = 0; $i < 5 && $i < count($clientes); $i++) {
-    if (isset($clientes[$i]) && isset($clientesUsuarios[$i])) {
-        echo "├─ {$clientes[$i]['nombre']} {$clientes[$i]['apellido']}: {$clientesUsuarios[$i]['email']} / 123456\n";
-    }
 }

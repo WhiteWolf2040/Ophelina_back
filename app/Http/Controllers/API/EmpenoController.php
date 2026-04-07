@@ -11,6 +11,66 @@ use Illuminate\Support\Facades\Log;
 
 class EmpenoController extends Controller
 {
+
+
+/**
+ * Obtener todos los empeños (activos y vencidos)
+ */
+public function index(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        $empenos = Empeno::where('id_empresa', $user->id_empresa)
+            ->with(['cliente', 'prenda'])
+            ->orderBy('fecha_empeno', 'desc')
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'data' => $empenos
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Obtener detalle de un empeño específico
+ */
+public function show(Request $request, $id)
+{
+    try {
+        $user = $request->user();
+        
+        $empeno = Empeno::where('id_empresa', $user->id_empresa)
+            ->where('id_empeno', $id)
+            ->with(['cliente', 'prenda', 'amortizaciones', 'pagos'])
+            ->first();
+        
+        if (!$empeno) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Empeño no encontrado'
+            ], 404);
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => $empeno
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
     /**
      * Obtener empeños activos con saldo pendiente para el formulario de pagos
      * GET /api/empenos/activos-con-saldo
@@ -85,4 +145,189 @@ class EmpenoController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Registrar un nuevo empeño
+     * POST /api/empenos
+     */
+    public function store(Request $request)
+    {
+        try {
+            $user = $request->user();
+            
+            $validated = $request->validate([
+                'cliente_id' => 'required|exists:clientes,id_cliente',
+                'prenda_id' => 'required|exists:prendas,id_prenda',
+                'monto_prestado' => 'required|numeric|min:100',
+                'tasa_id' => 'required|exists:tasas_interes,id_tasa',
+                'fecha_vencimiento' => 'required|date',
+                'aval_id' => 'nullable|exists:aval,id_aval'
+            ]);
+            
+            // Obtener la tasa de interés
+            $tasa = DB::table('tasas_interes')->where('id_tasa', $validated['tasa_id'])->first();
+            
+            // Calcular intereses
+            $interesMonto = $validated['monto_prestado'] * ($tasa->porcentaje / 100);
+            $ivaInteres = $interesMonto * 0.16;
+            $montoTotal = $validated['monto_prestado'] + $interesMonto + $ivaInteres;
+            
+            // Generar folio único
+            $folio = 'EMP-' . strtoupper(uniqid());
+            
+            DB::beginTransaction();
+            
+            // 1. Crear el empeño
+            $idEmpeno = DB::table('empeno')->insertGetId([
+                'id_empresa' => $user->id_empresa,
+                'id_cliente' => $validated['cliente_id'],
+                'id_prenda' => $validated['prenda_id'],
+                'id_aval' => $validated['aval_id'] ?? null,
+                'id_tasa' => $validated['tasa_id'],
+                'fecha_empeno' => now(),
+                'monto_prestado' => $validated['monto_prestado'],
+                'intereses' => $tasa->porcentaje,
+                'iva_porcentaje' => 16.00,
+                'fecha_vencimiento' => $validated['fecha_vencimiento'],
+                'estado' => 'activo',
+                'folio' => $folio
+            ]);
+            
+            // 2. Actualizar el estado de la prenda a "En Empeño"
+            DB::table('prendas')
+                ->where('id_prenda', $validated['prenda_id'])
+                ->update(['estado' => 'En Empeño']);
+            
+            // 3. Crear la amortización
+            $idAmortizacion = DB::table('amortizacion')->insertGetId([
+                'id_empeno' => $idEmpeno,
+                'saldo_inicial' => $montoTotal,
+                'saldo_final' => $montoTotal,
+                'numero_pago' => 1,
+                'fecha_pago_programado' => $validated['fecha_vencimiento'],
+                'capital' => $validated['monto_prestado'],
+                'interes' => $interesMonto,
+                'iva_interes' => $ivaInteres,
+                'monto_total' => $montoTotal,
+                'monto_pagado' => 0,
+                'estado' => 'pendiente'
+            ]);
+            
+            // 4. Registrar movimiento de caja (préstamo)
+            DB::table('movimientos_caja')->insert([
+                'tipo' => 'prestamo',
+                'monto' => $validated['monto_prestado'],
+                'descripcion' => 'Préstamo por empeño - Folio: ' . $folio,
+                'id_usuario' => $user->id_usuario,
+                'fecha' => now()
+            ]);
+            
+            DB::commit();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Empeño registrado correctamente',
+                'data' => [
+                    'id_empeno' => $idEmpeno,
+                    'folio' => $folio,
+                    'monto_total' => $montoTotal
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error al registrar empeño: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al registrar empeño: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Agrega este método a tu EmpenoController.php
+
+/**
+ * Obtener clientes de la empresa
+ * GET /api/clientes
+ */
+public function getClientes(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        $clientes = DB::table('clientes')
+            ->where('id_empresa', $user->id_empresa)
+            ->where('activo', 1)
+            ->select('id_cliente', 'nombre', 'apellido')
+            ->orderBy('nombre')
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'data' => $clientes
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Obtener prendas disponibles de la empresa
+ * GET /api/prendas/disponibles
+ */
+public function getPrendasDisponibles(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        $prendas = DB::table('prendas')
+            ->where('id_empresa', $user->id_empresa)
+            ->where('estado', 'Disponible')
+            ->select('id_prenda', 'descripcion', 'tipo', 'valor_estimado')
+            ->orderBy('descripcion')
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'data' => $prendas
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Obtener tasas de interés activas
+ * GET /api/tasas-interes
+ */
+public function getTasasInteres(Request $request)
+{
+    try {
+        $tasas = DB::table('tasas_interes')
+            ->where('activo', 1)
+            ->select('id_tasa', 'nombre', 'porcentaje', 'plazo_dias')
+            ->orderBy('porcentaje')
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'data' => $tasas
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
 }

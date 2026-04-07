@@ -10,6 +10,7 @@ use App\Http\Controllers\API\AmortizacionController;
 use App\Http\Controllers\API\EmpenoController;
 use App\Http\Controllers\API\RolController;
 use App\Http\Controllers\API\PermisoController;
+use App\Http\Controllers\API\PrecioOroController;
 
 /*
 |--------------------------------------------------------------------------
@@ -82,7 +83,10 @@ Route::prefix('amortizacion')->group(function () {
     });
 
      Route::prefix('empenos')->group(function () {
+        Route::get('/', [EmpenoController::class, 'index']);
+         Route::post('/', [EmpenoController::class, 'store']);
         Route::get('/activos-con-saldo', [EmpenoController::class, 'activosConSaldo']);
+        Route::get('/{id}', [EmpenoController::class, 'show']);
     });
 
      Route::prefix('roles')->group(function () {
@@ -114,6 +118,13 @@ Route::prefix('amortizacion')->group(function () {
         Route::delete('/{id}', [PermisoController::class, 'destroy']);
         Route::delete('/masivo', [PermisoController::class, 'destroyMasivo']);
 
+    });
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/precio-oro', [PrecioOroController::class, 'getPrecioActual']);
+        Route::get('/precio-oro/quilates', [PrecioOroController::class, 'getPreciosQuilates']);
+        Route::get('/precio-oro/historial', [PrecioOroController::class, 'historialPrecios']);
+        Route::post('/precio-oro/actualizar', [PrecioOroController::class, 'actualizarPrecio']);
     });
 
 });

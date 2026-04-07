@@ -12,10 +12,16 @@ class Rol extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'id_empresa',
         'nombre',
         'descripcion',
         'nivel'
     ];
+
+    public function empresa()
+    {
+        return $this->belongsTo(Empresa::class, 'id_empresa');
+    }
 
     // Relación con usuarios
     public function usuarios()
@@ -29,6 +35,12 @@ class Rol extends Model
         return $this->belongsToMany(Permiso::class, 'rol_permiso', 'id_rol', 'id_permiso')
                     ->withPivot('permitido')
                     ->wherePivot('permitido', 1);
+    }
+    
+    // Scope para filtrar por empresa
+    public function scopePorEmpresa($query, $empresaId)
+    {
+        return $query->where('id_empresa', $empresaId);
     }
 
     // Scope para filtrar por nivel
