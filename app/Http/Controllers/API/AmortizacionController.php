@@ -14,8 +14,10 @@ class AmortizacionController extends Controller
     /**
      * Obtener la amortización pendiente de un empeño
      * GET /api/amortizacion/pendiente/{id_empeno}
+     * 
+     * El frontend usa monto_pagado y saldo_pendiente para saber cuánto falta por pagar de esta cuota.
      */
-    // app/Http/Controllers/API/AmortizacionController.php
+  
 
 public function pendiente(Request $request, $id_empeno)
 {
@@ -60,8 +62,8 @@ public function pendiente(Request $request, $id_empeno)
                 'interes' => floatval($amortizacion->interes),
                 'iva_interes' => floatval($amortizacion->iva_interes),
                 'monto_total' => floatval($amortizacion->monto_total),
-                'monto_pagado' => floatval($montoPagado),  // <--- CONVERTIR A NÚMERO
-                'saldo_pendiente' => floatval(max(0, $saldoPendiente)),  // <--- CONVERTIR A NÚMERO
+                'monto_pagado' => floatval($montoPagado),  // <--- CONVERTIR A NÚMERO, IMPORTANTE PARA EL FRONTEND
+                'saldo_pendiente' => floatval(max(0, $saldoPendiente)),  // <--- CONVERTIR A NÚMERO, IMPORTANTE PARA EL FRONTEND
                 'fecha_programada' => $amortizacion->fecha_pago_programado,
                 'dias_retraso' => $amortizacion->dias_retraso,
                 'esta_vencido' => $amortizacion->esta_vencido

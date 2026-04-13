@@ -13,11 +13,12 @@ return new class extends Migration
     {
         Schema::create('rol_permiso', function (Blueprint $table) {
             $table->integer('id_rol_permiso', true);
-            $table->integer('id_rol')->nullable();
+            $table->integer('id_empresa')->index('id_empresa');
+            $table->integer('id_rol')->nullable()->index('id_rol');
             $table->integer('id_permiso')->nullable()->index('id_permiso');
             $table->boolean('permitido')->nullable()->default(true);
 
-            $table->unique(['id_rol', 'id_permiso'], 'id_rol');
+            $table->unique(['id_rol', 'id_permiso', 'id_empresa'], 'rol_permiso_empresa');
         });
     }
 

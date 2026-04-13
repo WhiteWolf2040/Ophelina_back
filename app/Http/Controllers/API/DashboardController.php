@@ -21,7 +21,7 @@ class DashboardController extends Controller
             ->where('pagos.tipo_pago', 'liquidacion')
             ->sum('pagos.interes_pagado');
 
-        // Pérdidas totales (deuda vencida)
+        // Pérdidas totales (deuda vencida) Alerta para el dueño
         $perdidaTotal = DB::table('amortizacion')
             ->join('empeno', 'empeno.id_empeno', '=', 'amortizacion.id_empeno')
             ->where('amortizacion.estado', 'pendiente')
@@ -31,6 +31,23 @@ class DashboardController extends Controller
             ->first();
         
         $perdidaTotal = $perdidaTotal ? floatval($perdidaTotal->total) : 0;
+
+         // Calcular ingresos del MES ACTUAL (no solo últimos 15 días)
+        $ingresosMesActual = DB::table('pagos')
+            ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->whereYear('pagos.fecha_pago', now()->year)
+            ->whereMonth('pagos.fecha_pago', now()->month)
+            ->sum('pagos.monto_total');
+
+        // Calcular pérdida total por vencimiento (para mostrarla en alertas)
+        $perdidaTotalQuery = DB::table('amortizacion')
+            ->join('empeno', 'empeno.id_empeno', '=', 'amortizacion.id_empeno')
+            ->where('amortizacion.estado', 'pendiente')
+            ->where('amortizacion.fecha_pago_programado', '<', now())
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->select(DB::raw('SUM(amortizacion.monto_total - COALESCE(amortizacion.monto_pagado, 0)) as total'))
+            ->first();
         
         // Empeños activos
         $empenosActivos = DB::table('empeno')
@@ -38,13 +55,13 @@ class DashboardController extends Controller
             ->where('id_empresa', $idEmpresa)
             ->count();
         
-        // Empeños vencidos
+        // Empeños vencidos Alerta para el dueño
         $empenosVencidos = DB::table('empeno')
             ->where('estado', 'vencido')
             ->where('id_empresa', $idEmpresa)
             ->count();
         
-        // Próximos a vencer
+        // Próximos a vencer Alerta para el dueño
         $proximosVencer = DB::table('empeno')
             ->whereBetween('fecha_vencimiento', [now(), now()->addDays(7)])
             ->where('estado', 'activo')
@@ -82,6 +99,7 @@ class DashboardController extends Controller
             "precio_oro" => $precioOro->precio_gramo_24k ?? 850,
             "ultima_actualizacion_oro" => $precioOro->fecha_actualizacion ?? null,
             "total_clientes" => $totalClientes,
+          
             "prendas_disponibles" => $prendasDisponibles,
             "ganancia_total" => floatval($gananciaTotal),
             "perdida_total" => $perdidaTotal,

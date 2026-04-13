@@ -13,10 +13,13 @@ return new class extends Migration
     {
         Schema::create('permisos', function (Blueprint $table) {
             $table->integer('id_permiso', true);
-            $table->string('nombre', 50)->nullable()->unique('nombre');
+            $table->integer('id_empresa')->index('id_empresa');
+            $table->string('nombre', 50)->nullable();
             $table->text('descripcion')->nullable();
             $table->string('modulo', 50)->nullable();
-            $table->string('Estado', 50)->nullable();
+            $table->enum('estado', ['activo', 'inactivo'])->nullable()->default('activo');
+
+            $table->unique(['nombre', 'id_empresa'], 'nombre_empresa');
         });
     }
 

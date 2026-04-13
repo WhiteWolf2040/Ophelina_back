@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::table('rol_permiso', function (Blueprint $table) {
             $table->foreign(['id_rol'], 'rol_permiso_ibfk_1')->references(['id_rol'])->on('rol')->onUpdate('no action')->onDelete('cascade');
             $table->foreign(['id_permiso'], 'rol_permiso_ibfk_2')->references(['id_permiso'])->on('permisos')->onUpdate('no action')->onDelete('cascade');
+            $table->foreign(['id_empresa'], 'rol_permiso_ibfk_empresa')->references(['id_empresa'])->on('empresa')->onUpdate('no action')->onDelete('cascade');
         });
     }
 
@@ -25,6 +26,7 @@ return new class extends Migration
         Schema::table('rol_permiso', function (Blueprint $table) {
             $table->dropForeign('rol_permiso_ibfk_1');
             $table->dropForeign('rol_permiso_ibfk_2');
+            $table->dropForeign('rol_permiso_ibfk_empresa');
         });
     }
 };

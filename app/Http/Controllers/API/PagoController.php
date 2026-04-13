@@ -128,7 +128,7 @@ public function show(Request $request, $id)
     }
 }
     /**
- * Crear un nuevo pago con lógica de amortización e intereses de mora
+ * Valida datos, busca la cuota pendiente más antigua y calcula intereses de mora si hay atraso.
  */
 public function store(Request $request)
 {
@@ -184,6 +184,13 @@ public function store(Request $request)
         $interesPagado = 0;
         $ivaPagado = 0;
         $montoTotalCalculado = 0;
+
+        /*
+        Liquidación: Paga cuota completa  Abono: Reduce capital (el cliente paga directamente a su deuda)
+
+        Interés: Solo paga intereses (mantiene el préstamo vivo)
+
+        Prórroga: Paga intereses + extiende 30 días el plazo */
 
         switch ($request->tipo_pago) {
             case 'liquidacion':
@@ -433,6 +440,55 @@ public function store(Request $request)
         }
     }
 
+    public function activosConSaldo(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        $empenos = Empeno::where('id_empresa', $user->id_empresa)
+            ->where('estado', 'activo')
+            ->with(['cliente', 'prenda'])
+            ->get()
+            ->map(function($empeno) {
+                
+                $pagosRealizados = Pago::where('id_empeno', $empeno->id_empeno)->count();
+                
+                // Obtener la primera amortización pendiente
+                $amortizacionPendiente = Amortizacio::where('id_empeno', $empeno->id_empeno)
+                    ->where('estado', 'pendiente')
+                    ->orderBy('numero_pago', 'asc')
+                    ->first();
+                
+                $saldoPendienteCuota = $amortizacionPendiente 
+                    ? ($amortizacionPendiente->monto_total - ($amortizacionPendiente->monto_pagado ?? 0))
+                    : 0;
+                
+                return [
+                    'id_empeno' => $empeno->id_empeno,
+                    'cliente' => $empeno->cliente->nombre . ' ' . $empeno->cliente->apellido,
+                    'articulo' => $empeno->prenda->descripcion ?? 'Sin artículo',
+                    'monto_prestado' => $empeno->monto_prestado,
+                    'saldo_total_pendiente' => $empeno->monto_prestado - ($empeno->total_pagado ?? 0),
+                    'saldo_pendiente_cuota' => $saldoPendienteCuota,
+                    'fecha_empeno' => $empeno->fecha_empeno,
+                    'fecha_vencimiento' => $empeno->fecha_vencimiento,
+                    'pagos_realizados' => $pagosRealizados, 
+                    'total_pagado' => $empeno->total_pagado ?? 0
+                ];
+            });
+        
+        return response()->json([
+            'success' => true,
+            'data' => $empenos
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al cargar empeños: ' . $e->getMessage()
+        ], 500);
+    }
+}
 
     /**
  * Calcular intereses por días de atraso
@@ -458,6 +514,8 @@ private function calcularInteresesMora($amortizacion, $fechaActual)
 /**
  * Contar pagos realizados para un empeño
  * GET /api/pagos/empeno/{id_empeno}/count
+ * 
+ * El frontend muestra "NÚMERO DE PAGOS REALIZADOS: 5" para que el usuario sepa cuántos pagos ha hecho.
  */
 public function countByEmpeno($id_empeno)
 {

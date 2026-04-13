@@ -23,6 +23,9 @@ return new class extends Migration
             $table->string('estado', 100)->nullable();
             $table->string('codigo_postal', 10)->nullable();
             $table->string('logo_url')->nullable();
+            $table->decimal('precio_oro_gramo', 10)->nullable()->default(850);
+            $table->decimal('precio_oro_onza', 10)->nullable();
+            $table->dateTime('ultima_actualizacion_oro')->nullable();
             $table->boolean('activo')->nullable()->default(true);
             $table->dateTime('fecha_registro')->nullable()->useCurrent();
         });

@@ -11,11 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('rol', function (Blueprint $table) {
-            $table->integer('id_rol', true);
-            $table->string('nombre', 50)->unique('nombre');
-            $table->text('descripcion')->nullable();
-            $table->integer('nivel')->nullable()->default(1);
+        Schema::table('permisos', function (Blueprint $table) {
+            $table->foreign(['id_empresa'], 'permisos_ibfk_empresa')->references(['id_empresa'])->on('empresa')->onUpdate('no action')->onDelete('cascade');
         });
     }
 
@@ -24,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('rol');
+        Schema::table('permisos', function (Blueprint $table) {
+            $table->dropForeign('permisos_ibfk_empresa');
+        });
     }
 };
