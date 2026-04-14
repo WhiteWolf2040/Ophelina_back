@@ -11,6 +11,10 @@ use App\Http\Controllers\API\EmpenoController;
 use App\Http\Controllers\API\RolController;
 use App\Http\Controllers\API\PermisoController;
 use App\Http\Controllers\API\PrecioOroController;
+use App\Http\Controllers\API\ContactController;
+
+
+Route::post('/send-email', [ContactController::class, 'SendEmail']);
 
 /*
 |--------------------------------------------------------------------------
