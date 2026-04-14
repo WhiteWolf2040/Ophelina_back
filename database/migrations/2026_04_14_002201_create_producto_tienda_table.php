@@ -24,7 +24,7 @@ return new class extends Migration
             $table->boolean('visible')->nullable()->default(true);
             $table->boolean('destacado')->nullable()->default(false);
             $table->string('imagen_url')->nullable();
-            $table->date('fecha_publicacion')->nullable()->default('curdate()');
+             $table->date('fecha_publicacion')->nullable();
         });
     }
 
