@@ -4,7 +4,7 @@ require 'vendor/autoload.php';
 
 $faker = Faker\Factory::create('es_MX');
 
-$pdo = new PDO("mysql:host=localhost;dbname=ophelina_v5", "root", "diego2040");
+$pdo = new PDO("mysql:host=localhost;dbname=ophelina_v2", "root", "");
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 echo "Seeding database...\n\n";
