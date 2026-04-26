@@ -154,7 +154,7 @@ class DashboardController extends Controller
             ->get();
 
         // Actividad reciente
-        $actividad = DB::table('pagos')
+       $actividad = DB::table('pagos')
             ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
             ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
             ->where('empeno.id_empresa', $idEmpresa)
@@ -168,6 +168,11 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
+        // Formatear fechas en actividad
+        $actividad = $actividad->map(function($item) {
+            $item->fecha = $item->fecha ? date('d/m/Y', strtotime($item->fecha)) : '';
+            return $item;
+        });
         // Capital vs Retorno por mes
  // Capital vs Retorno por mes - VERSIÓN ACUMULADA CORRECTA
 $prestamosPorMes = DB::table('empeno')
@@ -317,7 +322,7 @@ $capitalRetorno = $prestamosPorMes->map(function($prestamo) use (&$capitalAcumul
         ]);
     }
 
- public function morosidad(Request $request)
+public function morosidad(Request $request)
 {
     try {
         $user = $request->user();
@@ -335,7 +340,8 @@ $capitalRetorno = $prestamosPorMes->map(function($prestamo) use (&$capitalAcumul
                 DB::raw("SUM(empeno.monto_prestado) as total_prestado"),
                 DB::raw("SUM(amortizacion.monto_total - COALESCE(amortizacion.monto_pagado, 0)) as deuda"),
                 DB::raw("COUNT(amortizacion.id_amortizacion) as pagos_atrasados"),
-                DB::raw("MAX(amortizacion.fecha_pago_programado) as ultimo_pago_programado")
+                // 🔥 Obtener la FECHA REAL del último pago (no la programada)
+                DB::raw("(SELECT MAX(pagos.fecha_pago) FROM pagos WHERE pagos.id_empeno = empeno.id_empeno) as ultimo_pago_real")
             )
             ->groupBy('clientes.id_cliente', 'clientes.nombre', 'clientes.apellido')
             ->having('deuda', '>', 0)
@@ -343,22 +349,17 @@ $capitalRetorno = $prestamosPorMes->map(function($prestamo) use (&$capitalAcumul
             ->limit(10)
             ->get();
 
-        // Verificar los resultados para Sabryna Kohler
-        $sabryna = $morosos->firstWhere('cliente', 'Sabryna Kohler');
-        if ($sabryna) {
-          
-        }
-
         // Calcular días de atraso y formatear datos
         $morosidadFormateada = $morosos->map(function($item) {
+            // Calcular días de mora
             $diasMora = 0;
             $ultimoPagoFormateado = '';
             
-            if ($item->ultimo_pago_programado) {
+            // 🔥 Usar la fecha REAL del último pago
+            if ($item->ultimo_pago_real) {
                 try {
-                    $fechaProgramada = new \Carbon\Carbon($item->ultimo_pago_programado);
-                    $diasMora = $fechaProgramada->diffInDays(now());
-                    $ultimoPagoFormateado = $fechaProgramada->format('d/m/Y');
+                    $fechaReal = new \Carbon\Carbon($item->ultimo_pago_real);
+                    $ultimoPagoFormateado = $fechaReal->format('d/m/Y');
                 } catch (\Exception $e) {
                     $ultimoPagoFormateado = '';
                 }
@@ -367,9 +368,13 @@ $capitalRetorno = $prestamosPorMes->map(function($prestamo) use (&$capitalAcumul
             $totalPrestado = floatval($item->total_prestado);
             $deuda = floatval($item->deuda);
             
+            // Calcular porcentaje (máximo 100%)
             $porcentajePerdida = 0;
             if ($totalPrestado > 0 && $deuda > 0) {
                 $porcentajePerdida = ($deuda / $totalPrestado) * 100;
+                if ($porcentajePerdida > 100) {
+                    $porcentajePerdida = 100;
+                }
             }
             
             return [
@@ -380,7 +385,7 @@ $capitalRetorno = $prestamosPorMes->map(function($prestamo) use (&$capitalAcumul
                 'porcentaje_perdida' => round($porcentajePerdida, 2),
                 'pagos_atrasados' => $item->pagos_atrasados,
                 'dias_mora' => $diasMora,
-                'ultimo_pago' => $ultimoPagoFormateado
+                'ultimo_pago' => $ultimoPagoFormateado  // ← Aquí va la fecha REAL
             ];
         });
 
@@ -390,13 +395,14 @@ $capitalRetorno = $prestamosPorMes->map(function($prestamo) use (&$capitalAcumul
         ]);
         
     } catch (\Exception $e) {
-        
         return response()->json([
             "success" => true,
             "data" => []
         ]);
     }
-}    public function distribucionCategorias(Request $request)  // <--- AGREGAR $request
+} 
+
+public function distribucionCategorias(Request $request)  // <--- AGREGAR $request
     {
         try {
             $user = $request->user();

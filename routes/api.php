@@ -11,6 +11,7 @@ use App\Http\Controllers\API\EmpenoController;
 use App\Http\Controllers\API\RolController;
 use App\Http\Controllers\API\PermisoController;
 use App\Http\Controllers\API\PrecioOroController;
+use App\Http\Controllers\API\StripeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -19,6 +20,18 @@ use App\Http\Controllers\API\PrecioOroController;
 */
 
 Route::post('/login',[AuthController::class,'login']);
+
+    /*
+    ==========================
+    rutas stripe
+    ==========================
+    */
+
+    Route::post('/create-checkout-session', [StripeController::class, 'createCheckoutSession']);
+    Route::post('/verify-payment', [StripeController::class, 'verifyPayment']);
+    Route::post('/activate-free-plan', [StripeController::class, 'activateFreePlan']);
+    Route::get('/check-subscription/{empresaId}', [StripeController::class, 'checkSubscription']);
+  
 
 /*
 |--------------------------------------------------------------------------
@@ -164,5 +177,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/precio-oro/quilates', [PrecioOroController::class, 'getPreciosQuilates']);
     Route::get('/precio-oro/historial', [PrecioOroController::class, 'historialPrecios']);
     Route::post('/precio-oro/actualizar', [PrecioOroController::class, 'actualizarPrecio']);
+
+ 
 
 });
