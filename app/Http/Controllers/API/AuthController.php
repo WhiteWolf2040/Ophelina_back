@@ -81,42 +81,59 @@ class AuthController extends Controller
     USUARIO ACTUAL
     ===============================
     */
-
-    public function user(Request $request)
-    {
-        $usuario = $request->user()->load(['rol', 'rol.permisos', 'empresa']);
-        
-        // Obtener permisos del rol
-        $permisos = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
-        
-        // Obtener módulos a los que tiene acceso
-        $modulos = $usuario->rol ? $usuario->rol->permisos->pluck('modulo')->unique()->toArray() : [];
-
-        return response()->json([
-            "success" => true,
-            "data" => [
-                "usuario" => [
-                    "id" => $usuario->id_usuario,
-                    "nombre" => $usuario->nombre,
-                    "correo" => $usuario->correo,
-                    "telefono" => $usuario->telefono,
-                    "rol" => $usuario->rol->nombre ?? null,
-                    "rol_id" => $usuario->id_rol,
-                    "id_empresa" => $usuario->id_empresa,
-                    "permisos" => $permisos,
-                    "modulos" => $modulos,
-                    "empresa" => $usuario->empresa ? [
-                        "id" => $usuario->empresa->id_empresa,
-                        "nombre" => $usuario->empresa->nombre,
-                        "nombre_comercial" => $usuario->empresa->nombre_comercial,
-                        "rfc" => $usuario->empresa->rfc,
-                        "telefono" => $usuario->empresa->telefono,
-                        "email" => $usuario->empresa->email
-                    ] : null
-                ]
-            ]
-        ]);
+public function user(Request $request)
+{
+    $usuario = $request->user()->load(['rol', 'rol.permisos', 'empresa.plan']);
+    
+    // Obtener el plan de la empresa
+    $planId = $usuario->empresa->id_plan ?? 1;
+    
+    // Módulos permitidos por plan
+    $modulosPorPlan = [
+        1 => ['home', 'clientes', 'empenos'],
+        3 => ['home', 'clientes', 'pagos', 'empenos', 'configuracion'],
+        4 => ['home', 'clientes', 'pagos', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion']
+    ];
+    
+    $modulos = $modulosPorPlan[$planId] ?? $modulosPorPlan[1];
+    
+    // Obtener permisos del rol
+    $permisosDelRol = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
+    
+    // Obtener nombre del plan
+    $planNombre = 'Free';
+    if ($usuario->empresa && $usuario->empresa->plan) {
+        $planNombre = $usuario->empresa->plan->nombre;
+    } elseif ($planId == 3) {
+        $planNombre = 'Profesional';
+    } elseif ($planId == 4) {
+        $planNombre = 'Premium';
     }
+    
+    return response()->json([
+        "success" => true,
+        "data" => [
+            "usuario" => [
+                "id" => $usuario->id_usuario,
+                "nombre" => $usuario->nombre,
+                "correo" => $usuario->correo,
+                "telefono" => $usuario->telefono,
+                "rol" => $usuario->rol->nombre ?? null,
+                "rol_id" => $usuario->id_rol,
+                "id_empresa" => $usuario->id_empresa,
+                "plan_id" => $planId,
+                "plan_nombre" => $planNombre,
+                "modulos" => $modulos,
+                "permisos" => $permisosDelRol,
+                "empresa" => $usuario->empresa ? [
+                    "id" => $usuario->empresa->id_empresa,
+                    "nombre" => $usuario->empresa->nombre,
+                    "plan" => $planNombre
+                ] : null
+            ]
+        ]
+    ]);
+}
 
     /*
     ===============================
