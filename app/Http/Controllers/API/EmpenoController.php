@@ -8,11 +8,15 @@ use App\Models\Empeno;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+// Api wahatsapp
+/* use App\Services\WhatsAppService; */
+use App\Models\Cliente;
+use Carbon\Carbon;
 
 class EmpenoController extends Controller
 {
 
-
+/*  use WhatsappTrait; */
 /**
  * Obtener todos los empeños (activos y vencidos)
  */
@@ -379,4 +383,36 @@ public function getTasasInteres(Request $request)
         ], 500);
     }
 }
+
+/* public function enviarRecordatoriosVencimiento(Request $request)
+{
+    $whatsapp = new WhatsAppService();
+    
+    $empenosPorVencer = Empeno::where('estado', 'activo')
+        ->whereBetween('fecha_vencimiento', [Carbon::now(), Carbon::now()->addDays(3)])
+        ->with(['cliente', 'prenda'])
+        ->get();
+    
+    foreach ($empenosPorVencer as $empeno) {
+        $dias = now()->diffInDays($empeno->fecha_vencimiento, false);
+        
+       if ($dias >= 0 && $dias <= 3){
+            $mensaje = "📢 OPHELINA - Recordatorio\n\n";
+            $mensaje .= "Hola {$empeno->cliente->nombre},\n";
+            $mensaje .= "Tu prenda '{$empeno->prenda->descripcion}' vence en {$diasRestantes} días.\n\n";
+            $mensaje .= "Realiza tu pago para evitar cargos adicionales.\n";
+            $mensaje .= "¿Dudas? Contáctanos.";
+            
+            // Limitar mensaje a 300 caracteres (límite de CallMeBot)
+            $mensaje = substr($mensaje, 0, 300);
+            
+            $whatsapp->sendMessage($empeno->cliente->telefono, $mensaje);
+        }
+    }
+    
+    return response()->json(['success' => true]);
+}
+ */
+
+
 }

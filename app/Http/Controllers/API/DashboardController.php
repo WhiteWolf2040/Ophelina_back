@@ -326,36 +326,62 @@ public function morosidad(Request $request)
 {
     try {
         $user = $request->user();
+        $idEmpresa = $user->id_empresa;
         
-        // Obtener clientes con deuda (amortizaciones pendientes)
-        $morosos = DB::table('amortizacion')
-            ->join('empeno', 'empeno.id_empeno', '=', 'amortizacion.id_empeno')
-            ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
-            ->where('amortizacion.estado', 'pendiente')
-            ->where('amortizacion.fecha_pago_programado', '<', now())
-            ->where('empeno.id_empresa', $user->id_empresa)
-            ->select(
-                'clientes.id_cliente',
-                DB::raw("CONCAT(clientes.nombre, ' ', clientes.apellido) as cliente"),
-                DB::raw("SUM(empeno.monto_prestado) as total_prestado"),
-                DB::raw("SUM(amortizacion.monto_total - COALESCE(amortizacion.monto_pagado, 0)) as deuda"),
-                DB::raw("COUNT(amortizacion.id_amortizacion) as pagos_atrasados"),
-                // 🔥 Obtener la FECHA REAL del último pago (no la programada)
-                DB::raw("(SELECT MAX(pagos.fecha_pago) FROM pagos WHERE pagos.id_empeno = empeno.id_empeno) as ultimo_pago_real")
-            )
-            ->groupBy('clientes.id_cliente', 'clientes.nombre', 'clientes.apellido')
-            ->having('deuda', '>', 0)
-            ->orderByDesc('deuda')
-            ->limit(10)
-            ->get();
-
-        // Calcular días de atraso y formatear datos
-        $morosidadFormateada = $morosos->map(function($item) {
+        // Consulta SQL corregida - sin subconsulta problemática
+        $morosos = DB::select("
+            SELECT 
+                CONCAT(c.nombre, ' ', c.apellido) as nombre,
+                SUM(e.monto_prestado) as total_prestado,
+                SUM(a.monto_total - COALESCE(a.monto_pagado, 0)) as deuda,
+                COUNT(DISTINCT a.id_amortizacion) as pagos_atrasados,
+                MIN(a.fecha_pago_programado) as fecha_mas_antigua,
+                MAX(p.fecha_pago) as ultimo_pago_real
+            FROM amortizacion a
+            INNER JOIN empeno e ON e.id_empeno = a.id_empeno
+            INNER JOIN clientes c ON c.id_cliente = e.id_cliente
+            LEFT JOIN pagos p ON p.id_empeno = e.id_empeno
+            WHERE a.estado = 'pendiente'
+            AND a.fecha_pago_programado < NOW()
+            AND e.id_empresa = ?
+            GROUP BY c.id_cliente, c.nombre, c.apellido
+            HAVING deuda > 0
+            ORDER BY deuda DESC
+            LIMIT 10
+        ", [$idEmpresa]);
+        
+        // Si no hay resultados, devolver array vacío
+        if (empty($morosos)) {
+            return response()->json([
+                "success" => true,
+                "data" => []
+            ]);
+        }
+        
+        // Formatear resultados
+        $morosidadFormateada = [];
+        foreach ($morosos as $item) {
+            $totalPrestado = floatval($item->total_prestado);
+            $deuda = floatval($item->deuda);
+            
+            // Calcular porcentaje de pérdida
+            $porcentajePerdida = 0;
+            if ($totalPrestado > 0 && $deuda > 0) {
+                $porcentajePerdida = ($deuda / $totalPrestado) * 100;
+                if ($porcentajePerdida > 100) {
+                    $porcentajePerdida = 100;
+                }
+            }
+            
             // Calcular días de mora
             $diasMora = 0;
-            $ultimoPagoFormateado = '';
+            if ($item->fecha_mas_antigua) {
+                $fechaVencimiento = new \Carbon\Carbon($item->fecha_mas_antigua);
+                $diasMora = $fechaVencimiento->diffInDays(now());
+            }
             
-            // 🔥 Usar la fecha REAL del último pago
+            // Formatear último pago
+            $ultimoPagoFormateado = '';
             if ($item->ultimo_pago_real) {
                 try {
                     $fechaReal = new \Carbon\Carbon($item->ultimo_pago_real);
@@ -365,30 +391,18 @@ public function morosidad(Request $request)
                 }
             }
             
-            $totalPrestado = floatval($item->total_prestado);
-            $deuda = floatval($item->deuda);
-            
-            // Calcular porcentaje (máximo 100%)
-            $porcentajePerdida = 0;
-            if ($totalPrestado > 0 && $deuda > 0) {
-                $porcentajePerdida = ($deuda / $totalPrestado) * 100;
-                if ($porcentajePerdida > 100) {
-                    $porcentajePerdida = 100;
-                }
-            }
-            
-            return [
-                'cliente' => $item->cliente,
+            $morosidadFormateada[] = [
+                'nombre' => $item->nombre,
                 'total_prestado' => $totalPrestado,
                 'deuda' => $deuda,
                 'perdida_proyectada' => $deuda,
                 'porcentaje_perdida' => round($porcentajePerdida, 2),
                 'pagos_atrasados' => $item->pagos_atrasados,
                 'dias_mora' => $diasMora,
-                'ultimo_pago' => $ultimoPagoFormateado  // ← Aquí va la fecha REAL
+                'ultimo_pago' => $ultimoPagoFormateado
             ];
-        });
-
+        }
+        
         return response()->json([
             "success" => true,
             "data" => $morosidadFormateada
@@ -396,13 +410,12 @@ public function morosidad(Request $request)
         
     } catch (\Exception $e) {
         return response()->json([
-            "success" => true,
-            "data" => []
-        ]);
+            "success" => false,
+            "message" => $e->getMessage()
+        ], 500);
     }
-} 
-
-public function distribucionCategorias(Request $request)  // <--- AGREGAR $request
+}
+public function distribucionCategorias(Request $request)  
     {
         try {
             $user = $request->user();
@@ -432,4 +445,66 @@ public function distribucionCategorias(Request $request)  // <--- AGREGAR $reque
             ]);
         }
     }
+
+  public function amortizacionPendiente(Request $request)
+{
+    try {
+        $user = $request->user();
+        $idEmpresa = $user->id_empresa;
+        
+        $amortizaciones = DB::table('amortizacion')
+            ->join('empeno', 'empeno.id_empeno', '=', 'amortizacion.id_empeno')
+            ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
+            ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->where('amortizacion.estado', 'pendiente')
+            ->select(
+                'amortizacion.id_amortizacion',
+                'amortizacion.numero_pago',
+                'amortizacion.fecha_pago_programado',
+                'amortizacion.monto_total',
+                'amortizacion.monto_pagado',
+                'amortizacion.saldo_final',
+                DB::raw("CONCAT(clientes.nombre, ' ', COALESCE(clientes.apellido, '')) as cliente_nombre"),
+                'prendas.descripcion as articulo',
+                'empeno.monto_prestado',
+                'empeno.folio'
+            )
+            ->orderBy('amortizacion.fecha_pago_programado', 'asc')
+            ->limit(20)
+            ->get();
+        
+        $amortizaciones = $amortizaciones->map(function($item) {
+            $fechaProgramada = \Carbon\Carbon::parse($item->fecha_pago_programado);
+            $hoy = \Carbon\Carbon::now();
+            
+            //CALCULAR DÍAS ENTEROS
+            $diasAtraso = 0;
+            if ($fechaProgramada->lt($hoy)) {
+                $diasAtraso = (int) ceil($fechaProgramada->diffInDays($hoy));
+                if ($diasAtraso < 0) $diasAtraso = 0;
+            }
+            
+            $saldoRestante = $item->saldo_final ?? ($item->monto_total - ($item->monto_pagado ?? 0));
+            
+            $item->dias_atraso = $diasAtraso;
+            $item->status = $diasAtraso > 0 ? 'Atrasado' : 'Pendiente';
+            $item->saldo_restante = $saldoRestante;
+            
+            return $item;
+        });
+        
+        return response()->json([
+            'success' => true,
+            'data' => $amortizaciones
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+            'data' => []
+        ]);
+    }
+}
 }

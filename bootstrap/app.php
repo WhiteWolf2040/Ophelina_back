@@ -18,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleCors::class,
         ]);
 
+          $middleware->alias([
+        'check.plan' => \App\Http\Middleware\CheckPlanModule::class,
+        'check.permission' => CheckPermission::class,]);
+
         
       
     })

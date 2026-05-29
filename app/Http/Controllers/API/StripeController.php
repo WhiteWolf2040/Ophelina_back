@@ -39,7 +39,7 @@ class StripeController extends Controller
                 ]],
                 'mode' => 'subscription',
                 //  CAMBIADO: ahora redirige a /home en lugar de /dashboard
-                'success_url' => env('STRIPE_SUCCESS_URL', 'http://localhost:5173/home') . '?session_id={CHECKOUT_SESSION_ID}&payment=success',
+                'success_url' => env('STRIPE_SUCCESS_URL', 'http://localhost:5173/') . '?session_id={CHECKOUT_SESSION_ID}&payment=success',
                 'cancel_url' => env('STRIPE_CANCEL_URL', 'http://localhost:5173/planes'),
                 'metadata' => [
                     'plan_id' => $request->plan_id,
@@ -249,7 +249,7 @@ class StripeController extends Controller
             ->first();
             
         if (!$empresa) {
-            Log::warning('⚠️ Empresa no encontrada: ' . $empresaId);
+            Log::warning('Empresa no encontrada: ' . $empresaId);
             return response()->json(['activo' => false, 'mensaje' => 'Empresa no encontrada']);
         }
         
