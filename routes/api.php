@@ -4,7 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\DashboardController;
-use App\Http\Controllers\Api\ClienteController;
+use App\Http\Controllers\API\ClienteController;
 use App\Http\Controllers\API\PagoController;
 use App\Http\Controllers\API\AmortizacionController;
 use App\Http\Controllers\API\EmpenoController;
@@ -55,7 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
     DASHBOARD (Todos los planes pueden ver)
     ==========================
     */
-    Route::prefix('dashboard')->group(function () {
+    Route::prefix('home')->group(function () {
         Route::get('/', [DashboardController::class, 'index']);
         Route::get('/activos', [DashboardController::class, 'activos']);
         Route::get('/vencidos', [DashboardController::class, 'vencidos']);

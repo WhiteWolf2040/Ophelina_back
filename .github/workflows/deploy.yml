@@ -1,0 +1,50 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches:
+      - master #lo puedo cambiar por la rama que quiera desplegar, pero lo ideal es que sea main o master para evitar despliegues accidentales desde ramas de desarrollo
+
+jobs:
+  ci-cd-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, bcmath, pdo, pdo_pgsql, pgsql
+          coverage: none
+
+      - name: Validar secretos requeridos
+        run: |
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
+            echo "ERROR: RENDER_DEPLOY_HOOK no está configurado."
+            exit 1
+          fi
+
+      - name: Generar archivo .env
+        run: |
+          cat > .env <<EOF
+          ${{ secrets.ENV_FILE }}
+          EOF
+
+      - name: Verificar archivo .env
+        run: |
+          test -f .env
+          echo ".env generado correctamente"
+
+      - name: Instalar dependencias Composer
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Disparar despliegue en Render
+        run: |
+          curl --fail --silent --show-error \
+            -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+
+      - name: Confirmar despliegue solicitado
+        run: echo "Solicitud de despliegue enviada correctamente a Render."
