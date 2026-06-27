@@ -13,6 +13,8 @@ class Kernel extends HttpKernel
         \Illuminate\Http\Middleware\HandleCors::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
+        // ✅ CORS global
+        \App\Http\Middleware\Cors::class,
     ];
 
     /**
@@ -32,6 +34,8 @@ class Kernel extends HttpKernel
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            // ✅ CORS para API
+            \App\Http\Middleware\Cors::class,
         ],
     ];
 
@@ -50,6 +54,6 @@ class Kernel extends HttpKernel
 
         // ✅ TUS MIDDLEWARES PERSONALIZADOS
         'check.permission' => \App\Http\Middleware\CheckPermission::class,
-        'check.plan' => \App\Http\Middleware\CheckPlan::class,
+        'check.plan' => \App\Http\Middleware\CheckPlanModule::class,  // ← Asegúrate que el nombre coincida
     ];
 }

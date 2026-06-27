@@ -15,7 +15,7 @@ RUN apk add --no-cache \
     postgresql-dev \
     && docker-php-ext-install pdo pdo_pgsql bcmath gd
 
-# Crear directorios
+# Crear directorios necesarios
 RUN mkdir -p /etc/supervisor/conf.d \
     && mkdir -p /var/log/supervisor \
     && mkdir -p /run/nginx \
@@ -27,10 +27,10 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Copiar archivos
+# Copiar archivos del proyecto
 COPY . .
 
-# Instalar dependencias
+# Instalar dependencias (SIN --no-dev para poder generar clave)
 RUN composer install --optimize-autoloader --no-interaction
 
 # Optimizar Laravel
@@ -42,7 +42,9 @@ RUN php artisan config:cache || true \
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database
 
-# Configuración de Nginx
+# ==========================================
+# CONFIGURACIÓN DE NGINX (PUERTO 8080)
+# ==========================================
 RUN echo 'user www-data;' > /etc/nginx/nginx.conf && \
     echo 'worker_processes auto;' >> /etc/nginx/nginx.conf && \
     echo 'pid /run/nginx.pid;' >> /etc/nginx/nginx.conf && \
@@ -76,7 +78,9 @@ RUN echo 'user www-data;' > /etc/nginx/nginx.conf && \
     echo '    }' >> /etc/nginx/nginx.conf && \
     echo '}' >> /etc/nginx/nginx.conf
 
-# Configuración de Supervisor
+# ==========================================
+# CONFIGURACIÓN DE SUPERVISOR
+# ==========================================
 RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'nodaemon=true' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo 'logfile=/dev/null' >> /etc/supervisor/conf.d/supervisord.conf && \
@@ -101,7 +105,7 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (CORREGIDO)
+# SCRIPT DE ARRANQUE (GENERA .env)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
@@ -129,10 +133,10 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'cat /var/www/html/.env | grep DB_' >> /usr/local/bin/start.sh && \
     echo 'cat /var/www/html/.env | grep CACHE_' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# Crear archivo SQLite para evitar errores de caché' >> /usr/local/bin/start.sh && \
+    echo '# Crear archivo SQLite para caché' >> /usr/local/bin/start.sh && \
     echo 'touch /var/www/html/database/database.sqlite' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# Limpiar configuración' >> /usr/local/bin/start.sh && \
+    echo '# Limpiar y recargar configuración' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
