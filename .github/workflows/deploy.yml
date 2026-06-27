@@ -3,7 +3,7 @@ name: Deploy to Render
 on:
   push:
     branches:
-      - rama-diego #lo puedo cambiar por la rama que quiera desplegar, pero lo ideal es que sea main o master para evitar despliegues accidentales desde ramas de desarrollo
+      - rama-diego
 
 jobs:
   ci-cd-pipeline:
@@ -26,20 +26,31 @@ jobs:
             echo "ERROR: RENDER_DEPLOY_HOOK no está configurado."
             exit 1
           fi
+          if [ -z "${{ secrets.ENV_FILE }}" ]; then
+            echo "ERROR: ENV_FILE no está configurado."
+            exit 1
+          fi
 
-      - name: Generar archivo .env
+      - name: Generar archivo .env desde secret
         run: |
-          cat > .env <<EOF
-          ${{ secrets.ENV_FILE }}
-          EOF
+          echo "${{ secrets.ENV_FILE }}" > .env
 
       - name: Verificar archivo .env
         run: |
           test -f .env
           echo ".env generado correctamente"
+          echo "DB_CONNECTION=$(grep DB_CONNECTION .env | cut -d '=' -f2)"
+          echo "APP_ENV=$(grep APP_ENV .env | cut -d '=' -f2)"
 
       - name: Instalar dependencias Composer
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Optimizar Laravel
+        run: |
+          php artisan key:generate --force
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache
 
       - name: Disparar despliegue en Render
         run: |
