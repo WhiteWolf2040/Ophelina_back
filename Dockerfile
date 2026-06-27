@@ -15,11 +15,12 @@ RUN apk add --no-cache \
     postgresql-dev \
     && docker-php-ext-install pdo pdo_pgsql bcmath gd
 
-# Crear directorios
+# Crear directorios (incluyendo database)
 RUN mkdir -p /etc/supervisor/conf.d \
     && mkdir -p /var/log/supervisor \
     && mkdir -p /run/nginx \
-    && mkdir -p /var/www/html/public
+    && mkdir -p /var/www/html/public \
+    && mkdir -p /var/www/html/database
 
 # Instalar Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -37,9 +38,9 @@ RUN php artisan config:cache || true \
     && php artisan route:cache || true \
     && php artisan view:cache || true
 
-# Configurar permisos
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+# Configurar permisos (incluyendo database)
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database
 
 # Configuración de Nginx
 RUN echo 'user www-data;' > /etc/nginx/nginx.conf && \
@@ -100,7 +101,7 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (CON PERMISOS)
+# SCRIPT DE ARRANQUE (CORREGIDO)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
@@ -120,33 +121,30 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_DATABASE=Ophelina_v1_despliegue' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
     echo 'DB_PASSWORD=zLI6tryR1ZEZo3QoGEQ2MTzNCKPITWb6' >> /usr/local/bin/start.sh && \
+    echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ .env generado con PostgreSQL"' >> /usr/local/bin/start.sh && \
     echo 'cat /var/www/html/.env | grep DB_' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# Limpiar caché de Laravel' >> /usr/local/bin/start.sh && \
+    echo '# Crear archivo SQLite para evitar errores de caché' >> /usr/local/bin/start.sh && \
+    echo 'touch /var/www/html/database/database.sqlite' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# Limpiar y recargar configuración' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
+    echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan cache:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
-    echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# Probar conexión a BD' >> /usr/local/bin/start.sh && \
-    echo 'php artisan db:show || echo "⚠️ Error de conexión a BD"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# ✅ CREAR TABLA DE MIGRACIONES SI NO EXISTE' >> /usr/local/bin/start.sh && \
-    echo 'php artisan migrate:install --force || echo "⚠️ Tabla migrations ya existe"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# ✅ MIGRACIONES DESACTIVADAS' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Migraciones saltadas - Usando BD existente"' >> /usr/local/bin/start.sh && \
+    echo '# ✅ MIGRACIONES DESACTIVADAS - Usando BD existente' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Migraciones saltadas - Usando base de datos existente"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Iniciar Supervisor' >> /usr/local/bin/start.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
 
-# ✅ DAR PERMISOS DE EJECUCIÓN
-RUN chmod 755 /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
 
 EXPOSE 8080
 
