@@ -100,11 +100,11 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (CREA TABLA MIGRATIONS)
+# SCRIPT DE ARRANQUE (CON PERMISOS)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== INICIANDO SERVIDOR (MODO DEBUG) ==="' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Generar .env desde variables de entorno' >> /usr/local/bin/start.sh && \
     echo 'echo "Generando .env desde variables de entorno..."' >> /usr/local/bin/start.sh && \
@@ -144,6 +144,9 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Iniciar Supervisor' >> /usr/local/bin/start.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
+
+# ✅ DAR PERMISOS DE EJECUCIÓN
+RUN chmod 755 /usr/local/bin/start.sh
 
 EXPOSE 8080
 
