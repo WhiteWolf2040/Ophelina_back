@@ -15,7 +15,7 @@ RUN apk add --no-cache \
     postgresql-dev \
     && docker-php-ext-install pdo pdo_pgsql bcmath gd
 
-# Crear directorios (incluyendo database)
+# Crear directorios
 RUN mkdir -p /etc/supervisor/conf.d \
     && mkdir -p /var/log/supervisor \
     && mkdir -p /run/nginx \
@@ -38,7 +38,7 @@ RUN php artisan config:cache || true \
     && php artisan route:cache || true \
     && php artisan view:cache || true
 
-# Configurar permisos (incluyendo database)
+# Configurar permisos
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database
 
@@ -122,20 +122,19 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
     echo 'DB_PASSWORD=zLI6tryR1ZEZo3QoGEQ2MTzNCKPITWb6' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
+    echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ .env generado con PostgreSQL"' >> /usr/local/bin/start.sh && \
     echo 'cat /var/www/html/.env | grep DB_' >> /usr/local/bin/start.sh && \
+    echo 'cat /var/www/html/.env | grep CACHE_' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Crear archivo SQLite para evitar errores de caché' >> /usr/local/bin/start.sh && \
     echo 'touch /var/www/html/database/database.sqlite' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# Limpiar y recargar configuración' >> /usr/local/bin/start.sh && \
+    echo '# Limpiar configuración' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
-    echo 'php artisan cache:clear' >> /usr/local/bin/start.sh && \
-    echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
-    echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# ✅ MIGRACIONES DESACTIVADAS - Usando BD existente' >> /usr/local/bin/start.sh && \
