@@ -6,17 +6,21 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        // Verificar si la tabla ya existe antes de crearla
+        // 1. PRIMERO: Eliminar el índice si existe
+        Schema::table('clientes', function (Blueprint $table) {
+            if (Schema::hasIndex('clientes', 'id_empresa')) {
+                $table->dropIndex('id_empresa');
+            }
+        });
+
+        // 2. Crear la tabla si no existe
         if (!Schema::hasTable('clientes')) {
             Schema::create('clientes', function (Blueprint $table) {
                 $table->integer('id_cliente', true);
-                $table->integer('id_usuario')->nullable();
-                $table->integer('id_empresa');
+                $table->integer('id_usuario')->nullable()->index('id_usuario');
+                $table->integer('id_empresa')->index('id_empresa');
                 $table->string('nombre', 100);
                 $table->string('apellido', 100)->nullable();
                 $table->string('telefono', 20);
@@ -34,7 +38,7 @@ return new class extends Migration
             });
         }
 
-        // Crear índices SOLO si no existen
+        // 3. Crear índices solo si no existen
         Schema::table('clientes', function (Blueprint $table) {
             if (!Schema::hasIndex('clientes', 'id_usuario')) {
                 $table->index('id_usuario', 'id_usuario');
@@ -45,9 +49,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('clientes');
