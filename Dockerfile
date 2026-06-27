@@ -104,7 +104,7 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== INICIANDO SERVIDOR (MODO DEBUG) ==="' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Generar .env desde variables de entorno' >> /usr/local/bin/start.sh && \
     echo 'echo "Generando .env desde variables de entorno..."' >> /usr/local/bin/start.sh && \
@@ -112,7 +112,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'APP_NAME=Laravel' >> /usr/local/bin/start.sh && \
     echo 'APP_ENV=production' >> /usr/local/bin/start.sh && \
     echo 'APP_KEY=${APP_KEY}' >> /usr/local/bin/start.sh && \
-    echo 'APP_DEBUG=false' >> /usr/local/bin/start.sh && \
+    echo 'APP_DEBUG=true' >> /usr/local/bin/start.sh && \
     echo 'APP_URL=https://ophelina-back-v1.onrender.com' >> /usr/local/bin/start.sh && \
     echo 'DB_CONNECTION=pgsql' >> /usr/local/bin/start.sh && \
     echo 'DB_HOST=dpg-d8q7k36rnols739keru0-a.oregon-postgres.render.com' >> /usr/local/bin/start.sh && \
@@ -125,21 +125,25 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'echo "✅ .env generado con PostgreSQL"' >> /usr/local/bin/start.sh && \
     echo 'cat /var/www/html/.env | grep DB_' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# Recargar configuración de Laravel' >> /usr/local/bin/start.sh && \
+    echo '# Limpiar caché de Laravel' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
+    echo 'php artisan cache:clear' >> /usr/local/bin/start.sh && \
+    echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
+    echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# Probar conexión a BD' >> /usr/local/bin/start.sh && \
+    echo 'php artisan db:show || echo "⚠️ Error de conexión a BD"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# ✅ CREAR TABLA DE MIGRACIONES SI NO EXISTE' >> /usr/local/bin/start.sh && \
     echo 'php artisan migrate:install --force || echo "⚠️ Tabla migrations ya existe"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# ✅ MIGRACIONES DESACTIVADAS - Usando base de datos existente' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Migraciones saltadas - Base de datos ya existe"' >> /usr/local/bin/start.sh && \
+    echo '# ✅ MIGRACIONES DESACTIVADAS' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Migraciones saltadas - Usando BD existente"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Iniciar Supervisor' >> /usr/local/bin/start.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
-
-RUN chmod +x /usr/local/bin/start.sh
 
 EXPOSE 8080
 
