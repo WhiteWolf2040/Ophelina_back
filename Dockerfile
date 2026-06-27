@@ -15,7 +15,7 @@ RUN apk add --no-cache \
     postgresql-dev \
     && docker-php-ext-install pdo pdo_pgsql bcmath gd
 
-# Crear directorios necesarios
+# Crear directorios
 RUN mkdir -p /etc/supervisor/conf.d \
     && mkdir -p /var/log/supervisor \
     && mkdir -p /run/nginx \
@@ -26,69 +26,63 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Copiar archivos del proyecto
+# Copiar archivos
 COPY . .
-
-# Crear .env si no existe
-RUN if [ ! -f .env ]; then cp .env.example .env || true; fi
 
 # Instalar dependencias
 RUN composer install --optimize-autoloader --no-interaction
 
-# Generar APP_KEY y optimizar
-RUN php artisan key:generate --force || true
-RUN php artisan config:cache || true
-RUN php artisan route:cache || true
-RUN php artisan view:cache || true
+# Optimizar Laravel
+RUN php artisan config:cache || true \
+    && php artisan route:cache || true \
+    && php artisan view:cache || true
 
-# Configurar permisos
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-RUN chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
-
-# ==========================================
-# CONFIGURACIÓN DE NGINX (CORREGIDA)
-# ==========================================
-RUN echo 'user www-data; \
-worker_processes auto; \
-pid /run/nginx.pid; \
-events { \
-    worker_connections 1024; \
-} \
-http { \
-    include /etc/nginx/mime.types; \
-    default_type application/octet-stream; \
-    sendfile on; \
-    keepalive_timeout 65; \
-    server { \
-        listen 8080; \
-        server_name _; \
-        root /var/www/html/public; \
-        add_header X-Frame-Options "SAMEORIGIN"; \
-        add_header X-Content-Type-Options "nosniff"; \
-        index index.php; \
-        charset utf-8; \
-        location / { \
-            try_files $$uri $$uri/ /index.php?$$query_string; \
-        } \
-        location = /favicon.ico { access_log off; log_not_found off; } \
-        location = /robots.txt { access_log off; log_not_found off; } \
-        error_page 404 /index.php; \
-        location ~ \.php$$ { \
-            fastcgi_pass 127.0.0.1:9000; \
-            fastcgi_param SCRIPT_FILENAME $$realpath_root$$fastcgi_script_name; \
-            fastcgi_param PATH_INFO $$fastcgi_path_info; \
-            include fastcgi_params; \
-        } \
-        location ~ /\.ht { deny all; } \
-    } \
-}' > /etc/nginx/nginx.conf
+# Permisos
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 # ==========================================
-# CONFIGURACIÓN DE SUPERVISOR (CORREGIDA)
+# CONFIGURACIÓN DE NGINX (SIN VARIABLES)
+# ==========================================
+RUN echo 'user www-data;' > /etc/nginx/nginx.conf && \
+    echo 'worker_processes auto;' >> /etc/nginx/nginx.conf && \
+    echo 'pid /run/nginx.pid;' >> /etc/nginx/nginx.conf && \
+    echo '' >> /etc/nginx/nginx.conf && \
+    echo 'events {' >> /etc/nginx/nginx.conf && \
+    echo '    worker_connections 1024;' >> /etc/nginx/nginx.conf && \
+    echo '}' >> /etc/nginx/nginx.conf && \
+    echo '' >> /etc/nginx/nginx.conf && \
+    echo 'http {' >> /etc/nginx/nginx.conf && \
+    echo '    include /etc/nginx/mime.types;' >> /etc/nginx/nginx.conf && \
+    echo '    default_type application/octet-stream;' >> /etc/nginx/nginx.conf && \
+    echo '    sendfile on;' >> /etc/nginx/nginx.conf && \
+    echo '    keepalive_timeout 65;' >> /etc/nginx/nginx.conf && \
+    echo '' >> /etc/nginx/nginx.conf && \
+    echo '    server {' >> /etc/nginx/nginx.conf && \
+    echo '        listen 8080;' >> /etc/nginx/nginx.conf && \
+    echo '        server_name _;' >> /etc/nginx/nginx.conf && \
+    echo '        root /var/www/html/public;' >> /etc/nginx/nginx.conf && \
+    echo '        index index.php;' >> /etc/nginx/nginx.conf && \
+    echo '        charset utf-8;' >> /etc/nginx/nginx.conf && \
+    echo '' >> /etc/nginx/nginx.conf && \
+    echo '        location / {' >> /etc/nginx/nginx.conf && \
+    echo '            try_files $uri $uri/ /index.php?$query_string;' >> /etc/nginx/nginx.conf && \
+    echo '        }' >> /etc/nginx/nginx.conf && \
+    echo '' >> /etc/nginx/nginx.conf && \
+    echo '        location ~ \.php$ {' >> /etc/nginx/nginx.conf && \
+    echo '            fastcgi_pass 127.0.0.1:9000;' >> /etc/nginx/nginx.conf && \
+    echo '            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;' >> /etc/nginx/nginx.conf && \
+    echo '            include fastcgi_params;' >> /etc/nginx/nginx.conf && \
+    echo '        }' >> /etc/nginx/nginx.conf && \
+    echo '    }' >> /etc/nginx/nginx.conf && \
+    echo '}' >> /etc/nginx/nginx.conf
+
+# ==========================================
+# CONFIGURACIÓN DE SUPERVISOR
 # ==========================================
 RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'nodaemon=true' >> /etc/supervisor/conf.d/supervisord.conf && \
-    echo 'logfile=/var/log/supervisor/supervisord.log' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'logfile=/dev/null' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo 'pidfile=/run/supervisord.pid' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo '' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo '[program:php-fpm]' >> /etc/supervisor/conf.d/supervisord.conf && \
@@ -109,30 +103,6 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile=/dev/stderr' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
-# ==========================================
-# SCRIPT DE ARRANQUE SIMPLIFICADO
-# ==========================================
-RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
-    echo 'set -e' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== INICIANDO SERVIDOR EN PUERTO: ${PORT:-8080} ==="' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# Forzar uso de PostgreSQL en lugar de MySQL' >> /usr/local/bin/start.sh && \
-    echo 'export DB_CONNECTION=pgsql' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# Esperar a que la base de datos esté lista' >> /usr/local/bin/start.sh && \
-    echo 'echo "Esperando 5 segundos para que la base de datos esté lista..."' >> /usr/local/bin/start.sh && \
-    echo 'sleep 5' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# Ejecutar migraciones' >> /usr/local/bin/start.sh && \
-    echo 'echo "Ejecutando migraciones..."' >> /usr/local/bin/start.sh && \
-    echo 'php artisan migrate --force || echo "⚠️ Migraciones fallaron, continuando..."' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# Iniciar Supervisor' >> /usr/local/bin/start.sh && \
-    echo 'echo "Iniciando Supervisor..."' >> /usr/local/bin/start.sh && \
-    echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
-
-RUN chmod +x /usr/local/bin/start.sh
-
 EXPOSE 8080
 
-CMD ["/usr/local/bin/start.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
