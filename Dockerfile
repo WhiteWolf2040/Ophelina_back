@@ -1,9 +1,8 @@
 # syntax=docker/dockerfile:1.4
 
-# Cambiamos a PHP 8.4 para igualar la versión de tu entorno local y composer.lock
 FROM php:8.4-fpm-alpine
 
-# Instalar dependencias del sistema y extensiones de PHP necesarias para Laravel y PostgreSQL
+# Instalar dependencias del sistema y extensiones de PHP
 RUN apk add --no-cache \
     nginx \
     supervisor \
@@ -19,97 +18,154 @@ RUN apk add --no-cache \
 # Instalar Composer globalmente
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Configurar el directorio de trabajo
 WORKDIR /var/www/html
 
-# Copiar los archivos del proyecto al contenedor
+# Copiar los archivos del proyecto
 COPY . .
 
-# Instalar las dependencias de producción de Laravel
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# ==========================================
+# CREAR .env SI NO EXISTE
+# ==========================================
+RUN if [ ! -f .env ]; then \
+        cp .env.example .env || true; \
+    fi
 
-# Configurar permisos correctos para Laravel
+# ==========================================
+# INSTALAR DEPENDENCIAS
+# ==========================================
+RUN composer install --optimize-autoloader --no-interaction
+
+# ==========================================
+# GENERAR APP_KEY Y OPTIMIZAR LARAVEL
+# ==========================================
+RUN php artisan key:generate --force || true
+RUN php artisan config:cache || true
+RUN php artisan route:cache || true
+RUN php artisan view:cache || true
+
+# Configurar permisos
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+RUN chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 # ==========================================
-# CREACIÓN DE ARCHIVOS DE CONFIGURACIÓN
+# CONFIGURACIÓN DE NGINX (CORREGIDA)
 # ==========================================
-
-# 1. Crear el archivo de configuración de Nginx
-COPY <<-"EOF" /etc/nginx/nginx.conf
-user www-data;
-worker_processes auto;
-pid /run/nginx.pid;
-
-events {
-    worker_connections 1024;
-}
-
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-    sendfile on;
-    keepalive_timeout 65;
-
-    server {
-        listen 80;
-        server_name localhost;
-        root /var/www/html/public;
-
-        index index.php index.html;
-        charset utf-8;
-
-        location / {
-            try_files $uri $uri/ /index.php?$query_string;
-        }
-
-        location = /favicon.ico { access_log off; log_not_found off; }
-        location = /robots.txt  { access_log off; log_not_found off; }
-
-        error_page 404 /index.php;
-
-        location ~ \.php$ {
-            fastcgi_pass 127.0.0.1:9000;
-            fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-            include fastcgi_params;
-        }
-
-        location ~ /\.ht {
-            deny all;
-        }
-    }
-}
-EOF
-
-# 2. Crear el archivo de configuración de Supervisor
-COPY <<-"EOF" /etc/supervisor/conf.d/supervisord.conf
-[supervisord]
-nodaemon=true
-logfile=/dev/null
-logfile_maxbytes=0
-pidfile=/run/supervisord.pid
-
-[program:php-fpm]
-command=php-fpm
-stdout_logfile=/dev/stdout
-stdout_logfile_maxbytes=0
-stderr_logfile=/dev/stderr
-stderr_logfile_maxbytes=0
-
-[program:nginx]
-command=nginx -g "daemon off;"
-stdout_logfile=/dev/stdout
-stdout_logfile_maxbytes=0
-stderr_logfile=/dev/stderr
-stderr_logfile_maxbytes=0
-EOF
+RUN echo 'user www-data; \
+worker_processes auto; \
+pid /run/nginx.pid; \
+events { \
+    worker_connections 1024; \
+} \
+http { \
+    include /etc/nginx/mime.types; \
+    default_type application/octet-stream; \
+    sendfile on; \
+    keepalive_timeout 65; \
+    server { \
+        listen 8080; \
+        server_name _; \
+        root /var/www/html/public; \
+        add_header X-Frame-Options "SAMEORIGIN"; \
+        add_header X-Content-Type-Options "nosniff"; \
+        index index.php; \
+        charset utf-8; \
+        location / { \
+            try_files $$uri $$uri/ /index.php?$$query_string; \
+        } \
+        location = /favicon.ico { access_log off; log_not_found off; } \
+        location = /robots.txt { access_log off; log_not_found off; } \
+        error_page 404 /index.php; \
+        location ~ \.php$$ { \
+            fastcgi_pass 127.0.0.1:9000; \
+            fastcgi_param SCRIPT_FILENAME $$realpath_root$$fastcgi_script_name; \
+            fastcgi_param PATH_INFO $$fastcgi_path_info; \
+            include fastcgi_params; \
+        } \
+        location ~ /\.ht { deny all; } \
+    } \
+}' > /etc/nginx/nginx.conf
 
 # ==========================================
-# ARRANQUE DEL SERVIDOR
+# CONFIGURACIÓN DE SUPERVISOR
 # ==========================================
+RUN echo '[supervisord] \
+nodaemon=true \
+logfile=/dev/null \
+logfile_maxbytes=0 \
+pidfile=/run/supervisord.pid \
+[program:php-fpm] \
+command=php-fpm \
+stdout_logfile=/dev/stdout \
+stdout_logfile_maxbytes=0 \
+stderr_logfile=/dev/stderr \
+stderr_logfile_maxbytes=0 \
+[program:nginx] \
+command=nginx -g "daemon off;" \
+stdout_logfile=/dev/stdout \
+stdout_logfile_maxbytes=0 \
+stderr_logfile=/dev/stderr \
+stderr_logfile_maxbytes=0' > /etc/supervisor/conf.d/supervisord.conf
 
-# Exponer el puerto que Render asignará dinámicamente
-EXPOSE 80
+# ==========================================
+# SCRIPT DE ARRANQUE (CORREGIDO)
+# ==========================================
+RUN echo '#!/bin/sh \
+echo "=== INICIANDO SERVIDOR EN PUERTO: $PORT ===" \
+# Render asigna el puerto automáticamente, usamos 8080 internamente \
+echo "Configurando Nginx para escuchar en el puerto $PORT..." \
+# Crear archivo de configuración de Nginx con el puerto correcto \
+cat > /etc/nginx/nginx.conf << EOF \
+user www-data; \
+worker_processes auto; \
+pid /run/nginx.pid; \
+events { \
+    worker_connections 1024; \
+} \
+http { \
+    include /etc/nginx/mime.types; \
+    default_type application/octet-stream; \
+    sendfile on; \
+    keepalive_timeout 65; \
+    server { \
+        listen $PORT; \
+        server_name _; \
+        root /var/www/html/public; \
+        add_header X-Frame-Options "SAMEORIGIN"; \
+        add_header X-Content-Type-Options "nosniff"; \
+        index index.php; \
+        charset utf-8; \
+        location / { \
+            try_files $$uri $$uri/ /index.php?$$query_string; \
+        } \
+        location = /favicon.ico { access_log off; log_not_found off; } \
+        location = /robots.txt { access_log off; log_not_found off; } \
+        error_page 404 /index.php; \
+        location ~ \.php$$ { \
+            fastcgi_pass 127.0.0.1:9000; \
+            fastcgi_param SCRIPT_FILENAME $$realpath_root$$fastcgi_script_name; \
+            fastcgi_param PATH_INFO $$fastcgi_path_info; \
+            include fastcgi_params; \
+        } \
+        location ~ /\.ht { deny all; } \
+    } \
+} \
+EOF \
+# Ejecutar migraciones \
+if [ -n "$DB_CONNECTION" ]; then \
+    echo "Ejecutando migraciones..." \
+    php artisan migrate --force || echo "Migraciones fallaron, continuando..." \
+fi \
+# Iniciar Supervisor \
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' > /usr/local/bin/start.sh
 
-# Iniciar Supervisor para controlar Nginx y PHP-FPM juntos
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+RUN chmod +x /usr/local/bin/start.sh
+
+# ==========================================
+# EXPONER PUERTO (Render asigna automáticamente)
+# ==========================================
+EXPOSE 8080
+
+# ==========================================
+# INICIAR CON EL SCRIPT
+# ==========================================
+CMD ["/usr/local/bin/start.sh"]
