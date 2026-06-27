@@ -117,7 +117,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_CONNECTION=pgsql' >> /usr/local/bin/start.sh && \
     echo 'DB_HOST=dpg-d8q7k36rnols739keru0-a.oregon-postgres.render.com' >> /usr/local/bin/start.sh && \
     echo 'DB_PORT=5432' >> /usr/local/bin/start.sh && \
-    echo 'DB_DATABASE=db_ophelina_1' >> /usr/local/bin/start.sh && \
+    echo 'DB_DATABASE=Ophelina_v1_despliegue' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
     echo 'DB_PASSWORD=zLI6tryR1ZEZo3QoGEQ2MTzNCKPITWb6' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
@@ -131,7 +131,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Ejecutar migraciones' >> /usr/local/bin/start.sh && \
-    echo 'php artisan migrate --force || echo "⚠️ Migraciones fallaron, continuando..."' >> /usr/local/bin/start.sh && \
+    echo 'php artisan migrate:fresh --force || echo "⚠️ Migraciones fallaron, continuando..."' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Iniciar Supervisor' >> /usr/local/bin/start.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
