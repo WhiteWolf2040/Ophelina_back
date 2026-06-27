@@ -42,9 +42,7 @@ RUN php artisan config:cache || true \
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database
 
-# ==========================================
-# CONFIGURACIÓN DE NGINX (PUERTO 8080)
-# ==========================================
+# Configuración de Nginx (PUERTO 8080)
 RUN echo 'user www-data;' > /etc/nginx/nginx.conf && \
     echo 'worker_processes auto;' >> /etc/nginx/nginx.conf && \
     echo 'pid /run/nginx.pid;' >> /etc/nginx/nginx.conf && \
@@ -78,9 +76,7 @@ RUN echo 'user www-data;' > /etc/nginx/nginx.conf && \
     echo '    }' >> /etc/nginx/nginx.conf && \
     echo '}' >> /etc/nginx/nginx.conf
 
-# ==========================================
-# CONFIGURACIÓN DE SUPERVISOR
-# ==========================================
+# Configuración de Supervisor
 RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'nodaemon=true' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo 'logfile=/dev/null' >> /etc/supervisor/conf.d/supervisord.conf && \
@@ -105,7 +101,7 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (GENERA .env)
+# SCRIPT DE ARRANQUE (CON VERIFICACIÓN DE ERRORES)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
@@ -140,6 +136,13 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# === VERIFICAR ERRORES DE LARAVEL ===' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== VERIFICANDO LARAVEL ==="' >> /usr/local/bin/start.sh && \
+    echo 'php artisan route:list 2>&1 || echo "❌ Error en rutas"' >> /usr/local/bin/start.sh && \
+    echo 'php artisan migrate:status 2>&1 || echo "❌ Error en migraciones"' >> /usr/local/bin/start.sh && \
+    echo 'php artisan optimize:clear 2>&1 || echo "❌ Error al limpiar"' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== FIN VERIFICACIÓN ==="' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# ✅ MIGRACIONES DESACTIVADAS - Usando BD existente' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ Migraciones saltadas - Usando base de datos existente"' >> /usr/local/bin/start.sh && \
