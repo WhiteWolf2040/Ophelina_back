@@ -101,11 +101,15 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (CON VERIFICACIÓN DE ERRORES)
+# SCRIPT DE ARRANQUE (CORREGIDO)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
     echo 'echo "=== INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# FORZAR CACHE Y SESSION A FILE' >> /usr/local/bin/start.sh && \
+    echo 'export CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
+    echo 'export SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Generar .env desde variables de entorno' >> /usr/local/bin/start.sh && \
     echo 'echo "Generando .env desde variables de entorno..."' >> /usr/local/bin/start.sh && \
@@ -136,13 +140,6 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# === VERIFICAR ERRORES DE LARAVEL ===' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== VERIFICANDO LARAVEL ==="' >> /usr/local/bin/start.sh && \
-    echo 'php artisan route:list 2>&1 || echo "❌ Error en rutas"' >> /usr/local/bin/start.sh && \
-    echo 'php artisan migrate:status 2>&1 || echo "❌ Error en migraciones"' >> /usr/local/bin/start.sh && \
-    echo 'php artisan optimize:clear 2>&1 || echo "❌ Error al limpiar"' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== FIN VERIFICACIÓN ==="' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# ✅ MIGRACIONES DESACTIVADAS - Usando BD existente' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ Migraciones saltadas - Usando base de datos existente"' >> /usr/local/bin/start.sh && \
