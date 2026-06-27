@@ -3,7 +3,7 @@ name: Deploy to Render
 on:
   push:
     branches:
-      - master #lo puedo cambiar por la rama que quiera desplegar, pero lo ideal es que sea main o master para evitar despliegues accidentales desde ramas de desarrollo
+      - rama-diego #lo puedo cambiar por la rama que quiera desplegar, pero lo ideal es que sea main o master para evitar despliegues accidentales desde ramas de desarrollo
 
 jobs:
   ci-cd-pipeline:
