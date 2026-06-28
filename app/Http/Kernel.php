@@ -10,11 +10,11 @@ class Kernel extends HttpKernel
      * The application's global HTTP middleware stack.
      */
     protected $middleware = [
-        // ❌ ELIMINADO: \Illuminate\Http\Middleware\HandleCors::class,
+        \Illuminate\Http\Middleware\HandleCors::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
-        // ✅ CORS global (solo tu middleware personalizado)
-        \App\Http\Middleware\Cors::class,
+     
+       // \App\Http\Middleware\Cors::class,
     ];
 
     /**
@@ -35,7 +35,7 @@ class Kernel extends HttpKernel
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             // ✅ CORS para API (tu middleware personalizado)
-            \App\Http\Middleware\Cors::class,
+           // \App\Http\Middleware\Cors::class,
         ],
     ];
 
