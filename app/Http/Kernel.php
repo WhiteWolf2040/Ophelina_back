@@ -10,10 +10,10 @@ class Kernel extends HttpKernel
      * The application's global HTTP middleware stack.
      */
     protected $middleware = [
-        \Illuminate\Http\Middleware\HandleCors::class,
+        // ❌ ELIMINADO: \Illuminate\Http\Middleware\HandleCors::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
-        // ✅ CORS global
+        // ✅ CORS global (solo tu middleware personalizado)
         \App\Http\Middleware\Cors::class,
     ];
 
@@ -34,7 +34,7 @@ class Kernel extends HttpKernel
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
-            // ✅ CORS para API
+            // ✅ CORS para API (tu middleware personalizado)
             \App\Http\Middleware\Cors::class,
         ],
     ];
@@ -54,6 +54,6 @@ class Kernel extends HttpKernel
 
         // ✅ TUS MIDDLEWARES PERSONALIZADOS
         'check.permission' => \App\Http\Middleware\CheckPermission::class,
-        'check.plan' => \App\Http\Middleware\CheckPlanModule::class,  // ← Asegúrate que el nombre coincida
+        'check.plan' => \App\Http\Middleware\CheckPlanModule::class,
     ];
 }
