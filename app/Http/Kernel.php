@@ -52,8 +52,8 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
 
-        // ✅ TUS MIDDLEWARES PERSONALIZADOS
-        'check.permission' => \App\Http\Middleware\CheckPermission::class,
-        'check.plan' => \App\Http\Middleware\CheckPlanModule::class,
+        // ✅ TUS MIDDLEWARES PERSONALIZADOS (COMENTADOS)
+        // 'check.permission' => \App\Http\Middleware\CheckPermission::class,
+        // 'check.plan' => \App\Http\Middleware\CheckPlanModule::class,
     ];
 }
