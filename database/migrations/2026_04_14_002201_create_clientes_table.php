@@ -8,10 +8,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // 1. PRIMERO: Eliminar el índice si existe
+        // 1. PRIMERO: Eliminar el índice si existe (para limpiar)
         Schema::table('clientes', function (Blueprint $table) {
             if (Schema::hasIndex('clientes', 'id_empresa')) {
                 $table->dropIndex('id_empresa');
+            }
+            if (Schema::hasIndex('clientes', 'id_usuario')) {
+                $table->dropIndex('id_usuario');
             }
         });
 
@@ -19,8 +22,8 @@ return new class extends Migration
         if (!Schema::hasTable('clientes')) {
             Schema::create('clientes', function (Blueprint $table) {
                 $table->integer('id_cliente', true);
-                $table->integer('id_usuario')->nullable()->index('id_usuario');
-                $table->integer('id_empresa')->index('id_empresa');
+                $table->integer('id_usuario')->nullable();
+                $table->integer('id_empresa');
                 $table->string('nombre', 100);
                 $table->string('apellido', 100)->nullable();
                 $table->string('telefono', 20);
@@ -38,13 +41,13 @@ return new class extends Migration
             });
         }
 
-        // 3. Crear índices solo si no existen
+        // 3. Crear índices con nombres ÚNICOS (evita conflictos globales)
         Schema::table('clientes', function (Blueprint $table) {
-            if (!Schema::hasIndex('clientes', 'id_usuario')) {
-                $table->index('id_usuario', 'id_usuario');
+            if (!Schema::hasIndex('clientes', 'clientes_id_usuario_idx')) {
+                $table->index('id_usuario', 'clientes_id_usuario_idx');
             }
-            if (!Schema::hasIndex('clientes', 'id_empresa')) {
-                $table->index('id_empresa', 'id_empresa');
+            if (!Schema::hasIndex('clientes', 'clientes_id_empresa_idx')) {
+                $table->index('id_empresa', 'clientes_id_empresa_idx');
             }
         });
     }
