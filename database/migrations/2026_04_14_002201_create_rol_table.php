@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('rol', function (Blueprint $table) {
             $table->integer('id_rol', true);
-            $table->integer('id_empresa')->index('id_empresa');
+            $table->integer('id_empresa')->index('rol_id_empresa_idx');
             $table->string('nombre', 50);
             $table->text('descripcion')->nullable();
             $table->integer('nivel')->nullable()->default(1);

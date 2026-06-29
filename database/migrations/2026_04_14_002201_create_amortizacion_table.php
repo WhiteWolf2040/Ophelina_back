@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('amortizacion', function (Blueprint $table) {
             $table->integer('id_amortizacion', true);
-            $table->integer('id_empeno')->nullable()->index('id_empeno');
+            $table->integer('id_empeno')->nullable()->index('amortizacion_id_empeno_idx');
             $table->decimal('saldo_inicial', 10)->nullable();
             $table->decimal('saldo_final', 10)->nullable();
             $table->integer('numero_pago')->nullable();

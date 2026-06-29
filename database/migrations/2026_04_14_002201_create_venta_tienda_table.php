@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('venta_tienda', function (Blueprint $table) {
             $table->integer('id_venta', true);
-            $table->integer('id_cliente')->nullable()->index('id_cliente');
+            $table->integer('id_cliente')->nullable()->index('venta_tienda_id_cliente_idx');
             $table->dateTime('fecha_venta')->nullable()->useCurrent();
             $table->decimal('total', 10)->nullable();
             $table->enum('metodo_pago', ['efectivo', 'tarjeta', 'transferencia', 'mixto'])->nullable();

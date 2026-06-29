@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('producto_tienda', function (Blueprint $table) {
             $table->integer('id_producto', true);
-            $table->integer('id_empresa')->index('id_empresa');
-            $table->integer('id_prenda')->nullable()->index('id_prenda');
+             $table->integer('id_empresa')->index('id_empresa');
+            $table->integer('id_prenda')->nullable()->index('id_prenda');   
             $table->string('nombre', 100)->nullable();
             $table->text('descripcion')->nullable();
             $table->decimal('precio', 10)->nullable();

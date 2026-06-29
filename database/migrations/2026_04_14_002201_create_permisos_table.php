@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('permisos', function (Blueprint $table) {
             $table->integer('id_permiso', true);
-            $table->integer('id_empresa')->index('id_empresa');
+            $table->integer('id_empresa')->index('permisos_id_empresa_idx');
             $table->string('nombre', 50)->nullable();
             $table->text('descripcion')->nullable();
             $table->string('modulo', 50)->nullable();

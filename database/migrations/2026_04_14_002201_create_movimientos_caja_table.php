@@ -17,8 +17,8 @@ return new class extends Migration
             $table->decimal('monto', 10)->nullable();
             $table->text('descripcion')->nullable();
             $table->dateTime('fecha')->nullable()->useCurrent();
-            $table->integer('id_usuario')->nullable()->index('id_usuario');
-            $table->integer('id_pago')->nullable()->index('id_pago');
+            $table->integer('id_usuario')->nullable()->index('movimientos_caja_id_usuario_idx');
+            $table->integer('id_pago')->nullable()->index('movimientos_caja_id_pago_idx');
         });
     }
 

@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('apartados', function (Blueprint $table) {
             $table->integer('id_apartado', true);
-            $table->integer('id_cliente')->nullable()->index('id_cliente');
-            $table->integer('id_producto')->nullable()->index('id_producto');
+            $table->integer('id_cliente')->nullable()->index('apartados_id_cliente_idx');
+            $table->integer('id_producto')->nullable()->index('apartados_id_producto_idx');
             $table->dateTime('fecha_apartado')->nullable()->useCurrent();
             $table->date('fecha_expiracion')->nullable();
             $table->enum('estado', ['activo', 'completado', 'expirado', 'cancelado'])->nullable()->default('activo');
