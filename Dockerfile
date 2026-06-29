@@ -101,11 +101,15 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (CON MIGRACIONES ACTIVADAS)
+# SCRIPT DE ARRANQUE (CORREGIDO)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
     echo 'echo "=== INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# === ELIMINAR .env ANTERIOR ===' >> /usr/local/bin/start.sh && \
+    echo 'rm -f /var/www/html/.env' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ .env eliminado"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# FORZAR CACHE Y SESSION A FILE' >> /usr/local/bin/start.sh && \
     echo 'export CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
@@ -122,7 +126,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_CONNECTION=pgsql' >> /usr/local/bin/start.sh && \
     echo 'DB_HOST=dpg-d90rptf7f7vs73ct7nig-a.oregon-postgres.render.com' >> /usr/local/bin/start.sh && \
     echo 'DB_PORT=5432' >> /usr/local/bin/start.sh && \
-    echo 'DB_DATABASE=ophelina_v1_despliegue' >> /usr/local/bin/start.sh && \
+    echo 'DB_DATABASE=Ophelina_v1_despliegue' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
     echo 'DB_PASSWORD=v11zeZoEmBpuvEgGq9D1aD71bvu0BLB5' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
@@ -148,7 +152,6 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
 
 RUN chmod +x /usr/local/bin/start.sh
-
 EXPOSE 8080
 
 CMD ["/usr/local/bin/start.sh"]
