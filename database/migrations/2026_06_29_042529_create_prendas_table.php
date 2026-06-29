@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('prendas', function (Blueprint $table) {
             $table->integer('id_prenda', true);
-            $table->integer('id_empresa')->index('prendas_id_empresa_idx');
+            $table->integer('id_empresa')->index('id_empresa');
             $table->string('descripcion')->nullable();
             $table->enum('tipo', ['Joyería', 'Electrónica', 'Relojes', 'Herramientas', 'Instrumentos', 'Otros'])->nullable();
             $table->string('material', 100)->nullable();

@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('imagen_prenda', function (Blueprint $table) {
             $table->integer('id_imagen', true);
-            $table->integer('id_prenda')->nullable()->index('imagen_prenda_id_prenda_idx');
+            $table->integer('id_prenda')->nullable()->index('id_prenda');
             $table->string('ruta_archivo')->nullable();
             $table->boolean('es_principal')->nullable()->default(false);
             $table->integer('orden')->nullable()->default(0);

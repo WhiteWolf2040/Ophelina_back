@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('producto_tienda', function (Blueprint $table) {
             $table->integer('id_producto', true);
-           $table->integer('id_empresa')->index('producto_tienda_id_empresa_idx');
-            $table->integer('id_prenda')->nullable()->index('producto_tienda_id_prenda_idx');  
+            $table->integer('id_empresa')->index('id_empresa');
+            $table->integer('id_prenda')->nullable()->index('id_prenda');
             $table->string('nombre', 100)->nullable();
             $table->text('descripcion')->nullable();
             $table->decimal('precio', 10)->nullable();
@@ -24,7 +24,7 @@ return new class extends Migration
             $table->boolean('visible')->nullable()->default(true);
             $table->boolean('destacado')->nullable()->default(false);
             $table->string('imagen_url')->nullable();
-             $table->date('fecha_publicacion')->nullable();
+            $table->date('fecha_publicacion')->nullable()->default('curdate()');
         });
     }
 

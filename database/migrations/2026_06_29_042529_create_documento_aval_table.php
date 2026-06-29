@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('documento_aval', function (Blueprint $table) {
             $table->integer('id_documento', true);
-            $table->integer('id_aval')->index('documento_aval_id_aval_idx');
+            $table->integer('id_aval')->index('id_aval');
             $table->string('tipo_documento', 50)->nullable();
             $table->string('archivo')->nullable();
             $table->dateTime('fecha_subida')->nullable()->useCurrent();
