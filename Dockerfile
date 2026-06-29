@@ -2,7 +2,7 @@
 
 FROM php:8.4-fpm-alpine
 
-# Instalar dependencias
+# Instalar dependencias (INCLUYENDO postgresql-client para psql)
 RUN apk add --no-cache \
     nginx \
     supervisor \
@@ -13,6 +13,7 @@ RUN apk add --no-cache \
     unzip \
     git \
     postgresql-dev \
+    postgresql-client \
     && docker-php-ext-install pdo pdo_pgsql bcmath gd
 
 # Crear directorios necesarios
@@ -159,6 +160,19 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo '# === ELIMINAR TODAS LAS TABLAS ===' >> /usr/local/bin/start.sh && \
     echo 'php artisan db:wipe --force || echo "⚠️ No se pudo limpiar la BD"' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ Base de datos limpiada"' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# === ELIMINAR ÍNDICES HUÉRFANOS ===' >> /usr/local/bin/start.sh && \
+    echo 'export PGPASSWORD=$DB_PASSWORD' >> /usr/local/bin/start.sh && \
+    echo 'psql -h $DB_HOST -U $DB_USERNAME -d $DB_DATABASE -c "DROP INDEX IF EXISTS id_empresa CASCADE;" || echo "⚠️ No se pudo eliminar id_empresa"' >> /usr/local/bin/start.sh && \
+    echo 'psql -h $DB_HOST -U $DB_USERNAME -d $DB_DATABASE -c "DROP INDEX IF EXISTS id_usuario CASCADE;" || echo "⚠️ No se pudo eliminar id_usuario"' >> /usr/local/bin/start.sh && \
+    echo 'psql -h $DB_HOST -U $DB_USERNAME -d $DB_DATABASE -c "DROP INDEX IF EXISTS id_cliente CASCADE;" || echo "⚠️ No se pudo eliminar id_cliente"' >> /usr/local/bin/start.sh && \
+    echo 'psql -h $DB_HOST -U $DB_USERNAME -d $DB_DATABASE -c "DROP INDEX IF EXISTS id_empeno CASCADE;" || echo "⚠️ No se pudo eliminar id_empeno"' >> /usr/local/bin/start.sh && \
+    echo 'psql -h $DB_HOST -U $DB_USERNAME -d $DB_DATABASE -c "DROP INDEX IF EXISTS id_aval CASCADE;" || echo "⚠️ No se pudo eliminar id_aval"' >> /usr/local/bin/start.sh && \
+    echo 'psql -h $DB_HOST -U $DB_USERNAME -d $DB_DATABASE -c "DROP INDEX IF EXISTS id_prenda CASCADE;" || echo "⚠️ No se pudo eliminar id_prenda"' >> /usr/local/bin/start.sh && \
+    echo 'psql -h $DB_HOST -U $DB_USERNAME -d $DB_DATABASE -c "DROP INDEX IF EXISTS id_producto CASCADE;" || echo "⚠️ No se pudo eliminar id_producto"' >> /usr/local/bin/start.sh && \
+    echo 'psql -h $DB_HOST -U $DB_USERNAME -d $DB_DATABASE -c "DROP INDEX IF EXISTS id_rol CASCADE;" || echo "⚠️ No se pudo eliminar id_rol"' >> /usr/local/bin/start.sh && \
+    echo 'psql -h $DB_HOST -U $DB_USERNAME -d $DB_DATABASE -c "DROP INDEX IF EXISTS id_permiso CASCADE;" || echo "⚠️ No se pudo eliminar id_permiso"' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Índices huérfanos eliminados"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# ✅ EJECUTAR MIGRACIONES (CREA TABLAS DESDE CERO)' >> /usr/local/bin/start.sh && \
     echo 'php artisan migrate --force || echo "⚠️ Migraciones fallaron"' >> /usr/local/bin/start.sh && \
