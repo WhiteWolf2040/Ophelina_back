@@ -158,7 +158,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === ELIMINAR TODAS LAS TABLAS ===' >> /usr/local/bin/start.sh && \
-    echo 'php artisan db:wipe --force || echo "⚠️ No se pudo limpiar la BD"' >> /usr/local/bin/start.sh && \
+    echo 'psql $DATABASE_URL -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || echo "⚠️ No se pudo recrear el esquema"' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ Base de datos limpiada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === ELIMINAR ÍNDICES HUÉRFANOS ===' >> /usr/local/bin/start.sh && \
