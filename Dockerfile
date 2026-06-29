@@ -100,6 +100,9 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile=/dev/stderr' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
+# ==========================================
+# SCRIPT DE ARRANQUE (CORREGIDO)
+# ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
     echo 'echo "=== INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
@@ -143,10 +146,9 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo '# Crear archivo SQLite para caché' >> /usr/local/bin/start.sh && \
     echo 'touch /var/www/html/database/database.sqlite' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# Limpiar TODA la caché de Laravel' >> /usr/local/bin/start.sh && \
+    echo '# Limpiar toda la caché de Laravel' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
-    echo 'php artisan cache:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan optimize:clear' >> /usr/local/bin/start.sh && \
