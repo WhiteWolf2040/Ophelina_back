@@ -18,7 +18,7 @@ return new class extends Migration
             $table->decimal('total', 10)->nullable();
             $table->enum('metodo_pago', ['efectivo', 'tarjeta', 'transferencia', 'mixto'])->nullable();
             $table->enum('estado', ['completada', 'cancelada', 'pendiente'])->nullable()->default('completada');
-            $table->string('folio', 20)->nullable()->unique('folio');
+            $table->string('folio', 20)->nullable()->unique('venta_tienda_folio_unique');
         });
     }
 
