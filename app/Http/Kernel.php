@@ -35,7 +35,7 @@ class Kernel extends HttpKernel
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             // ✅ CORS para API (tu middleware personalizado)
-           // \App\Http\Middleware\Cors::class,
+             \App\Http\Middleware\Cors::class,
         ],
     ];
 

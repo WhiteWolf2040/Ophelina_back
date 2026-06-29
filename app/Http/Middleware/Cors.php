@@ -12,7 +12,7 @@ class Cors
         // Manejar solicitudes OPTIONS (preflight)
         if ($request->getMethod() === 'OPTIONS') {
             return response('', 200)
-                ->header('Access-Control-Allow-Origin', 'https://ophelina-front.vercel.app/')
+                ->header('Access-Control-Allow-Origin', 'https://ophelina-front.vercel.app')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
                 ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-XSRF-TOKEN')
                 ->header('Access-Control-Allow-Credentials', 'true')
@@ -23,7 +23,7 @@ class Cors
         $response = $next($request);
         
         // Agregar headers CORS a la respuesta
-        $response->headers->set('Access-Control-Allow-Origin', 'https://ophelina-front.vercel.app/');
+        $response->headers->set('Access-Control-Allow-Origin', 'https://ophelina-front.vercel.app');
         $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-XSRF-TOKEN');
         $response->headers->set('Access-Control-Allow-Credentials', 'true');
