@@ -122,7 +122,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_CONNECTION=pgsql' >> /usr/local/bin/start.sh && \
     echo 'DB_HOST=dpg-d8q7k36rnols739keru0-a.oregon-postgres.render.com' >> /usr/local/bin/start.sh && \
     echo 'DB_PORT=5432' >> /usr/local/bin/start.sh && \
-    echo 'DB_DATABASE=Ophelina_v1_despliegue' >> /usr/local/bin/start.sh && \
+    echo 'DB_DATABASE=ophelina_v1_despliegue' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
     echo 'DB_PASSWORD=zLI6tryR1ZEZo3QoGEQ2MTzNCKPITWb6' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
