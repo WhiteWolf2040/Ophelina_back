@@ -14,8 +14,17 @@ class ImportarDatosSeeder extends Seeder
         // Desactivar restricciones de clave foránea
         //DB::statement('SET session_replication_role = replica;');
 
+          // ==========================================
+        // 1. PLANES SAAS
         // ==========================================
-        // 1. EMPRESAS
+        DB::table('planes_saas')->insert([
+            ['id_plan' => 1, 'nombre' => 'Free Trial', 'clave' => 'free', 'precio_mensual' => 0.00, 'max_empleados' => 1, 'max_clientes' => 50, 'max_prendas' => 50, 'max_empenos_activos' => 5, 'dias_prueba' => 30, 'activo' => 1],
+            ['id_plan' => 2, 'nombre' => 'Profesional', 'clave' => 'profesional', 'precio_mensual' => 999.00, 'max_empleados' => 5, 'max_clientes' => 1000, 'max_prendas' => 5000, 'max_empenos_activos' => 200, 'dias_prueba' => 0, 'activo' => 1],
+            ['id_plan' => 3, 'nombre' => 'Premium', 'clave' => 'empresarial', 'precio_mensual' => 1499.00, 'max_empleados' => 20, 'max_clientes' => 10000, 'max_prendas' => 50000, 'max_empenos_activos' => 1000, 'dias_prueba' => 0, 'activo' => 1],
+        ]);
+
+        // ==========================================
+        // 2. EMPRESAS
         // ==========================================
         DB::table('empresa')->insert([
             ['id_empresa' => 1, 'nombre' => 'Empresa Juan', 'nombre_comercial' => 'Juan Prendas', 'rfc' => 'JUAN123456ABC', 'telefono' => '5551234567', 'email' => 'juan@empresa.com', 'direccion' => 'Calle Principal 123', 'ciudad' => 'Ciudad de México', 'estado' => 'CDMX', 'codigo_postal' => '12345', 'logo_url' => null, 'precio_oro_gramo' => 850.00, 'precio_oro_onza' => null, 'ultima_actualizacion_oro' => null, 'activo' => 1, 'id_plan' => 3, 'fecha_registro' => '2026-06-25 09:55:26', 'fecha_inicio_plan' => '2026-06-25', 'fecha_fin_plan' => '2026-07-25', 'plan_activo' => 1],
@@ -23,14 +32,7 @@ class ImportarDatosSeeder extends Seeder
             ['id_empresa' => 3, 'nombre' => 'Empeños Express', 'nombre_comercial' => 'Express Empeños', 'rfc' => 'EXP123456ABC', 'telefono' => '5559876543', 'email' => 'express@empresa.com', 'direccion' => 'Boulevard Central 789', 'ciudad' => 'Guadalajara', 'estado' => 'Jalisco', 'codigo_postal' => '44100', 'logo_url' => null, 'precio_oro_gramo' => 850.00, 'precio_oro_onza' => null, 'ultima_actualizacion_oro' => null, 'activo' => 1, 'id_plan' => null, 'fecha_registro' => '2026-06-25 09:55:26', 'fecha_inicio_plan' => null, 'fecha_fin_plan' => null, 'plan_activo' => 1],
         ]);
 
-        // ==========================================
-        // 2. PLANES SAAS
-        // ==========================================
-        DB::table('planes_saas')->insert([
-            ['id_plan' => 1, 'nombre' => 'Free Trial', 'clave' => 'free', 'precio_mensual' => 0.00, 'max_empleados' => 1, 'max_clientes' => 50, 'max_prendas' => 50, 'max_empenos_activos' => 5, 'dias_prueba' => 30, 'activo' => 1],
-            ['id_plan' => 2, 'nombre' => 'Profesional', 'clave' => 'profesional', 'precio_mensual' => 999.00, 'max_empleados' => 5, 'max_clientes' => 1000, 'max_prendas' => 5000, 'max_empenos_activos' => 200, 'dias_prueba' => 0, 'activo' => 1],
-            ['id_plan' => 3, 'nombre' => 'Premium', 'clave' => 'empresarial', 'precio_mensual' => 1499.00, 'max_empleados' => 20, 'max_clientes' => 10000, 'max_prendas' => 50000, 'max_empenos_activos' => 1000, 'dias_prueba' => 0, 'activo' => 1],
-        ]);
+      
 
         // ==========================================
         // 3. TASAS DE INTERÉS
