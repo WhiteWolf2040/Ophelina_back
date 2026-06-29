@@ -146,13 +146,12 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo '# Crear archivo SQLite para caché' >> /usr/local/bin/start.sh && \
     echo 'touch /var/www/html/database/database.sqlite' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# Limpiar toda la caché de Laravel' >> /usr/local/bin/start.sh && \
+    echo '# Limpiar caché de Laravel (sin optimize:clear)' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
-    echo 'php artisan optimize:clear' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Todas las cachés limpiadas"' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Cachés limpiadas"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Recargar configuración' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
@@ -164,6 +163,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
 
 RUN chmod +x /usr/local/bin/start.sh
+
 EXPOSE 8080
 
 CMD ["/usr/local/bin/start.sh"]
