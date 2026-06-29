@@ -18,7 +18,7 @@ return new class extends Migration
             $table->text('descripcion')->nullable();
             $table->integer('nivel')->nullable()->default(1);
 
-            $table->unique(['nombre', 'id_empresa'], 'nombre_empresa');
+            $table->unique(['nombre', 'id_empresa'], 'rol_nombre_empresa_unique');
         });
     }
 
