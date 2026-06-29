@@ -7,14 +7,14 @@ use Illuminate\Http\Request;
 
 class Cors
 {
-    public function handle(Request $request, Closure $next)
+   public function handle(Request $request, Closure $next)
     {
-        // Manejar solicitudes OPTIONS (preflight)
-        if ($request->getMethod() === 'OPTIONS') {
+        // Si es OPTIONS, responder con 200 y headers
+        if ($request->isMethod('OPTIONS')) {
             return response('', 200)
-                ->header('Access-Control-Allow-Origin', 'https://ophelina-front.vercel.app')
+                ->header('Access-Control-Allow-Origin', 'https://ophelina-front-ces96e1a9-test-ophelina-s-projects.vercel.app')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-XSRF-TOKEN')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-XSRF-TOKEN, Accept, Origin')
                 ->header('Access-Control-Allow-Credentials', 'true')
                 ->header('Access-Control-Max-Age', '86400');
         }
@@ -22,11 +22,12 @@ class Cors
         // Procesar la solicitud normal
         $response = $next($request);
         
-        // Agregar headers CORS a la respuesta
-        $response->headers->set('Access-Control-Allow-Origin', 'https://ophelina-front.vercel.app');
+        // Agregar headers a la respuesta
+        $response->headers->set('Access-Control-Allow-Origin', 'https://ophelina-front-ces96e1a9-test-ophelina-s-projects.vercel.app');
         $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-XSRF-TOKEN');
+        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-XSRF-TOKEN, Accept, Origin');
         $response->headers->set('Access-Control-Allow-Credentials', 'true');
+        $response->headers->set('Access-Control-Max-Age', '86400');
         
         return $response;
     }

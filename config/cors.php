@@ -1,11 +1,11 @@
 <?php
 
 return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout', 'register','*'],
+    'paths' => ['*'],
     'allowed_methods' => ['*'],
     'allowed_origins' => [
-        'https://ophelina-front.vercel.app',  // ← TU FRONTEND EN PRODUCCIÓN
-        'https://ophelina-front-kj2sqv2b7-test-ophelina-s-projects.vercel.app', // ← Preview (opcional)
+        'https://ophelina-front-ces96e1a9-test-ophelina-s-projects.vercel.app',
+        'https://ophelina-front.vercel.app',
         'http://localhost:5173',
         'http://localhost:3000',
         'http://localhost:8000',
