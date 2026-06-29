@@ -157,7 +157,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# ✅ EJECUTAR MIGRACIONES (CREA TABLAS DESDE CERO)' >> /usr/local/bin/start.sh && \
-    echo 'php artisan migrate --force || echo "⚠️ Migraciones fallaron"' >> /usr/local/bin/start.sh && \
+    echo 'php artisan migrate:fresh --force || echo "⚠️ Migraciones fallaron"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Iniciar Supervisor' >> /usr/local/bin/start.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
