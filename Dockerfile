@@ -101,7 +101,7 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (CORREGIDO)
+# SCRIPT DE ARRANQUE (CON MIGRACIONES ACTIVADAS)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
@@ -141,8 +141,8 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# ✅ MIGRACIONES DESACTIVADAS - Usando BD existente' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Migraciones saltadas - Usando base de datos existente"' >> /usr/local/bin/start.sh && \
+    echo '# ✅ EJECUTAR MIGRACIONES (CREA TABLAS DESDE CERO)' >> /usr/local/bin/start.sh && \
+    echo 'php artisan migrate --force || echo "⚠️ Migraciones fallaron"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# Iniciar Supervisor' >> /usr/local/bin/start.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
