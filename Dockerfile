@@ -120,11 +120,11 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'APP_DEBUG=true' >> /usr/local/bin/start.sh && \
     echo 'APP_URL=https://ophelina-back-v1.onrender.com' >> /usr/local/bin/start.sh && \
     echo 'DB_CONNECTION=pgsql' >> /usr/local/bin/start.sh && \
-    echo 'DB_HOST=dpg-d90rptf7f7vs73ct7nig-a' >> /usr/local/bin/start.sh && \
+    echo 'DB_HOST=dpg-d90rptf7f7vs73ct7nig-a.oregon-postgres.render.com' >> /usr/local/bin/start.sh && \
     echo 'DB_PORT=5432' >> /usr/local/bin/start.sh && \
     echo 'DB_DATABASE=ophelina_v1_despliegue' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
-    echo 'DB_PASSWORD=v1lzeZoEmBpuvEgGq9DlaD7lbvuOBLB5' >> /usr/local/bin/start.sh && \
+    echo 'DB_PASSWORD=v11zeZoEmBpuvEgGq9D1aD71bvu0BLB5' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
