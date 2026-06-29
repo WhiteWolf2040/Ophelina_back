@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('clientes', function (Blueprint $table) {
             $table->integer('id_cliente', true);
-            $table->integer('id_usuario')->nullable()->index('id_usuario');
-            $table->integer('id_empresa')->index('id_empresa');
+            $table->integer('id_usuario')->nullable()->index('clientes_id_usuario_idx');
+            $table->integer('id_empresa')->index('clientes_id_empresa_idx');
             $table->string('nombre', 100);
             $table->string('apellido', 100)->nullable();
             $table->string('telefono', 20);

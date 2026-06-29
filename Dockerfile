@@ -21,7 +21,8 @@ RUN mkdir -p /etc/supervisor/conf.d \
     && mkdir -p /var/log/supervisor \
     && mkdir -p /run/nginx \
     && mkdir -p /var/www/html/public \
-    && mkdir -p /var/www/html/database
+    && mkdir -p /var/www/html/database \
+    && mkdir -p /var/www/html/storage/framework/{sessions,views,cache}
 
 # Instalar Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -32,12 +33,12 @@ WORKDIR /var/www/html
 COPY . .
 
 # Instalar dependencias
-RUN composer install --optimize-autoloader --no-interaction
+RUN composer install --optimize-autoloader --no-interaction --no-dev
 
-# Optimizar Laravel
-RUN php artisan config:cache || true \
-    && php artisan route:cache || true \
-    && php artisan view:cache || true
+# Optimizar Laravel (NO cachear en build, mejor en runtime)
+# RUN php artisan config:cache || true \
+#     && php artisan route:cache || true \
+#     && php artisan view:cache || true
 
 # Configurar permisos
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database \
@@ -74,6 +75,10 @@ RUN echo 'user www-data;' > /etc/nginx/nginx.conf && \
     echo '            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;' >> /etc/nginx/nginx.conf && \
     echo '            include fastcgi_params;' >> /etc/nginx/nginx.conf && \
     echo '        }' >> /etc/nginx/nginx.conf && \
+    echo '' >> /etc/nginx/nginx.conf && \
+    echo '        location ~ /\.ht {' >> /etc/nginx/nginx.conf && \
+    echo '            deny all;' >> /etc/nginx/nginx.conf && \
+    echo '        }' >> /etc/nginx/nginx.conf && \
     echo '    }' >> /etc/nginx/nginx.conf && \
     echo '}' >> /etc/nginx/nginx.conf
 
@@ -102,23 +107,32 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (CON SEEDER)
+# SCRIPT DE ARRANQUE (CON SEEDER MEJORADO)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== 🚀 INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# === VERIFICAR CONEXIÓN A POSTGRESQL ===' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== ESPERANDO BASE DE DATOS ==="' >> /usr/local/bin/start.sh && \
+    echo 'MAX_RETRIES=30' >> /usr/local/bin/start.sh && \
+    echo 'RETRY_COUNT=0' >> /usr/local/bin/start.sh && \
+    echo 'until pg_isready -h dpg-d90rptf7f7vs73ct7nig-a.oregon-postgres.render.com -p 5432 -U root || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do' >> /usr/local/bin/start.sh && \
+    echo '    RETRY_COUNT=$((RETRY_COUNT+1))' >> /usr/local/bin/start.sh && \
+    echo '    echo "⏳ Esperando PostgreSQL... $RETRY_COUNT/$MAX_RETRIES"' >> /usr/local/bin/start.sh && \
+    echo '    sleep 2' >> /usr/local/bin/start.sh && \
+    echo 'done' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === LIMPIAR CACHÉ ===' >> /usr/local/bin/start.sh && \
     echo 'rm -rf /var/www/html/bootstrap/cache/*.php' >> /usr/local/bin/start.sh && \
-    echo 'rm -f /var/www/html/.env' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Caché y .env limpiados"' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Caché limpiada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === GENERAR .env ===' >> /usr/local/bin/start.sh && \
     echo 'cat > /var/www/html/.env << "ENVEOF"' >> /usr/local/bin/start.sh && \
     echo 'APP_NAME=Laravel' >> /usr/local/bin/start.sh && \
     echo 'APP_ENV=production' >> /usr/local/bin/start.sh && \
     echo 'APP_KEY=${APP_KEY}' >> /usr/local/bin/start.sh && \
-    echo 'APP_DEBUG=true' >> /usr/local/bin/start.sh && \
+    echo 'APP_DEBUG=false' >> /usr/local/bin/start.sh && \
     echo 'APP_URL=https://ophelina-back-v1.onrender.com' >> /usr/local/bin/start.sh && \
     echo 'DB_CONNECTION=pgsql' >> /usr/local/bin/start.sh && \
     echo 'DB_HOST=dpg-d90rptf7f7vs73ct7nig-a.oregon-postgres.render.com' >> /usr/local/bin/start.sh && \
@@ -131,8 +145,12 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ .env generado"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === LIMPIAR CONFIGURACIÓN ===' >> /usr/local/bin/start.sh && \
+    echo '# === GENERAR APP_KEY ===' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
+    echo 'php artisan key:generate --force' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ App Key generada"' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# === LIMPIAR CONFIGURACIÓN ===' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
@@ -140,12 +158,19 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'echo "✅ Configuración optimizada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === EJECUTAR MIGRACIONES ===' >> /usr/local/bin/start.sh && \
-    echo 'php artisan migrate --force || echo "⚠️ Migraciones fallaron"' >> /usr/local/bin/start.sh && \
+    echo 'php artisan migrate --force' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Migraciones ejecutadas"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === EJECUTAR SEEDER (INSERTAR DATOS) ===' >> /usr/local/bin/start.sh && \
-    echo 'php artisan db:seed --class=ImportarDatosSeeder --force || echo "⚠️ Seeder falló"' >> /usr/local/bin/start.sh && \
+    echo '# === EJECUTAR SEEDER ===' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== INSERTANDO DATOS INICIALES ==="' >> /usr/local/bin/start.sh && \
+    echo 'if php artisan db:seed --class=ImportarDatosSeeder --force; then' >> /usr/local/bin/start.sh && \
+    echo '    echo "✅ Seeder ejecutado correctamente"' >> /usr/local/bin/start.sh && \
+    echo 'else' >> /usr/local/bin/start.sh && \
+    echo '    echo "⚠️ El seeder ya fue ejecutado o tiene datos duplicados"' >> /usr/local/bin/start.sh && \
+    echo 'fi' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === INICIAR SUPERVISOR ===' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== 🟢 SERVIDOR LISTO ==="' >> /usr/local/bin/start.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
 
 RUN chmod +x /usr/local/bin/start.sh

@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('usuario', function (Blueprint $table) {
             $table->integer('id_usuario', true);
-            $table->integer('id_rol')->index('id_rol');
-            $table->integer('id_empresa')->index('id_empresa');
+            $table->integer('id_rol')->index('usuario_id_rol_idx');
+            $table->integer('id_empresa')->index('usuario_id_empresa_idx');
             $table->string('nombre', 100);
             $table->string('correo', 100)->unique('correo');
             $table->string('contrasena');
