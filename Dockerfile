@@ -2,7 +2,7 @@
 
 FROM php:8.4-fpm-alpine
 
-# Instalar dependencias (INCLUYENDO postgresql-client para psql)
+# Instalar dependencias
 RUN apk add --no-cache \
     nginx \
     supervisor \
@@ -31,7 +31,7 @@ WORKDIR /var/www/html
 # Copiar archivos del proyecto
 COPY . .
 
-# Instalar dependencias (SIN --no-dev para poder generar clave)
+# Instalar dependencias
 RUN composer install --optimize-autoloader --no-interaction
 
 # Optimizar Laravel
@@ -102,28 +102,18 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (CORREGIDO)
+# SCRIPT DE ARRANQUE (OPTIMIZADO)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
     echo 'echo "=== INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === LIMPIAR CACHÉ ANTES DE GENERAR .env ===' >> /usr/local/bin/start.sh && \
-    echo 'rm -rf /var/www/html/bootstrap/cache/config.php' >> /usr/local/bin/start.sh && \
-    echo 'rm -rf /var/www/html/bootstrap/cache/packages.php' >> /usr/local/bin/start.sh && \
-    echo 'rm -rf /var/www/html/bootstrap/cache/routes-v7.php' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Archivos de caché eliminados"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# === ELIMINAR .env ANTERIOR ===' >> /usr/local/bin/start.sh && \
+    echo '# === LIMPIAR CACHÉ ===' >> /usr/local/bin/start.sh && \
+    echo 'rm -rf /var/www/html/bootstrap/cache/*.php' >> /usr/local/bin/start.sh && \
     echo 'rm -f /var/www/html/.env' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ .env eliminado"' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Caché y .env limpiados"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# FORZAR CACHE Y SESSION A FILE' >> /usr/local/bin/start.sh && \
-    echo 'export CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
-    echo 'export SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# Generar .env desde variables de entorno' >> /usr/local/bin/start.sh && \
-    echo 'echo "Generando .env desde variables de entorno..."' >> /usr/local/bin/start.sh && \
+    echo '# === GENERAR .env ===' >> /usr/local/bin/start.sh && \
     echo 'cat > /var/www/html/.env << "ENVEOF"' >> /usr/local/bin/start.sh && \
     echo 'APP_NAME=Laravel' >> /usr/local/bin/start.sh && \
     echo 'APP_ENV=production' >> /usr/local/bin/start.sh && \
@@ -133,39 +123,26 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_CONNECTION=pgsql' >> /usr/local/bin/start.sh && \
     echo 'DB_HOST=dpg-d90rptf7f7vs73ct7nig-a.oregon-postgres.render.com' >> /usr/local/bin/start.sh && \
     echo 'DB_PORT=5432' >> /usr/local/bin/start.sh && \
-    echo 'DB_DATABASE=Ophelina_v1_despliegue' >> /usr/local/bin/start.sh && \
+    echo 'DB_DATABASE=ophelina_v1_despliegue' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
-    echo 'DB_PASSWORD=v11zeZoEmBpuvEgGq9D1aD71bvu0BLB5' >> /usr/local/bin/start.sh && \
+    echo 'DB_PASSWORD=v1lzeZoEmBpuvEgGq9DlaD7lbvuOBLB5' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ .env generado"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ .env generado con PostgreSQL"' >> /usr/local/bin/start.sh && \
-    echo 'cat /var/www/html/.env | grep DB_' >> /usr/local/bin/start.sh && \
-    echo 'cat /var/www/html/.env | grep CACHE_' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# Crear archivo SQLite para caché' >> /usr/local/bin/start.sh && \
-    echo 'touch /var/www/html/database/database.sqlite' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# Limpiar caché de Laravel' >> /usr/local/bin/start.sh && \
+    echo '# === LIMPIAR CONFIGURACIÓN ===' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Cachés limpiadas"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# Recargar configuración' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Configuración optimizada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === RECREAR BASE DE DATOS DESDE CERO ===' >> /usr/local/bin/start.sh && \
-    echo 'export PGPASSWORD=$DB_PASSWORD' >> /usr/local/bin/start.sh && \
-    echo 'psql -h $DB_HOST -U $DB_USERNAME -d $DB_DATABASE -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || echo "⚠️ No se pudo recrear el esquema"' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Base de datos recreada desde cero"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# ✅ EJECUTAR MIGRACIONES (CREA TABLAS DESDE CERO)' >> /usr/local/bin/start.sh && \
+    echo '# === EJECUTAR MIGRACIONES ===' >> /usr/local/bin/start.sh && \
     echo 'php artisan migrate --force || echo "⚠️ Migraciones fallaron"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# Iniciar Supervisor' >> /usr/local/bin/start.sh && \
+    echo '# === INICIAR SUPERVISOR ===' >> /usr/local/bin/start.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
 
 RUN chmod +x /usr/local/bin/start.sh
