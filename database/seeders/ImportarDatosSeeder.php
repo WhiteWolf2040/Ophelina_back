@@ -12,7 +12,7 @@ class ImportarDatosSeeder extends Seeder
     public function run(): void
     {
         // Desactivar restricciones de clave foránea
-        DB::statement('SET session_replication_role = replica;');
+        //DB::statement('SET session_replication_role = replica;');
 
         // ==========================================
         // 1. EMPRESAS
@@ -196,7 +196,7 @@ class ImportarDatosSeeder extends Seeder
         ]);
 
         // Reactivar restricciones de clave foránea
-        DB::statement('SET session_replication_role = DEFAULT');
+       // DB::statement('SET session_replication_role = DEFAULT');
 
         $this->command->info('✅ Datos importados correctamente.');
         $this->command->info('📌 Usuarios: password = "password"');
