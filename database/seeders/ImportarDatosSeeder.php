@@ -19,7 +19,7 @@ class ImportarDatosSeeder extends Seeder
             'pagos', 'amortizacion', 'empeno', 'producto_tienda', 'imagen_prenda',
             'prendas', 'documento_aval', 'documento_cliente', 'direcciones',
             'metodo_pago', 'clientes', 'aval', 'rol_permiso', 'permisos',
-            'tasas_interes', 'usuario', 'rol', 'empresa'
+            'tasas_interes', 'usuario', 'rol', 'empresa', 'planes_saas'
         ];
 
         foreach ($tables as $table) {
@@ -34,7 +34,17 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("\n");
 
         // ==========================================
-        // 1. EMPRESAS
+        // 1. PLANES SAAS
+        // ==========================================
+        DB::table('planes_saas')->insert([
+            ['id_plan' => 1, 'nombre' => 'Free Trial', 'clave' => 'free', 'precio_mensual' => 0.00, 'max_empleados' => 1, 'max_clientes' => 50, 'max_prendas' => 50, 'max_empenos_activos' => 5, 'dias_prueba' => 30, 'activo' => 1],
+            ['id_plan' => 2, 'nombre' => 'Profesional', 'clave' => 'profesional', 'precio_mensual' => 999.00, 'max_empleados' => 5, 'max_clientes' => 1000, 'max_prendas' => 5000, 'max_empenos_activos' => 200, 'dias_prueba' => 0, 'activo' => 1],
+            ['id_plan' => 3, 'nombre' => 'Premium', 'clave' => 'empresarial', 'precio_mensual' => 1499.00, 'max_empleados' => 20, 'max_clientes' => 10000, 'max_prendas' => 50000, 'max_empenos_activos' => 1000, 'dias_prueba' => 0, 'activo' => 1],
+        ]);
+        $this->command->info("✅ Planes SAAS creados: 3");
+
+        // ==========================================
+        // 2. EMPRESAS (con planes asignados)
         // ==========================================
         $empresas = [
             [
@@ -46,7 +56,8 @@ class ImportarDatosSeeder extends Seeder
                 'direccion' => 'Calle Principal 123',
                 'ciudad' => 'Ciudad de México',
                 'estado' => 'CDMX',
-                'codigo_postal' => '12345'
+                'codigo_postal' => '12345',
+                'id_plan' => 3 // Premium
             ],
             [
                 'nombre' => 'Empresa Tula',
@@ -57,7 +68,8 @@ class ImportarDatosSeeder extends Seeder
                 'direccion' => 'Av. Reforma 456',
                 'ciudad' => 'Tula',
                 'estado' => 'Hidalgo',
-                'codigo_postal' => '67890'
+                'codigo_postal' => '67890',
+                'id_plan' => 2 // Profesional
             ],
             [
                 'nombre' => 'Empeños Express',
@@ -68,7 +80,8 @@ class ImportarDatosSeeder extends Seeder
                 'direccion' => 'Boulevard Central 789',
                 'ciudad' => 'Guadalajara',
                 'estado' => 'Jalisco',
-                'codigo_postal' => '44100'
+                'codigo_postal' => '44100',
+                'id_plan' => 1 // Free
             ]
         ];
 
@@ -85,6 +98,7 @@ class ImportarDatosSeeder extends Seeder
                     'ciudad' => substr($empresa['ciudad'], 0, 100),
                     'estado' => substr($empresa['estado'], 0, 100),
                     'codigo_postal' => substr($empresa['codigo_postal'], 0, 10),
+                    'id_plan' => $empresa['id_plan'],
                     'activo' => 1,
                     'fecha_registro' => now()
                 ],
@@ -95,7 +109,7 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Empresas creadas: " . count($empresaIds));
 
         // ==========================================
-        // 2. ROLES
+        // 3. ROLES (con id_empresa)
         // ==========================================
         $rolesBase = ["Administrador", "Gerente", "Cajero", "Cliente"];
         $rolIds = [];
@@ -103,10 +117,10 @@ class ImportarDatosSeeder extends Seeder
         foreach ($empresaIds as $empresaId) {
             foreach ($rolesBase as $nivel => $nombre) {
                 $descripcion = match($nombre) {
-                    'Administrador' => 'Acceso total al sistema',
-                    'Gerente' => 'Gestión de clientes y empeños',
-                    'Cajero' => 'Solo ventas y pagos',
-                    'Cliente' => 'Portal de clientes',
+                    'Administrador' => 'Acceso total al sistema con todos los permisos',
+                    'Gerente' => 'Gestión de clientes, empeños y operaciones',
+                    'Cajero' => 'Operaciones de caja y pagos',
+                    'Cliente' => 'Portal de clientes - visualización básica',
                     default => 'Rol del sistema'
                 };
 
@@ -114,7 +128,7 @@ class ImportarDatosSeeder extends Seeder
                     [
                         'id_empresa' => $empresaId,
                         'nombre' => $nombre,
-                        'descripcion' => substr($descripcion . " - " . $faker->sentence(2), 0, 255),
+                        'descripcion' => substr($descripcion, 0, 255),
                         'nivel' => $nivel + 1
                     ],
                     'id_rol'
@@ -129,15 +143,18 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Roles creados: " . (count($empresaIds) * count($rolesBase)));
 
         // ==========================================
-        // 3. PERMISOS
+        // 4. PERMISOS (todos los permisos para cada empresa)
         // ==========================================
         $permisosBase = [
-            "ver_dashboard", "ver_clientes", "crear_clientes", "editar_clientes", "eliminar_clientes",
-            "ver_empenos", "crear_empenos", "editar_empenos", "cancelar_empenos",
-            "ver_pagos", "registrar_pagos",
-            "ver_tienda", "crear_productos", "editar_productos",
-            "ver_caja", "registrar_movimientos",
-            "ver_reportes"
+            'ver_dashboard', 'ver_clientes', 'crear_clientes', 'editar_clientes', 'eliminar_clientes',
+            'ver_empenos', 'crear_empenos', 'editar_empenos', 'eliminar_empenos', 'cancelar_empenos',
+            'ver_pagos', 'registrar_pagos',
+            'ver_tienda', 'crear_productos', 'editar_productos', 'eliminar_productos',
+            'ver_caja', 'registrar_movimientos',
+            'ver_reportes',
+            'ver_configuracion', 'ver_permisos', 'ver_roles',
+            'crear_roles', 'editar_roles', 'eliminar_roles',
+            'crear_permisos', 'editar_permisos', 'eliminar_permisos'
         ];
 
         $permisoIds = [];
@@ -152,6 +169,7 @@ class ImportarDatosSeeder extends Seeder
                     str_contains($permiso, 'caja') => 'caja',
                     str_contains($permiso, 'reportes') => 'reportes',
                     str_contains($permiso, 'dashboard') => 'dashboard',
+                    str_contains($permiso, 'configuracion') || str_contains($permiso, 'permisos') || str_contains($permiso, 'roles') => 'configuracion',
                     default => 'general'
                 };
 
@@ -177,9 +195,10 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Permisos creados: " . (count($empresaIds) * count($permisosBase)));
 
         // ==========================================
-        // 4. ROL_PERMISO
+        // 5. ROL_PERMISO (asignar permisos por rol)
         // ==========================================
         foreach ($empresaIds as $empresaId) {
+            // Administrador: TODOS los permisos
             $adminRolId = $rolIds[$empresaId]['Administrador'];
             foreach ($permisoIds[$empresaId] as $permisoId) {
                 DB::table('rol_permiso')->insert([
@@ -190,9 +209,15 @@ class ImportarDatosSeeder extends Seeder
                 ]);
             }
 
+            // Gerente: permisos de operación
             $gerenteRolId = $rolIds[$empresaId]['Gerente'];
-            $permisosGerente = ['ver_clientes', 'crear_clientes', 'editar_clientes', 'ver_empenos', 'crear_empenos',
-                                'ver_pagos', 'registrar_pagos', 'ver_tienda', 'ver_reportes'];
+            $permisosGerente = [
+                'ver_dashboard', 'ver_clientes', 'crear_clientes', 'editar_clientes',
+                'ver_empenos', 'crear_empenos', 'editar_empenos',
+                'ver_pagos', 'registrar_pagos',
+                'ver_tienda', 'crear_productos', 'editar_productos',
+                'ver_reportes'
+            ];
             foreach ($permisosGerente as $permiso) {
                 if (isset($permisoIds[$empresaId][$permiso])) {
                     DB::table('rol_permiso')->insert([
@@ -204,8 +229,12 @@ class ImportarDatosSeeder extends Seeder
                 }
             }
 
+            // Cajero: permisos de caja y pagos
             $cajeroRolId = $rolIds[$empresaId]['Cajero'];
-            $permisosCajero = ['ver_pagos', 'registrar_pagos', 'ver_caja', 'registrar_movimientos'];
+            $permisosCajero = [
+                'ver_pagos', 'registrar_pagos',
+                'ver_caja', 'registrar_movimientos'
+            ];
             foreach ($permisosCajero as $permiso) {
                 if (isset($permisoIds[$empresaId][$permiso])) {
                     DB::table('rol_permiso')->insert([
@@ -217,8 +246,11 @@ class ImportarDatosSeeder extends Seeder
                 }
             }
 
+            // Cliente: permisos de visualización
             $clienteRolId = $rolIds[$empresaId]['Cliente'];
-            $permisosCliente = ['ver_dashboard', 'ver_clientes', 'ver_empenos', 'ver_pagos', 'ver_tienda'];
+            $permisosCliente = [
+                'ver_dashboard', 'ver_clientes', 'ver_empenos', 'ver_pagos', 'ver_tienda'
+            ];
             foreach ($permisosCliente as $permiso) {
                 if (isset($permisoIds[$empresaId][$permiso])) {
                     DB::table('rol_permiso')->insert([
@@ -233,20 +265,22 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Permisos asignados a roles");
 
         // ==========================================
-        // 5. USUARIOS
+        // 6. USUARIOS
         // ==========================================
         $todosUsuarios = [];
         $clientesUsuarios = [];
 
         foreach ($empresaIds as $empresaId) {
             $adminRolId = $rolIds[$empresaId]['Administrador'];
-            $email = strtolower(str_replace(' ', '', $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'])) . '@admin.com';
+            $empresaNombre = $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'];
+            $email = strtolower(str_replace(' ', '', $empresaNombre)) . '@admin.com';
 
+            // Administrador de la empresa
             $id = DB::table('usuario')->insertGetId(
                 [
                     'id_rol' => $adminRolId,
                     'id_empresa' => $empresaId,
-                    'nombre' => substr("Admin " . $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'], 0, 100),
+                    'nombre' => substr("Admin " . $empresaNombre, 0, 100),
                     'correo' => substr($email, 0, 100),
                     'contrasena' => Hash::make('123456'),
                     'telefono' => substr($faker->phoneNumber(), 0, 20),
@@ -257,6 +291,7 @@ class ImportarDatosSeeder extends Seeder
             );
             $todosUsuarios[] = $id;
 
+            // Gerentes (2 por empresa)
             $gerenteRolId = $rolIds[$empresaId]['Gerente'];
             for ($i = 0; $i < 2; $i++) {
                 $id = DB::table('usuario')->insertGetId(
@@ -275,6 +310,7 @@ class ImportarDatosSeeder extends Seeder
                 $todosUsuarios[] = $id;
             }
 
+            // Cajeros (3 por empresa)
             $cajeroRolId = $rolIds[$empresaId]['Cajero'];
             for ($i = 0; $i < 3; $i++) {
                 $id = DB::table('usuario')->insertGetId(
@@ -293,6 +329,7 @@ class ImportarDatosSeeder extends Seeder
                 $todosUsuarios[] = $id;
             }
 
+            // Clientes (15 por empresa)
             $clienteRolId = $rolIds[$empresaId]['Cliente'];
             for ($i = 0; $i < 15; $i++) {
                 $nombre = $faker->firstName();
@@ -325,7 +362,7 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Usuarios creados: " . count($todosUsuarios));
 
         // ==========================================
-        // 6. CLIENTES
+        // 7. CLIENTES
         // ==========================================
         $clientes = [];
         foreach ($clientesUsuarios as $clienteUsuario) {
@@ -357,7 +394,7 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Clientes creados: " . count($clientes));
 
         // ==========================================
-        // 7. PRENDAS (ANTES DE AVALES)
+        // 8. PRENDAS
         // ==========================================
         $tipos = ["Joyería", "Electrónica", "Relojes", "Herramientas", "Instrumentos", "Otros"];
         $materiales = ["oro", "plata", "acero", "platino", "madera", "plástico"];
@@ -397,7 +434,7 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Prendas creadas: " . count($prendas));
 
         // ==========================================
-        // 8. AVALES (DESPUÉS DE PRENDAS)
+        // 9. AVALES
         // ==========================================
         $avales = [];
         for ($i = 0; $i < 60; $i++) {
@@ -433,7 +470,7 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Avales creados: " . count($avales));
 
         // ==========================================
-        // 9. TASAS INTERÉS
+        // 10. TASAS INTERÉS
         // ==========================================
         $tasasInteres = [
             ['nombre' => 'Basico', 'porcentaje' => 5.00, 'plazo_dias' => 15],
@@ -459,7 +496,7 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Tasas de interés creadas: " . count($tasas));
 
         // ==========================================
-        // 10. EMPEÑOS
+        // 11. EMPEÑOS
         // ==========================================
         $empenos = [];
         $amortizacionesTotales = 0;
@@ -632,7 +669,7 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Pagos registrados: $pagosRegistrados");
 
         // ==========================================
-        // 11. PRODUCTOS TIENDA
+        // 12. PRODUCTOS TIENDA
         // ==========================================
         $productos = [];
         for ($i = 0; $i < 80; $i++) {
@@ -660,7 +697,7 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Productos tienda creados: " . count($productos));
 
         // ==========================================
-        // 12. VENTAS Y DETALLES
+        // 13. VENTAS Y DETALLES
         // ==========================================
         $ventasIds = [];
         for ($i = 0; $i < 60; $i++) {
@@ -705,7 +742,7 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Detalles de venta creados: $detallesCount");
 
         // ==========================================
-        // 13. MOVIMIENTOS CAJA
+        // 14. MOVIMIENTOS CAJA
         // ==========================================
         $pagosExistentes = DB::table('pagos')->pluck('id_pago')->toArray();
         $usuariosLista = DB::table('usuario')->pluck('id_usuario')->toArray();
@@ -748,6 +785,7 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info(" DATABASE SEEDED SUCCESSFULLY!");
         $this->command->info("========================================");
         $this->command->info("\nRESUMEN FINAL:");
+        $this->command->info("├─ Planes SAAS: 3 (Free, Profesional, Premium)");
         $this->command->info("├─ Empresas: " . count($empresaIds));
         $this->command->info("├─ Roles por empresa: " . count($rolesBase));
         $this->command->info("├─ Permisos por empresa: " . count($permisosBase));
@@ -766,7 +804,14 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("\n📌 CREDENCIALES DE ACCESO:");
         foreach ($empresas as $index => $empresa) {
             $email = strtolower(str_replace(' ', '', $empresa['nombre_comercial'])) . '@admin.com';
+            $plan = match($empresa['id_plan']) {
+                1 => 'Free Trial',
+                2 => 'Profesional',
+                3 => 'Premium',
+                default => 'Sin plan'
+            };
             $this->command->info("├─ {$empresa['nombre_comercial']}: $email / 123456");
+            $this->command->info("│  └─ Plan: $plan");
         }
     }
 }
