@@ -198,7 +198,9 @@ class ImportarDatosSeeder extends Seeder
         // 5. ROL_PERMISO (asignar permisos por rol)
         // ==========================================
         foreach ($empresaIds as $empresaId) {
-            // Administrador: TODOS los permisos
+            // ==========================================
+            // ADMINISTRADOR: TODOS los permisos
+            // ==========================================
             $adminRolId = $rolIds[$empresaId]['Administrador'];
             foreach ($permisoIds[$empresaId] as $permisoId) {
                 DB::table('rol_permiso')->insert([
@@ -209,16 +211,28 @@ class ImportarDatosSeeder extends Seeder
                 ]);
             }
 
-            // Gerente: permisos de operación
+            // ==========================================
+            // ✅ GERENTE: SOLO PERMISOS LIMITADOS (4 módulos)
+            // ==========================================
             $gerenteRolId = $rolIds[$empresaId]['Gerente'];
-            $permisosGerente = [
-                'ver_dashboard', 'ver_clientes', 'crear_clientes', 'editar_clientes',
-                'ver_empenos', 'crear_empenos', 'editar_empenos',
-                'ver_pagos', 'registrar_pagos',
-                'ver_tienda', 'crear_productos', 'editar_productos',
-                'ver_reportes'
+            
+            // 🔥 PERMISOS LIMITADOS PARA GERENTE
+            $permisosGerenteLimitados = [
+                // Dashboard
+                'ver_dashboard',
+                // Clientes (ver y crear)
+                'ver_clientes', 
+                'crear_clientes',
+                // Empeños (ver y crear)
+                'ver_empenos',
+                'crear_empenos',
+                // Pagos (ver y registrar)
+                'ver_pagos',
+                'registrar_pagos',
             ];
-            foreach ($permisosGerente as $permiso) {
+            
+            // Asignar solo estos permisos al Gerente
+            foreach ($permisosGerenteLimitados as $permiso) {
                 if (isset($permisoIds[$empresaId][$permiso])) {
                     DB::table('rol_permiso')->insert([
                         'id_empresa' => $empresaId,
@@ -229,7 +243,9 @@ class ImportarDatosSeeder extends Seeder
                 }
             }
 
-            // Cajero: permisos de caja y pagos
+            // ==========================================
+            // CAJERO: permisos de caja y pagos
+            // ==========================================
             $cajeroRolId = $rolIds[$empresaId]['Cajero'];
             $permisosCajero = [
                 'ver_pagos', 'registrar_pagos',
@@ -246,7 +262,9 @@ class ImportarDatosSeeder extends Seeder
                 }
             }
 
-            // Cliente: permisos de visualización
+            // ==========================================
+            // CLIENTE: permisos de visualización
+            // ==========================================
             $clienteRolId = $rolIds[$empresaId]['Cliente'];
             $permisosCliente = [
                 'ver_dashboard', 'ver_clientes', 'ver_empenos', 'ver_pagos', 'ver_tienda'
@@ -272,16 +290,22 @@ class ImportarDatosSeeder extends Seeder
 
         foreach ($empresaIds as $empresaId) {
             $adminRolId = $rolIds[$empresaId]['Administrador'];
+            $gerenteRolId = $rolIds[$empresaId]['Gerente'];
+            $cajeroRolId = $rolIds[$empresaId]['Cajero'];
+            $clienteRolId = $rolIds[$empresaId]['Cliente'];
+            
             $empresaNombre = $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'];
-            $email = strtolower(str_replace(' ', '', $empresaNombre)) . '@admin.com';
-
-            // Administrador de la empresa
+            
+            // ==========================================
+            // ADMINISTRADOR (todos los permisos)
+            // ==========================================
+            $emailAdmin = strtolower(str_replace(' ', '', $empresaNombre)) . '@admin.com';
             $id = DB::table('usuario')->insertGetId(
                 [
                     'id_rol' => $adminRolId,
                     'id_empresa' => $empresaId,
                     'nombre' => substr("Admin " . $empresaNombre, 0, 100),
-                    'correo' => substr($email, 0, 100),
+                    'correo' => substr($emailAdmin, 0, 100),
                     'contrasena' => Hash::make('123456'),
                     'telefono' => substr($faker->phoneNumber(), 0, 20),
                     'activo' => 1,
@@ -291,8 +315,30 @@ class ImportarDatosSeeder extends Seeder
             );
             $todosUsuarios[] = $id;
 
-            // Gerentes (2 por empresa)
-            $gerenteRolId = $rolIds[$empresaId]['Gerente'];
+            // ==========================================
+            // ✅ NUEVO: GERENTE CON PERMISOS LIMITADOS (solo para Empresa Juan)
+            // ==========================================
+            if ($empresaId == $empresaIds[0]) { // Empresa Juan
+                $emailGerente = 'juangerente@admin.com';
+                $id = DB::table('usuario')->insertGetId(
+                    [
+                        'id_rol' => $gerenteRolId,
+                        'id_empresa' => $empresaId,
+                        'nombre' => substr("Gerente " . $empresaNombre, 0, 100),
+                        'correo' => $emailGerente,
+                        'contrasena' => Hash::make('123456'),
+                        'telefono' => substr($faker->phoneNumber(), 0, 20),
+                        'activo' => 1,
+                        'fecha_registro' => now()
+                    ],
+                    'id_usuario'
+                );
+                $todosUsuarios[] = $id;
+            }
+
+            // ==========================================
+            // GERENTES ADICIONALES (2 por empresa)
+            // ==========================================
             for ($i = 0; $i < 2; $i++) {
                 $id = DB::table('usuario')->insertGetId(
                     [
@@ -310,8 +356,9 @@ class ImportarDatosSeeder extends Seeder
                 $todosUsuarios[] = $id;
             }
 
-            // Cajeros (3 por empresa)
-            $cajeroRolId = $rolIds[$empresaId]['Cajero'];
+            // ==========================================
+            // CAJEROS (3 por empresa)
+            // ==========================================
             for ($i = 0; $i < 3; $i++) {
                 $id = DB::table('usuario')->insertGetId(
                     [
@@ -329,8 +376,9 @@ class ImportarDatosSeeder extends Seeder
                 $todosUsuarios[] = $id;
             }
 
-            // Clientes (15 por empresa)
-            $clienteRolId = $rolIds[$empresaId]['Cliente'];
+            // ==========================================
+            // CLIENTES (15 por empresa)
+            // ==========================================
             for ($i = 0; $i < 15; $i++) {
                 $nombre = $faker->firstName();
                 $apellido = $faker->lastName();
@@ -802,6 +850,7 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("├─ Detalle ventas: $detallesCount");
         $this->command->info("└─ Movimientos caja: $movimientos");
         $this->command->info("\n📌 CREDENCIALES DE ACCESO:");
+        $this->command->info("├─ 🔥 ADMINISTRADOR (TODOS los permisos):");
         foreach ($empresas as $index => $empresa) {
             $email = strtolower(str_replace(' ', '', $empresa['nombre_comercial'])) . '@admin.com';
             $plan = match($empresa['id_plan']) {
@@ -810,8 +859,11 @@ class ImportarDatosSeeder extends Seeder
                 3 => 'Premium',
                 default => 'Sin plan'
             };
-            $this->command->info("├─ {$empresa['nombre_comercial']}: $email / 123456");
+            $this->command->info("│  ├─ {$empresa['nombre_comercial']}: $email / 123456");
             $this->command->info("│  └─ Plan: $plan");
         }
+        $this->command->info("├─ 🔸 GERENTE (PERMISOS LIMITADOS):");
+        $this->command->info("│  └─ Juan Prendas: juangerente@admin.com / 123456");
+        $this->command->info("│     └─ Módulos: Dashboard, Clientes (ver/crear), Empeños (ver/crear), Pagos (ver/registrar)");
     }
 }

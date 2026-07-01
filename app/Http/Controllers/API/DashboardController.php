@@ -333,94 +333,99 @@ class DashboardController extends Controller
         }
     }
 
-    public function morosidad(Request $request)
-    {
-        try {
-            $user = $request->user();
-            $idEmpresa = $user->id_empresa;
+  public function morosidad(Request $request)
+{
+    try {
+        $user = $request->user();
+        $idEmpresa = $user->id_empresa;
 
-            // ✅ Consulta SQL corregida para PostgreSQL
-            $morosos = DB::select("
-                SELECT 
-                    CONCAT(c.nombre, ' ', c.apellido) as nombre,
-                    SUM(e.monto_prestado) as total_prestado,
-                    SUM(a.monto_total - COALESCE(a.monto_pagado, 0)) as deuda,
-                    COUNT(DISTINCT a.id_amortizacion) as pagos_atrasados,
-                    MIN(a.fecha_pago_programado) as fecha_mas_antigua,
-                    MAX(p.fecha_pago) as ultimo_pago_real
-                FROM amortizacion a
-                INNER JOIN empeno e ON e.id_empeno = a.id_empeno
-                INNER JOIN clientes c ON c.id_cliente = e.id_cliente
-                LEFT JOIN pagos p ON p.id_empeno = e.id_empeno
-                WHERE a.estado = 'pendiente'
-                AND a.fecha_pago_programado < NOW()
-                AND e.id_empresa = ?
-                GROUP BY c.id_cliente, c.nombre, c.apellido
-                HAVING deuda > 0
-                ORDER BY deuda DESC
-                LIMIT 10
-            ", [$idEmpresa]);
+        // ✅ Consulta SQL corregida para PostgreSQL
+        $morosos = DB::select("
+            SELECT 
+                CONCAT(c.nombre, ' ', c.apellido) as nombre,
+                COALESCE(SUM(e.monto_prestado), 0) as total_prestado,
+                COALESCE(SUM(a.monto_total - COALESCE(a.monto_pagado, 0)), 0) as deuda,
+                COUNT(DISTINCT a.id_amortizacion) as pagos_atrasados,
+                MIN(a.fecha_pago_programado) as fecha_mas_antigua,
+                MAX(p.fecha_pago) as ultimo_pago_real
+            FROM amortizacion a
+            INNER JOIN empeno e ON e.id_empeno = a.id_empeno
+            INNER JOIN clientes c ON c.id_cliente = e.id_cliente
+            LEFT JOIN pagos p ON p.id_empeno = e.id_empeno
+            WHERE a.estado = 'pendiente'
+            AND a.fecha_pago_programado < NOW()
+            AND e.id_empresa = ?
+            GROUP BY c.id_cliente, c.nombre, c.apellido
+            HAVING COALESCE(SUM(a.monto_total - COALESCE(a.monto_pagado, 0)), 0) > 0
+            ORDER BY COALESCE(SUM(a.monto_total - COALESCE(a.monto_pagado, 0)), 0) DESC
+            LIMIT 10
+        ", [$idEmpresa]);
 
-            if (empty($morosos)) {
-                return response()->json([
-                    "success" => true,
-                    "data" => []
-                ]);
-            }
-
-            $morosidadFormateada = [];
-            foreach ($morosos as $item) {
-                $totalPrestado = floatval($item->total_prestado);
-                $deuda = floatval($item->deuda);
-
-                $porcentajePerdida = 0;
-                if ($totalPrestado > 0 && $deuda > 0) {
-                    $porcentajePerdida = ($deuda / $totalPrestado) * 100;
-                    if ($porcentajePerdida > 100) {
-                        $porcentajePerdida = 100;
-                    }
-                }
-
-                $diasMora = 0;
-                if ($item->fecha_mas_antigua) {
-                    $fechaVencimiento = new \Carbon\Carbon($item->fecha_mas_antigua);
-                    $diasMora = $fechaVencimiento->diffInDays(now());
-                }
-
-                $ultimoPagoFormateado = '';
-                if ($item->ultimo_pago_real) {
-                    try {
-                        $fechaReal = new \Carbon\Carbon($item->ultimo_pago_real);
-                        $ultimoPagoFormateado = $fechaReal->format('d/m/Y');
-                    } catch (\Exception $e) {
-                        $ultimoPagoFormateado = '';
-                    }
-                }
-
-                $morosidadFormateada[] = [
-                    'nombre' => $item->nombre,
-                    'total_prestado' => $totalPrestado,
-                    'deuda' => $deuda,
-                    'perdida_proyectada' => $deuda,
-                    'porcentaje_perdida' => round($porcentajePerdida, 2),
-                    'pagos_atrasados' => $item->pagos_atrasados,
-                    'dias_mora' => $diasMora,
-                    'ultimo_pago' => $ultimoPagoFormateado
-                ];
-            }
-
+        if (empty($morosos)) {
             return response()->json([
                 "success" => true,
-                "data" => $morosidadFormateada
+                "data" => []
             ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                "success" => false,
-                "message" => $e->getMessage()
-            ], 500);
         }
+
+        $morosidadFormateada = [];
+        foreach ($morosos as $item) {
+            $totalPrestado = floatval($item->total_prestado);
+            $deuda = floatval($item->deuda);
+
+            $porcentajePerdida = 0;
+            if ($totalPrestado > 0 && $deuda > 0) {
+                $porcentajePerdida = ($deuda / $totalPrestado) * 100;
+                if ($porcentajePerdida > 100) {
+                    $porcentajePerdida = 100;
+                }
+            }
+
+            $diasMora = 0;
+            if ($item->fecha_mas_antigua) {
+                try {
+                    $fechaVencimiento = new \Carbon\Carbon($item->fecha_mas_antigua);
+                    $diasMora = $fechaVencimiento->diffInDays(now());
+                } catch (\Exception $e) {
+                    $diasMora = 0;
+                }
+            }
+
+            $ultimoPagoFormateado = '';
+            if ($item->ultimo_pago_real) {
+                try {
+                    $fechaReal = new \Carbon\Carbon($item->ultimo_pago_real);
+                    $ultimoPagoFormateado = $fechaReal->format('d/m/Y');
+                } catch (\Exception $e) {
+                    $ultimoPagoFormateado = '';
+                }
+            }
+
+            $morosidadFormateada[] = [
+                'nombre' => $item->nombre,
+                'total_prestado' => $totalPrestado,
+                'deuda' => $deuda,
+                'perdida_proyectada' => $deuda,
+                'porcentaje_perdida' => round($porcentajePerdida, 2),
+                'pagos_atrasados' => intval($item->pagos_atrasados),
+                'dias_mora' => $diasMora,
+                'ultimo_pago' => $ultimoPagoFormateado
+            ];
+        }
+
+        return response()->json([
+            "success" => true,
+            "data" => $morosidadFormateada
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('Error en morosidad: ' . $e->getMessage());
+        return response()->json([
+            "success" => false,
+            "message" => "Error al calcular morosidad: " . $e->getMessage()
+        ], 500);
     }
+}
 
     public function distribucionCategorias(Request $request)
     {
