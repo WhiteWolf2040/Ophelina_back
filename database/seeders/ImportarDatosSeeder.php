@@ -13,7 +13,7 @@ class ImportarDatosSeeder extends Seeder
 
     public function run(): void
     {
-        // ✅ CORRECTO: Usar $this->faker (NO Faker\Factory::create)
+       
         $faker = $this->faker;
 
         // Limpiar tablas existentes
@@ -25,7 +25,7 @@ class ImportarDatosSeeder extends Seeder
             'tasas_interes', 'usuario', 'rol', 'empresa'
         ];
 
-        DB::statement('SET session_replication_role = replica;');
+        
         foreach ($tables as $table) {
             try {
                 DB::table($table)->truncate();
@@ -34,7 +34,7 @@ class ImportarDatosSeeder extends Seeder
                 $this->command->warn("⚠️ No se pudo limpiar {$table}: " . $e->getMessage());
             }
         }
-        DB::statement('SET session_replication_role = DEFAULT;');
+       
 
         $this->command->info("\n");
 
