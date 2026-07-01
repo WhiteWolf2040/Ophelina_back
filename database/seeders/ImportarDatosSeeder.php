@@ -11,6 +11,7 @@ class ImportarDatosSeeder extends Seeder
 {
     public function run(): void
     {
+        $faker = $this->faker;
         $faker = Faker::create('es_MX');
 
         echo "Seeding database...\n\n";
