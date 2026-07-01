@@ -14,8 +14,7 @@ class ImportarDatosSeeder extends Seeder
                 $this->limpiarTablas();
 
                 
-                // Desactivar restricciones de clave foránea
-        //DB::statement('SET session_replication_role = replica;');
+
 
           // ==========================================
         // 1. PLANES SAAS
@@ -350,16 +349,5 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info('📌 Admin: expressempeños@admin.com / password');
     }
 
-     private function limpiarTablas(): void
-    {
-        $tablas = ['usuario', 'empresa', 'planes_saas', 'rol', 'clientes', 'prendas', 'empeno'];
-        
-        DB::statement('SET session_replication_role = replica;');
-        
-        foreach ($tablas as $tabla) {
-            DB::table($tabla)->truncate();
-        }
-        
-        DB::statement('SET session_replication_role = DEFAULT;');
-    }
+  
 }

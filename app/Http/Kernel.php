@@ -6,21 +6,15 @@ use Illuminate\Foundation\Http\Kernel as HttpKernel;
 
 class Kernel extends HttpKernel
 {
-    /**
-     * The application's global HTTP middleware stack.
-     */
     protected $middleware = [
-        \App\Http\Middleware\Cors::class,
+        // ✅ SOLO el middleware de Laravel
         \Illuminate\Http\Middleware\HandleCors::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
-     
-      
+        \Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance::class,
+        \Illuminate\Http\Middleware\TrustProxies::class,
     ];
 
-    /**
-     * The application's route middleware groups.
-     */
     protected $middlewareGroups = [
         'web' => [
             \Illuminate\Cookie\Middleware\EncryptCookies::class,
@@ -35,14 +29,12 @@ class Kernel extends HttpKernel
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
-            // ✅ CORS para API (tu middleware personalizado)
-             \App\Http\Middleware\Cors::class,
+            
+            // ✅ CORS DE LARAVEL (opcional, ya está en global)
+            // \Illuminate\Http\Middleware\HandleCors::class,
         ],
     ];
 
-    /**
-     * The application's route middleware.
-     */
     protected $routeMiddleware = [
         'auth' => \Illuminate\Auth\Middleware\Authenticate::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
@@ -52,8 +44,8 @@ class Kernel extends HttpKernel
         'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
-
-        // ✅ TUS MIDDLEWARES PERSONALIZADOS (COMENTADOS)
+        
+        // ✅ TUS MIDDLEWARES PERSONALIZADOS (si los tienes)
         // 'check.permission' => \App\Http\Middleware\CheckPermission::class,
         // 'check.plan' => \App\Http\Middleware\CheckPlanModule::class,
     ];
