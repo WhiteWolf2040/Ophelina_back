@@ -5,337 +5,727 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
+use Faker\Factory as Faker;
 
 class ImportarDatosSeeder extends Seeder
 {
     public function run(): void
     {
-        // ==========================================
-        // 1. PLANES SAAS (sin dependencias)
-        // ==========================================
-        DB::table('planes_saas')->insert([
-            ['id_plan' => 1, 'nombre' => 'Free Trial', 'clave' => 'free', 'precio_mensual' => 0.00, 'max_empleados' => 1, 'max_clientes' => 50, 'max_prendas' => 50, 'max_empenos_activos' => 5, 'dias_prueba' => 30, 'activo' => 1],
-            ['id_plan' => 2, 'nombre' => 'Profesional', 'clave' => 'profesional', 'precio_mensual' => 999.00, 'max_empleados' => 5, 'max_clientes' => 1000, 'max_prendas' => 5000, 'max_empenos_activos' => 200, 'dias_prueba' => 0, 'activo' => 1],
-            ['id_plan' => 3, 'nombre' => 'Premium', 'clave' => 'empresarial', 'precio_mensual' => 1499.00, 'max_empleados' => 20, 'max_clientes' => 10000, 'max_prendas' => 50000, 'max_empenos_activos' => 1000, 'dias_prueba' => 0, 'activo' => 1],
-        ]);
+        $faker = Faker::create('es_MX');
 
-        // ==========================================
-        // 2. TASAS DE INTERÉS (sin dependencias)
-        // ==========================================
-        DB::table('tasas_interes')->insert([
-            ['id_tasa' => 1, 'nombre' => 'Basico', 'porcentaje' => 5.00, 'plazo_dias' => 15, 'activo' => 1],
-            ['id_tasa' => 2, 'nombre' => 'Estandar', 'porcentaje' => 8.00, 'plazo_dias' => 30, 'activo' => 1],
-            ['id_tasa' => 3, 'nombre' => 'Premium', 'porcentaje' => 10.00, 'plazo_dias' => 45, 'activo' => 1],
-            ['id_tasa' => 4, 'nombre' => 'Extendido', 'porcentaje' => 12.00, 'plazo_dias' => 60, 'activo' => 1],
-            ['id_tasa' => 5, 'nombre' => 'Flexible', 'porcentaje' => 15.00, 'plazo_dias' => 90, 'activo' => 1],
-        ]);
+        echo "Seeding database...\n\n";
 
-        // ==========================================
-        // 3. PRECIO ORO (sin dependencias)
-        // ==========================================
-        DB::table('precio_oro')->insert([
-            ['id_precio' => 1, 'precio_gramo_24k' => 2800.16, 'precio_gramo_22k' => 2566.81, 'precio_gramo_21k' => 2450.14, 'precio_gramo_18k' => 2100.12, 'precio_gramo_14k' => 1633.43, 'precio_gramo_10k' => 1166.73, 'precio_onza' => 87094.73, 'moneda' => 'MXN', 'fuente' => 'GoldAPI.io', 'fecha_actualizacion' => '2026-06-21 23:18:55'],
-        ]);
+        // Limpiar tablas existentes (orden inverso para evitar conflictos FK)
+        $tables = [
+            'movimientos_caja', 'detalle_venta', 'venta_tienda', 'apartados',
+            'pagos', 'amortizacion', 'empeno', 'producto_tienda', 'imagen_prenda',
+            'prendas', 'documento_aval', 'documento_cliente', 'direcciones',
+            'metodo_pago', 'clientes', 'aval', 'rol_permiso', 'permisos',
+            'tasas_interes', 'usuario', 'rol', 'empresa'
+        ];
 
-        // ==========================================
-        // 4. EMPRESAS (depende de planes_saas)
-        // ==========================================
-        DB::table('empresa')->insert([
-            ['id_empresa' => 1, 'nombre' => 'Empresa Juan', 'nombre_comercial' => 'Juan Prendas', 'rfc' => 'JUAN123456ABC', 'telefono' => '5551234567', 'email' => 'juan@empresa.com', 'direccion' => 'Calle Principal 123', 'ciudad' => 'Ciudad de México', 'estado' => 'CDMX', 'codigo_postal' => '12345', 'logo_url' => null, 'precio_oro_gramo' => 850.00, 'precio_oro_onza' => null, 'ultima_actualizacion_oro' => null, 'activo' => 1, 'id_plan' => 3, 'fecha_registro' => '2026-06-25 09:55:26', 'fecha_inicio_plan' => '2026-06-25', 'fecha_fin_plan' => '2026-07-25', 'plan_activo' => 1],
-            ['id_empresa' => 2, 'nombre' => 'Empresa Tula', 'nombre_comercial' => 'Tula Empeños', 'rfc' => 'TULA987654XYZ', 'telefono' => '5557654321', 'email' => 'tula@empresa.com', 'direccion' => 'Av. Reforma 456', 'ciudad' => 'Tula', 'estado' => 'Hidalgo', 'codigo_postal' => '67890', 'logo_url' => null, 'precio_oro_gramo' => 850.00, 'precio_oro_onza' => null, 'ultima_actualizacion_oro' => null, 'activo' => 1, 'id_plan' => null, 'fecha_registro' => '2026-06-25 09:55:26', 'fecha_inicio_plan' => null, 'fecha_fin_plan' => null, 'plan_activo' => 1],
-            ['id_empresa' => 3, 'nombre' => 'Empeños Express', 'nombre_comercial' => 'Express Empeños', 'rfc' => 'EXP123456ABC', 'telefono' => '5559876543', 'email' => 'express@empresa.com', 'direccion' => 'Boulevard Central 789', 'ciudad' => 'Guadalajara', 'estado' => 'Jalisco', 'codigo_postal' => '44100', 'logo_url' => null, 'precio_oro_gramo' => 850.00, 'precio_oro_onza' => null, 'ultima_actualizacion_oro' => null, 'activo' => 1, 'id_plan' => null, 'fecha_registro' => '2026-06-25 09:55:26', 'fecha_inicio_plan' => null, 'fecha_fin_plan' => null, 'plan_activo' => 1],
-        ]);
+        // 🔥 PostgreSQL TRUNCATE (sin SET FOREIGN_KEY_CHECKS)
+        DB::statement('SET session_replication_role = replica;');
+        foreach ($tables as $table) {
+            try {
+                DB::table($table)->truncate();
+                $this->command->info("✅ Tabla {$table} limpiada");
+            } catch (\Exception $e) {
+                $this->command->warn("⚠️ No se pudo limpiar {$table}: " . $e->getMessage());
+            }
+        }
+        DB::statement('SET session_replication_role = DEFAULT;');
 
-        // ==========================================
-        // 5. ROLES (depende de empresas)
-        // ==========================================
-        DB::table('rol')->insert([
-            ['id_rol' => 1, 'id_empresa' => 1, 'nombre' => 'Administrador', 'descripcion' => 'Acceso total al sistema con todos los permisos', 'nivel' => 1],
-            ['id_rol' => 2, 'id_empresa' => 1, 'nombre' => 'Gerente', 'descripcion' => 'Gestión de clientes, empeños y operaciones', 'nivel' => 2],
-            ['id_rol' => 3, 'id_empresa' => 1, 'nombre' => 'Cajero', 'descripcion' => 'Operaciones de caja y pagos', 'nivel' => 3],
-            ['id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Cliente', 'descripcion' => 'Portal de clientes - visualización básica', 'nivel' => 4],
-            ['id_rol' => 5, 'id_empresa' => 2, 'nombre' => 'Administrador', 'descripcion' => 'Acceso total al sistema con todos los permisos', 'nivel' => 1],
-            ['id_rol' => 6, 'id_empresa' => 2, 'nombre' => 'Gerente', 'descripcion' => 'Gestión de clientes, empeños y operaciones', 'nivel' => 2],
-            ['id_rol' => 7, 'id_empresa' => 2, 'nombre' => 'Cajero', 'descripcion' => 'Operaciones de caja y pagos', 'nivel' => 3],
-            ['id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Cliente', 'descripcion' => 'Portal de clientes - visualización básica', 'nivel' => 4],
-            ['id_rol' => 9, 'id_empresa' => 3, 'nombre' => 'Administrador', 'descripcion' => 'Acceso total al sistema con todos los permisos', 'nivel' => 1],
-            ['id_rol' => 10, 'id_empresa' => 3, 'nombre' => 'Gerente', 'descripcion' => 'Gestión de clientes, empeños y operaciones', 'nivel' => 2],
-            ['id_rol' => 11, 'id_empresa' => 3, 'nombre' => 'Cajero', 'descripcion' => 'Operaciones de caja y pagos', 'nivel' => 3],
-            ['id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Cliente', 'descripcion' => 'Portal de clientes - visualización básica', 'nivel' => 4],
-        ]);
+        $this->command->info("\n");
 
-        // ==========================================
-        // 6. USUARIOS (depende de roles y empresas)
-        // ==========================================
-        $password = Hash::make('password');
-        DB::table('usuario')->insert([
-            ['id_usuario' => 1, 'id_rol' => 1, 'id_empresa' => 1, 'nombre' => 'Administrador Juan Prendas', 'correo' => 'juanprendas@admin.com', 'contrasena' => $password, 'telefono' => '607-889-5746', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:26', 'ultimo_acceso' => null],
-            ['id_usuario' => 2, 'id_rol' => 2, 'id_empresa' => 1, 'nombre' => 'Gerente Juan Prendas', 'correo' => 'juanprendas.gerente@admin.com', 'contrasena' => $password, 'telefono' => '+1-540-876-0628', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:26', 'ultimo_acceso' => null],
-            ['id_usuario' => 3, 'id_rol' => 3, 'id_empresa' => 1, 'nombre' => 'Cajero Juan Prendas', 'correo' => 'juanprendas.cajero@admin.com', 'contrasena' => $password, 'telefono' => '+1-518-644-9777', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 4, 'id_rol' => 2, 'id_empresa' => 1, 'nombre' => 'Princess Hodkiewicz', 'correo' => 'bernhard.jerod@example.com', 'contrasena' => $password, 'telefono' => '1-541-338-6362', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 5, 'id_rol' => 2, 'id_empresa' => 1, 'nombre' => 'Abagail Gorczany', 'correo' => 'vstokes@example.net', 'contrasena' => $password, 'telefono' => '248.608.9942', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 6, 'id_rol' => 3, 'id_empresa' => 1, 'nombre' => 'Annie Konopelski IV', 'correo' => 'ratke.jeffry@example.org', 'contrasena' => $password, 'telefono' => '1-458-717-9000', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 7, 'id_rol' => 3, 'id_empresa' => 1, 'nombre' => 'Rachael Barrows', 'correo' => 'ramiro.wuckert@example.net', 'contrasena' => $password, 'telefono' => '+1.262.360.0930', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 8, 'id_rol' => 3, 'id_empresa' => 1, 'nombre' => 'Randal Luettgen', 'correo' => 'dante.mitchell@example.com', 'contrasena' => $password, 'telefono' => '1-937-267-1795', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 9, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Brian Zemlak', 'correo' => 'abel05@example.net', 'contrasena' => $password, 'telefono' => '+1-475-745-3707', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 10, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Alycia Smith', 'correo' => 'klind@example.org', 'contrasena' => $password, 'telefono' => '1-341-428-4425', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 11, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Claudie Stanton', 'correo' => 'tina11@example.org', 'contrasena' => $password, 'telefono' => '308-848-1274', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 12, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Amelie Powlowski', 'correo' => 'antwon52@example.net', 'contrasena' => $password, 'telefono' => '+19302466106', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 13, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Jakob Hackett', 'correo' => 'vergie38@example.net', 'contrasena' => $password, 'telefono' => '(580) 212-1311', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 14, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Ilene Kutch', 'correo' => 'goodwin.kelvin@example.org', 'contrasena' => $password, 'telefono' => '360.271.5133', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 15, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Anita Gusikowski', 'correo' => 'candice69@example.org', 'contrasena' => $password, 'telefono' => '+1-401-495-7066', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 16, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Nolan Cremin', 'correo' => 'eanderson@example.com', 'contrasena' => $password, 'telefono' => '320.408.3858', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:27', 'ultimo_acceso' => null],
-            ['id_usuario' => 17, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Adrienne Bins', 'correo' => 'ephraim.anderson@example.net', 'contrasena' => $password, 'telefono' => '212-270-9508', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 18, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Chelsey Bauch', 'correo' => 'thompson.herman@example.org', 'contrasena' => $password, 'telefono' => '(319) 816-4012', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 19, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Evelyn Zemlak', 'correo' => 'schneider.ruby@example.com', 'contrasena' => $password, 'telefono' => '323.239.0590', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 20, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Oscar Corwin', 'correo' => 'kirlin.felicity@example.com', 'contrasena' => $password, 'telefono' => '+1 (702) 637-6352', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 21, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Olin Baumbach', 'correo' => 'fkuphal@example.com', 'contrasena' => $password, 'telefono' => '+1 (252) 640-9235', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 22, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'General Haley', 'correo' => 'seamus33@example.org', 'contrasena' => $password, 'telefono' => '(478) 591-9077', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 23, 'id_rol' => 4, 'id_empresa' => 1, 'nombre' => 'Maybell Wisoky', 'correo' => 'makenzie39@example.org', 'contrasena' => $password, 'telefono' => '+12517453960', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 24, 'id_rol' => 5, 'id_empresa' => 2, 'nombre' => 'Administrador Tula Empeños', 'correo' => 'tulaempeños@admin.com', 'contrasena' => $password, 'telefono' => '219.525.1619', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 25, 'id_rol' => 6, 'id_empresa' => 2, 'nombre' => 'Gerente Tula Empeños', 'correo' => 'tulaempeños.gerente@admin.com', 'contrasena' => $password, 'telefono' => '+1-908-282-2963', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 26, 'id_rol' => 7, 'id_empresa' => 2, 'nombre' => 'Cajero Tula Empeños', 'correo' => 'tulaempeños.cajero@admin.com', 'contrasena' => $password, 'telefono' => '320-336-0668', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 27, 'id_rol' => 6, 'id_empresa' => 2, 'nombre' => 'Aracely Beatty', 'correo' => 'eve50@example.net', 'contrasena' => $password, 'telefono' => '347-634-5259', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 28, 'id_rol' => 6, 'id_empresa' => 2, 'nombre' => 'Evalyn Effertz', 'correo' => 'hallie.altenwerth@example.net', 'contrasena' => $password, 'telefono' => '1-347-588-0772', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 29, 'id_rol' => 7, 'id_empresa' => 2, 'nombre' => 'Miss Adella Williamson Sr.', 'correo' => 'gaylord16@example.org', 'contrasena' => $password, 'telefono' => '1-619-504-3585', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 30, 'id_rol' => 7, 'id_empresa' => 2, 'nombre' => 'Makayla Schamberger', 'correo' => 'reyna07@example.net', 'contrasena' => $password, 'telefono' => '(848) 763-5539', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 31, 'id_rol' => 7, 'id_empresa' => 2, 'nombre' => 'Reid Predovic', 'correo' => 'catharine51@example.net', 'contrasena' => $password, 'telefono' => '845-532-6183', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:28', 'ultimo_acceso' => null],
-            ['id_usuario' => 32, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Skye Price', 'correo' => 'dorris.hahn@example.net', 'contrasena' => $password, 'telefono' => '(707) 297-0418', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 33, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Tavares Ritchie', 'correo' => 'west.letha@example.com', 'contrasena' => $password, 'telefono' => '(432) 305-2046', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 34, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Glen Parker', 'correo' => 'bogan.brody@example.com', 'contrasena' => $password, 'telefono' => '+1-320-534-3157', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 35, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Howard Stanton', 'correo' => 'gryan@example.com', 'contrasena' => $password, 'telefono' => '+19408734594', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 36, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Wade Morissette', 'correo' => 'stephania85@example.net', 'contrasena' => $password, 'telefono' => '(575) 360-6862', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 37, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Rod Bernhard', 'correo' => 'eemard@example.com', 'contrasena' => $password, 'telefono' => '559-548-8317', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 38, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Lucius Kiehn', 'correo' => 'ullrich.fatima@example.com', 'contrasena' => $password, 'telefono' => '980-365-2824', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 39, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Lester Mills', 'correo' => 'pierre92@example.org', 'contrasena' => $password, 'telefono' => '+1.321.424.8349', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 40, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Theodore Harvey', 'correo' => 'nader.crystal@example.net', 'contrasena' => $password, 'telefono' => '385-348-9756', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 41, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Maribel Nader', 'correo' => 'ynolan@example.org', 'contrasena' => $password, 'telefono' => '(970) 437-2430', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 42, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Foster Upton', 'correo' => 'elise.douglas@example.org', 'contrasena' => $password, 'telefono' => '854.257.2238', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 43, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Bertha Nolan', 'correo' => 'moore.maegan@example.net', 'contrasena' => $password, 'telefono' => '+14018766927', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 44, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Bessie Oberbrunner', 'correo' => 'gmante@example.com', 'contrasena' => $password, 'telefono' => '1-618-691-6841', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 45, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Renee Schroeder', 'correo' => 'pouros.benton@example.com', 'contrasena' => $password, 'telefono' => '+1.864.685.5732', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:29', 'ultimo_acceso' => null],
-            ['id_usuario' => 46, 'id_rol' => 8, 'id_empresa' => 2, 'nombre' => 'Agustin Reichel', 'correo' => 'elody.schuster@example.com', 'contrasena' => $password, 'telefono' => '(231) 752-8014', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 47, 'id_rol' => 9, 'id_empresa' => 3, 'nombre' => 'Administrador Express Empeños', 'correo' => 'expressempeños@admin.com', 'contrasena' => $password, 'telefono' => '680-846-6784', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 48, 'id_rol' => 10, 'id_empresa' => 3, 'nombre' => 'Gerente Express Empeños', 'correo' => 'expressempeños.gerente@admin.com', 'contrasena' => $password, 'telefono' => '+1-854-371-2058', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 49, 'id_rol' => 11, 'id_empresa' => 3, 'nombre' => 'Cajero Express Empeños', 'correo' => 'expressempeños.cajero@admin.com', 'contrasena' => $password, 'telefono' => '762-238-0233', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 50, 'id_rol' => 10, 'id_empresa' => 3, 'nombre' => 'Dr. Destin Walsh IV', 'correo' => 'dkessler@example.net', 'contrasena' => $password, 'telefono' => '+1 (312) 380-7970', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 51, 'id_rol' => 10, 'id_empresa' => 3, 'nombre' => 'Mrs. Hannah Kerluke PhD', 'correo' => 'mertz.eliseo@example.org', 'contrasena' => $password, 'telefono' => '+14257878314', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 52, 'id_rol' => 11, 'id_empresa' => 3, 'nombre' => 'Ewald Johnston', 'correo' => 'igutmann@example.com', 'contrasena' => $password, 'telefono' => '(423) 424-5655', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 53, 'id_rol' => 11, 'id_empresa' => 3, 'nombre' => 'Presley Heathcote Sr.', 'correo' => 'shields.ryann@example.net', 'contrasena' => $password, 'telefono' => '+15087398885', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 54, 'id_rol' => 11, 'id_empresa' => 3, 'nombre' => 'Trisha Jakubowski', 'correo' => 'spinka.spencer@example.net', 'contrasena' => $password, 'telefono' => '+13256730998', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 55, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Veda Wisoky', 'correo' => 'zweimann@example.com', 'contrasena' => $password, 'telefono' => '754-867-0246', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 56, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Gaylord Emmerich', 'correo' => 'mitchell.anastacio@example.com', 'contrasena' => $password, 'telefono' => '+1.757.614.6046', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 57, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'River Collier', 'correo' => 'nathanial59@example.org', 'contrasena' => $password, 'telefono' => '540.429.1345', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 58, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Allie Grant', 'correo' => 'zaria65@example.net', 'contrasena' => $password, 'telefono' => '209-815-7048', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 59, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Cathy Leuschke', 'correo' => 'ifadel@example.org', 'contrasena' => $password, 'telefono' => '440-217-3664', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:30', 'ultimo_acceso' => null],
-            ['id_usuario' => 60, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Dayton Daniel', 'correo' => 'jcarroll@example.net', 'contrasena' => $password, 'telefono' => '+16695351521', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:31', 'ultimo_acceso' => null],
-            ['id_usuario' => 61, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Ceasar Rice', 'correo' => 'audie.doyle@example.org', 'contrasena' => $password, 'telefono' => '(216) 249-8871', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:31', 'ultimo_acceso' => null],
-            ['id_usuario' => 62, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Zelda Beahan', 'correo' => 'thiel.chloe@example.net', 'contrasena' => $password, 'telefono' => '337-776-1080', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:31', 'ultimo_acceso' => null],
-            ['id_usuario' => 63, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Herminio Stanton', 'correo' => 'jesse.mayert@example.com', 'contrasena' => $password, 'telefono' => '(380) 628-2623', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:31', 'ultimo_acceso' => null],
-            ['id_usuario' => 64, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Lesly Langworth', 'correo' => 'qgislason@example.org', 'contrasena' => $password, 'telefono' => '1-509-250-7472', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:31', 'ultimo_acceso' => null],
-            ['id_usuario' => 65, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Prince Wolf', 'correo' => 'chesley.morissette@example.net', 'contrasena' => $password, 'telefono' => '(940) 609-3754', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:31', 'ultimo_acceso' => null],
-            ['id_usuario' => 66, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Stacey Schoen', 'correo' => 'mcclure.mathias@example.org', 'contrasena' => $password, 'telefono' => '+1-854-312-5517', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:31', 'ultimo_acceso' => null],
-            ['id_usuario' => 67, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Ari Tromp', 'correo' => 'gtoy@example.org', 'contrasena' => $password, 'telefono' => '352.398.1359', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:31', 'ultimo_acceso' => null],
-            ['id_usuario' => 68, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Andrew Von', 'correo' => 'langworth.gwendolyn@example.com', 'contrasena' => $password, 'telefono' => '+1 (747) 428-1394', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:31', 'ultimo_acceso' => null],
-            ['id_usuario' => 69, 'id_rol' => 12, 'id_empresa' => 3, 'nombre' => 'Mose Greenholt', 'correo' => 'joany.waelchi@example.org', 'contrasena' => $password, 'telefono' => '859-776-0146', 'foto_perfil' => null, 'activo' => 1, 'fecha_registro' => '2026-06-25 09:55:31', 'ultimo_acceso' => null],
-        ]);
+        /* =====================
+           EMPRESAS
+        =====================*/
 
-        // ==========================================
-        // 7. CLIENTES (depende de usuarios y empresas)
-        // ==========================================
-        DB::table('clientes')->insert([
-            ['id_cliente' => 1, 'id_usuario' => 9, 'id_empresa' => 1, 'nombre' => 'Brian', 'apellido' => 'Zemlak', 'telefono' => '1-601-593-0854', 'correo' => 'abel05@example.net', 'direccion' => '486 Larson Turnpike Apt. 685', 'codigo_postal' => '64551-3694', 'ciudad' => 'West Shaina', 'estado' => 'Hawaii', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 2, 'id_usuario' => 10, 'id_empresa' => 1, 'nombre' => 'Alycia', 'apellido' => 'Smith', 'telefono' => '414.827.9152', 'correo' => 'klind@example.org', 'direccion' => '235 Mitchell Viaduct', 'codigo_postal' => '69635', 'ciudad' => 'Giaborough', 'estado' => 'Alaska', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 3, 'id_usuario' => 11, 'id_empresa' => 1, 'nombre' => 'Claudie', 'apellido' => 'Stanton', 'telefono' => '+1.208.975.0457', 'correo' => 'tina11@example.org', 'direccion' => '840 Margret Trail', 'codigo_postal' => '47784-7112', 'ciudad' => 'Modestahaven', 'estado' => 'Wyoming', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 4, 'id_usuario' => 12, 'id_empresa' => 1, 'nombre' => 'Amelie', 'apellido' => 'Powlowski', 'telefono' => '+1 (501) 653-5071', 'correo' => 'antwon52@example.net', 'direccion' => '58845 Kiehn Cape', 'codigo_postal' => '21405-0345', 'ciudad' => 'Layneland', 'estado' => 'Washington', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 5, 'id_usuario' => 13, 'id_empresa' => 1, 'nombre' => 'Jakob', 'apellido' => 'Hackett', 'telefono' => '+1 (786) 994-6761', 'correo' => 'vergie38@example.net', 'direccion' => '9683 O\'Conner Spur Suite 992', 'codigo_postal' => '17369-1496', 'ciudad' => 'Effiemouth', 'estado' => 'Georgia', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 6, 'id_usuario' => 14, 'id_empresa' => 1, 'nombre' => 'Ilene', 'apellido' => 'Kutch', 'telefono' => '+16127444552', 'correo' => 'goodwin.kelvin@example.org', 'direccion' => '94130 Mollie Grove Suite 084', 'codigo_postal' => '88054-9117', 'ciudad' => 'West Letaland', 'estado' => 'Delaware', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 7, 'id_usuario' => 15, 'id_empresa' => 1, 'nombre' => 'Anita', 'apellido' => 'Gusikowski', 'telefono' => '248.310.1430', 'correo' => 'candice69@example.org', 'direccion' => '1693 Gust Row', 'codigo_postal' => '14617-3370', 'ciudad' => 'West Opalland', 'estado' => 'Kansas', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 8, 'id_usuario' => 16, 'id_empresa' => 1, 'nombre' => 'Nolan', 'apellido' => 'Cremin', 'telefono' => '(959) 342-7655', 'correo' => 'eanderson@example.com', 'direccion' => '46753 Kallie Points Apt. 396', 'codigo_postal' => '78407', 'ciudad' => 'Bahringermouth', 'estado' => 'Illinois', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 9, 'id_usuario' => 17, 'id_empresa' => 1, 'nombre' => 'Adrienne', 'apellido' => 'Bins', 'telefono' => '+16672962558', 'correo' => 'ephraim.anderson@example.net', 'direccion' => '8336 Rasheed Ports Apt. 094', 'codigo_postal' => '99872', 'ciudad' => 'Kenyattaton', 'estado' => 'Georgia', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 10, 'id_usuario' => 18, 'id_empresa' => 1, 'nombre' => 'Chelsey', 'apellido' => 'Bauch', 'telefono' => '+1-206-678-3355', 'correo' => 'thompson.herman@example.org', 'direccion' => '90838 Morris Loaf', 'codigo_postal' => '20907-9755', 'ciudad' => 'Nellieport', 'estado' => 'Illinois', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 11, 'id_usuario' => 19, 'id_empresa' => 1, 'nombre' => 'Evelyn', 'apellido' => 'Zemlak', 'telefono' => '678-798-9522', 'correo' => 'schneider.ruby@example.com', 'direccion' => '4196 Kreiger Isle Suite 820', 'codigo_postal' => '88641-4251', 'ciudad' => 'East Arvelbury', 'estado' => 'Alaska', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 12, 'id_usuario' => 20, 'id_empresa' => 1, 'nombre' => 'Oscar', 'apellido' => 'Corwin', 'telefono' => '814-403-6839', 'correo' => 'kirlin.felicity@example.com', 'direccion' => '92599 Anahi Drive Suite 484', 'codigo_postal' => '94858', 'ciudad' => 'Betteville', 'estado' => 'Delaware', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 13, 'id_usuario' => 21, 'id_empresa' => 1, 'nombre' => 'Olin', 'apellido' => 'Baumbach', 'telefono' => '1-231-753-2119', 'correo' => 'fkuphal@example.com', 'direccion' => '5928 Prosacco Tunnel Apt. 821', 'codigo_postal' => '03955-4435', 'ciudad' => 'Port Elmira', 'estado' => 'New Hampshire', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 14, 'id_usuario' => 22, 'id_empresa' => 1, 'nombre' => 'General', 'apellido' => 'Haley', 'telefono' => '+12513664064', 'correo' => 'seamus33@example.org', 'direccion' => '24810 Brent Place', 'codigo_postal' => '88074', 'ciudad' => 'Kautzerfurt', 'estado' => 'Kentucky', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 15, 'id_usuario' => 23, 'id_empresa' => 1, 'nombre' => 'Maybell', 'apellido' => 'Wisoky', 'telefono' => '+1 (863) 823-6423', 'correo' => 'makenzie39@example.org', 'direccion' => '6470 Alessia Courts Apt. 566', 'codigo_postal' => '10097-5014', 'ciudad' => 'Lake Odell', 'estado' => 'Pennsylvania', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 16, 'id_usuario' => 32, 'id_empresa' => 2, 'nombre' => 'Skye', 'apellido' => 'Price', 'telefono' => '986.972.1474', 'correo' => 'dorris.hahn@example.net', 'direccion' => '651 Cassandra Plain Apt. 065', 'codigo_postal' => '33831-0555', 'ciudad' => 'Soniashire', 'estado' => 'Louisiana', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 17, 'id_usuario' => 33, 'id_empresa' => 2, 'nombre' => 'Tavares', 'apellido' => 'Ritchie', 'telefono' => '1-478-713-8573', 'correo' => 'west.letha@example.com', 'direccion' => '7295 Lessie Station', 'codigo_postal' => '71524', 'ciudad' => 'New Svenmouth', 'estado' => 'Maine', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 18, 'id_usuario' => 34, 'id_empresa' => 2, 'nombre' => 'Glen', 'apellido' => 'Parker', 'telefono' => '1-781-794-4428', 'correo' => 'bogan.brody@example.com', 'direccion' => '9619 McClure Squares', 'codigo_postal' => '11758-9780', 'ciudad' => 'North Noemy', 'estado' => 'Kentucky', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 19, 'id_usuario' => 35, 'id_empresa' => 2, 'nombre' => 'Howard', 'apellido' => 'Stanton', 'telefono' => '+13205398048', 'correo' => 'gryan@example.com', 'direccion' => '785 Leuschke Cliffs Suite 616', 'codigo_postal' => '33481-6423', 'ciudad' => 'Mullerside', 'estado' => 'Wyoming', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 20, 'id_usuario' => 36, 'id_empresa' => 2, 'nombre' => 'Wade', 'apellido' => 'Morissette', 'telefono' => '980-666-6779', 'correo' => 'stephania85@example.net', 'direccion' => '7671 Thomas Points', 'codigo_postal' => '79629', 'ciudad' => 'Coleshire', 'estado' => 'Idaho', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 21, 'id_usuario' => 37, 'id_empresa' => 2, 'nombre' => 'Rod', 'apellido' => 'Bernhard', 'telefono' => '1-781-839-8700', 'correo' => 'eemard@example.com', 'direccion' => '40237 Kuvalis Ville', 'codigo_postal' => '22311-0596', 'ciudad' => 'Haleyberg', 'estado' => 'Florida', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 22, 'id_usuario' => 38, 'id_empresa' => 2, 'nombre' => 'Lucius', 'apellido' => 'Kiehn', 'telefono' => '1-304-808-5466', 'correo' => 'ullrich.fatima@example.com', 'direccion' => '46756 Jaycee Union', 'codigo_postal' => '61559-7206', 'ciudad' => 'Kassulkefort', 'estado' => 'Delaware', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 23, 'id_usuario' => 39, 'id_empresa' => 2, 'nombre' => 'Lester', 'apellido' => 'Mills', 'telefono' => '(484) 587-4535', 'correo' => 'pierre92@example.org', 'direccion' => '52319 Fritsch Brook', 'codigo_postal' => '59039', 'ciudad' => 'Shawnborough', 'estado' => 'Maine', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 24, 'id_usuario' => 40, 'id_empresa' => 2, 'nombre' => 'Theodore', 'apellido' => 'Harvey', 'telefono' => '1-681-945-0538', 'correo' => 'nader.crystal@example.net', 'direccion' => '98290 Metz Branch Suite 901', 'codigo_postal' => '18706', 'ciudad' => 'West Alessiabury', 'estado' => 'Louisiana', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 25, 'id_usuario' => 41, 'id_empresa' => 2, 'nombre' => 'Maribel', 'apellido' => 'Nader', 'telefono' => '(616) 667-6370', 'correo' => 'ynolan@example.org', 'direccion' => '61047 Kris Vista', 'codigo_postal' => '41037-6722', 'ciudad' => 'Tamaraview', 'estado' => 'Virginia', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 26, 'id_usuario' => 42, 'id_empresa' => 2, 'nombre' => 'Foster', 'apellido' => 'Upton', 'telefono' => '+1 (970) 466-9281', 'correo' => 'elise.douglas@example.org', 'direccion' => '524 Charlie Crossing Suite 802', 'codigo_postal' => '52204', 'ciudad' => 'Zenaborough', 'estado' => 'Mississippi', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 27, 'id_usuario' => 43, 'id_empresa' => 2, 'nombre' => 'Bertha', 'apellido' => 'Nolan', 'telefono' => '+1-786-834-0936', 'correo' => 'moore.maegan@example.net', 'direccion' => '546 Alysa Drive', 'codigo_postal' => '28571-2529', 'ciudad' => 'Skilesland', 'estado' => 'Oklahoma', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 28, 'id_usuario' => 44, 'id_empresa' => 2, 'nombre' => 'Bessie', 'apellido' => 'Oberbrunner', 'telefono' => '+1.434.336.5676', 'correo' => 'gmante@example.com', 'direccion' => '82561 Bethel Valley Apt. 545', 'codigo_postal' => '40326-7197', 'ciudad' => 'North Imelda', 'estado' => 'New Jersey', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 29, 'id_usuario' => 45, 'id_empresa' => 2, 'nombre' => 'Renee', 'apellido' => 'Schroeder', 'telefono' => '+1.574.452.5703', 'correo' => 'pouros.benton@example.com', 'direccion' => '52858 Michel Manor Suite 694', 'codigo_postal' => '05890-2325', 'ciudad' => 'Port Jillianside', 'estado' => 'Utah', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 30, 'id_usuario' => 46, 'id_empresa' => 2, 'nombre' => 'Agustin', 'apellido' => 'Reichel', 'telefono' => '816-350-5308', 'correo' => 'elody.schuster@example.com', 'direccion' => '16363 Katelin Cove', 'codigo_postal' => '24480', 'ciudad' => 'Candelarioside', 'estado' => 'Massachusetts', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 31, 'id_usuario' => 55, 'id_empresa' => 3, 'nombre' => 'Veda', 'apellido' => 'Wisoky', 'telefono' => '(731) 777-5223', 'correo' => 'zweimann@example.com', 'direccion' => '250 Veum Divide', 'codigo_postal' => '72294-0124', 'ciudad' => 'Aufderharfurt', 'estado' => 'Colorado', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 32, 'id_usuario' => 56, 'id_empresa' => 3, 'nombre' => 'Gaylord', 'apellido' => 'Emmerich', 'telefono' => '1-815-699-0755', 'correo' => 'mitchell.anastacio@example.com', 'direccion' => '85980 Feil Shore Suite 332', 'codigo_postal' => '15653', 'ciudad' => 'New Corbin', 'estado' => 'Rhode Island', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 33, 'id_usuario' => 57, 'id_empresa' => 3, 'nombre' => 'River', 'apellido' => 'Collier', 'telefono' => '+1 (469) 365-9161', 'correo' => 'nathanial59@example.org', 'direccion' => '49220 Wilfredo Well', 'codigo_postal' => '47856-1069', 'ciudad' => 'West Charley', 'estado' => 'Nebraska', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 34, 'id_usuario' => 58, 'id_empresa' => 3, 'nombre' => 'Allie', 'apellido' => 'Grant', 'telefono' => '(920) 223-7403', 'correo' => 'zaria65@example.net', 'direccion' => '7745 Gislason Well', 'codigo_postal' => '15430-9129', 'ciudad' => 'South Royceberg', 'estado' => 'Pennsylvania', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 35, 'id_usuario' => 59, 'id_empresa' => 3, 'nombre' => 'Cathy', 'apellido' => 'Leuschke', 'telefono' => '740.252.4711', 'correo' => 'ifadel@example.org', 'direccion' => '1588 Jacobs Wells Suite 406', 'codigo_postal' => '97053', 'ciudad' => 'North Alainaville', 'estado' => 'Indiana', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 36, 'id_usuario' => 60, 'id_empresa' => 3, 'nombre' => 'Dayton', 'apellido' => 'Daniel', 'telefono' => '+1-934-289-9878', 'correo' => 'jcarroll@example.net', 'direccion' => '583 Demario Summit Apt. 821', 'codigo_postal' => '07500-9299', 'ciudad' => 'Ankundington', 'estado' => 'Texas', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 37, 'id_usuario' => 61, 'id_empresa' => 3, 'nombre' => 'Ceasar', 'apellido' => 'Rice', 'telefono' => '+1 (817) 376-6977', 'correo' => 'audie.doyle@example.org', 'direccion' => '554 Bauch Port', 'codigo_postal' => '58813-5222', 'ciudad' => 'Schmidtport', 'estado' => 'Louisiana', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 38, 'id_usuario' => 62, 'id_empresa' => 3, 'nombre' => 'Zelda', 'apellido' => 'Beahan', 'telefono' => '+1-854-524-1389', 'correo' => 'thiel.chloe@example.net', 'direccion' => '53410 Aimee Camp Apt. 023', 'codigo_postal' => '71219', 'ciudad' => 'South Rebekaborough', 'estado' => 'Hawaii', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 39, 'id_usuario' => 63, 'id_empresa' => 3, 'nombre' => 'Herminio', 'apellido' => 'Stanton', 'telefono' => '336.202.3242', 'correo' => 'jesse.mayert@example.com', 'direccion' => '670 Littel Spur Apt. 238', 'codigo_postal' => '26021', 'ciudad' => 'Genehaven', 'estado' => 'Pennsylvania', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 40, 'id_usuario' => 64, 'id_empresa' => 3, 'nombre' => 'Lesly', 'apellido' => 'Langworth', 'telefono' => '820.749.2741', 'correo' => 'qgislason@example.org', 'direccion' => '6878 Kim Canyon Suite 170', 'codigo_postal' => '27804-9775', 'ciudad' => 'Dietrichbury', 'estado' => 'Oklahoma', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 41, 'id_usuario' => 65, 'id_empresa' => 3, 'nombre' => 'Prince', 'apellido' => 'Wolf', 'telefono' => '734.603.1076', 'correo' => 'chesley.morissette@example.net', 'direccion' => '9605 Selina Plaza Apt. 272', 'codigo_postal' => '91120-0771', 'ciudad' => 'Port Marianafort', 'estado' => 'Utah', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 42, 'id_usuario' => 66, 'id_empresa' => 3, 'nombre' => 'Stacey', 'apellido' => 'Schoen', 'telefono' => '225.290.8737', 'correo' => 'mcclure.mathias@example.org', 'direccion' => '1314 Harvey Fields Suite 634', 'codigo_postal' => '80583-5102', 'ciudad' => 'Shieldsport', 'estado' => 'Louisiana', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 43, 'id_usuario' => 67, 'id_empresa' => 3, 'nombre' => 'Ari', 'apellido' => 'Tromp', 'telefono' => '586-989-7398', 'correo' => 'gtoy@example.org', 'direccion' => '9453 Kerluke Ford Suite 050', 'codigo_postal' => '14425', 'ciudad' => 'Volkmanfurt', 'estado' => 'Maryland', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 44, 'id_usuario' => 68, 'id_empresa' => 3, 'nombre' => 'Andrew', 'apellido' => 'Von', 'telefono' => '727.365.7361', 'correo' => 'langworth.gwendolyn@example.com', 'direccion' => '9991 Mae Trace', 'codigo_postal' => '80070', 'ciudad' => 'Lincolnland', 'estado' => 'Indiana', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-            ['id_cliente' => 45, 'id_usuario' => 69, 'id_empresa' => 3, 'nombre' => 'Mose', 'apellido' => 'Greenholt', 'telefono' => '(918) 673-0141', 'correo' => 'joany.waelchi@example.org', 'direccion' => '8667 Steuber Heights Suite 708', 'codigo_postal' => '09000', 'ciudad' => 'North Magdalen', 'estado' => 'Florida', 'fecha_registro' => '2026-06-25 09:55:31', 'activo' => 1, 'tipo_identificacion' => null, 'numero_identificacion' => null, 'foto_perfil' => null, 'foto_ine' => null],
-        ]);
+        $empresas = [
+            [
+                'nombre' => 'Empresa Juan', 
+                'nombre_comercial' => 'Juan Prendas', 
+                'rfc' => 'JUAN123456ABC', 
+                'telefono' => '5551234567', 
+                'email' => 'juan@empresa.com', 
+                'direccion' => 'Calle Principal 123', 
+                'ciudad' => 'Ciudad de México', 
+                'estado' => 'CDMX', 
+                'codigo_postal' => '12345'
+            ],
+            [
+                'nombre' => 'Empresa Tula', 
+                'nombre_comercial' => 'Tula Empeños', 
+                'rfc' => 'TULA987654XYZ', 
+                'telefono' => '5557654321', 
+                'email' => 'tula@empresa.com', 
+                'direccion' => 'Av. Reforma 456', 
+                'ciudad' => 'Tula', 
+                'estado' => 'Hidalgo', 
+                'codigo_postal' => '67890'
+            ],
+            [
+                'nombre' => 'Empeños Express', 
+                'nombre_comercial' => 'Express Empeños', 
+                'rfc' => 'EXP123456ABC', 
+                'telefono' => '5559876543', 
+                'email' => 'express@empresa.com', 
+                'direccion' => 'Boulevard Central 789', 
+                'ciudad' => 'Guadalajara', 
+                'estado' => 'Jalisco', 
+                'codigo_postal' => '44100'
+            ]
+        ];
 
-        // ==========================================
-        // 8. AVALES (depende de clientes y empresas)
-        // ==========================================
-        DB::table('aval')->insert([
-            ['id_aval' => 1, 'id_empresa' => 1, 'id_cliente' => 1, 'nombre' => 'Mark', 'apellido' => 'Jacobs', 'telefono' => '+1.248.378.6867', 'direccion' => '591 Orn Villages Suite 429 Carleemouth, WV 79153-0658', 'email' => 'king.amira@example.net', 'identificacion' => null],
-            ['id_aval' => 2, 'id_empresa' => 1, 'id_cliente' => 2, 'nombre' => 'Lacey', 'apellido' => 'Heaney', 'telefono' => '+1-434-474-2106', 'direccion' => '24026 Kilback Plaza Apt. 336 Luettgenhaven, ND 73338', 'email' => 'georgette.ullrich@example.org', 'identificacion' => null],
-            ['id_aval' => 3, 'id_empresa' => 1, 'id_cliente' => 3, 'nombre' => 'Briana', 'apellido' => 'Haley', 'telefono' => '1-307-373-9164', 'direccion' => '302 Trevion Corner North Julius, KS 41197', 'email' => 'muhammad84@example.org', 'identificacion' => null],
-            ['id_aval' => 4, 'id_empresa' => 1, 'id_cliente' => 4, 'nombre' => 'Freddy', 'apellido' => 'Hoeger', 'telefono' => '520.238.8966', 'direccion' => '94546 Durgan Vista Xanderside, DC 73129-6738', 'email' => 'jreichel@example.org', 'identificacion' => null],
-            ['id_aval' => 5, 'id_empresa' => 1, 'id_cliente' => 5, 'nombre' => 'Gabrielle', 'apellido' => 'Abshire', 'telefono' => '479.704.5751', 'direccion' => '18442 Rohan Gateway Apt. 461 Treutelside, OK 14205', 'email' => 'dhauck@example.com', 'identificacion' => null],
-            ['id_aval' => 6, 'id_empresa' => 1, 'id_cliente' => 6, 'nombre' => 'Kip', 'apellido' => 'Smitham', 'telefono' => '+19729837589', 'direccion' => '850 Kunde Extension Apt. 669 Lueilwitzview, KY 34912', 'email' => 'kamron.welch@example.com', 'identificacion' => null],
-            ['id_aval' => 7, 'id_empresa' => 1, 'id_cliente' => 7, 'nombre' => 'Burdette', 'apellido' => 'Klein', 'telefono' => '+1.854.629.3175', 'direccion' => '386 Damion Pass Apt. 588 West Myrlmouth, ME 60978', 'email' => 'hkihn@example.org', 'identificacion' => null],
-            ['id_aval' => 8, 'id_empresa' => 1, 'id_cliente' => 8, 'nombre' => 'Amaya', 'apellido' => 'Dicki', 'telefono' => '+1.443.317.4074', 'direccion' => '5565 Bauch Alley South Jorditown, UT 36621', 'email' => 'sofia26@example.com', 'identificacion' => null],
-            ['id_aval' => 9, 'id_empresa' => 1, 'id_cliente' => 9, 'nombre' => 'Leanna', 'apellido' => 'Schinner', 'telefono' => '862-824-1859', 'direccion' => '836 Tatyana Tunnel Apt. 650 South Anjali, CO 08046-5942', 'email' => 'tsimonis@example.org', 'identificacion' => null],
-            ['id_aval' => 10, 'id_empresa' => 1, 'id_cliente' => 10, 'nombre' => 'John', 'apellido' => 'Bednar', 'telefono' => '757.371.7973', 'direccion' => '13944 Eugene Plaza North Berneice, SC 72385', 'email' => 'brad.ritchie@example.com', 'identificacion' => null],
-            ['id_aval' => 11, 'id_empresa' => 1, 'id_cliente' => 11, 'nombre' => 'Camila', 'apellido' => 'Price', 'telefono' => '+1 (623) 719-1062', 'direccion' => '82477 Erwin Oval Schimmelshire, WI 39515', 'email' => 'auer.mariah@example.com', 'identificacion' => null],
-            ['id_aval' => 12, 'id_empresa' => 1, 'id_cliente' => 12, 'nombre' => 'Summer', 'apellido' => 'Emmerich', 'telefono' => '+14232615307', 'direccion' => '533 Louisa Ports Suite 725 West Therese, WV 67248', 'email' => 'wilma07@example.net', 'identificacion' => null],
-            ['id_aval' => 13, 'id_empresa' => 1, 'id_cliente' => 13, 'nombre' => 'Cydney', 'apellido' => 'Langworth', 'telefono' => '1-254-886-0987', 'direccion' => '2871 Lebsack Mews Lake Destanyville, TX 95538-7251', 'email' => 'hmccullough@example.org', 'identificacion' => null],
-            ['id_aval' => 14, 'id_empresa' => 1, 'id_cliente' => 14, 'nombre' => 'Delores', 'apellido' => 'Gulgowski', 'telefono' => '973-860-7488', 'direccion' => '904 Kulas Estate East Jennifermouth, VT 90172', 'email' => 'humberto79@example.com', 'identificacion' => null],
-            ['id_aval' => 15, 'id_empresa' => 1, 'id_cliente' => 15, 'nombre' => 'Ethan', 'apellido' => 'Lockman', 'telefono' => '+19789832489', 'direccion' => '2267 Kristopher Land Morissetteburgh, MS 13719-5282', 'email' => 'tcarter@example.net', 'identificacion' => null],
-            ['id_aval' => 16, 'id_empresa' => 2, 'id_cliente' => 16, 'nombre' => 'Rachelle', 'apellido' => 'Smith', 'telefono' => '+1.640.604.4515', 'direccion' => '74905 Jody Squares Suite 579 Drakeburgh, TN 67793-4842', 'email' => 'darrick.walsh@example.net', 'identificacion' => null],
-            ['id_aval' => 17, 'id_empresa' => 2, 'id_cliente' => 17, 'nombre' => 'Hyman', 'apellido' => 'Schinner', 'telefono' => '845.928.7298', 'direccion' => '79076 Merl Throughway Apt. 616 Considineside, AK 45195-9233', 'email' => 'achristiansen@example.com', 'identificacion' => null],
-            ['id_aval' => 18, 'id_empresa' => 2, 'id_cliente' => 18, 'nombre' => 'Austyn', 'apellido' => 'Hintz', 'telefono' => '+1 (737) 631-7987', 'direccion' => '303 Pamela Fords Suite 554 Daishaton, NM 33644', 'email' => 'jordyn43@example.org', 'identificacion' => null],
-            ['id_aval' => 19, 'id_empresa' => 2, 'id_cliente' => 19, 'nombre' => 'Gaylord', 'apellido' => 'Upton', 'telefono' => '724-970-1172', 'direccion' => '984 Clyde Streets Ernesthaven, MO 01486-8506', 'email' => 'bharber@example.com', 'identificacion' => null],
-            ['id_aval' => 20, 'id_empresa' => 2, 'id_cliente' => 20, 'nombre' => 'Joseph', 'apellido' => 'Reichert', 'telefono' => '+1.413.327.4616', 'direccion' => '206 Kerluke Way Lockmanside, OR 20693', 'email' => 'cordie48@example.org', 'identificacion' => null],
-            ['id_aval' => 21, 'id_empresa' => 2, 'id_cliente' => 21, 'nombre' => 'Laura', 'apellido' => 'Bahringer', 'telefono' => '830-302-9447', 'direccion' => '607 Koelpin Streets Apt. 799 Frankieland, VT 57895-5150', 'email' => 'kilback.imogene@example.com', 'identificacion' => null],
-            ['id_aval' => 22, 'id_empresa' => 2, 'id_cliente' => 22, 'nombre' => 'Patsy', 'apellido' => 'Osinski', 'telefono' => '531-485-3586', 'direccion' => '394 Trantow Forest Harveymouth, AR 65051-2978', 'email' => 'swilderman@example.com', 'identificacion' => null],
-            ['id_aval' => 23, 'id_empresa' => 2, 'id_cliente' => 23, 'nombre' => 'Aimee', 'apellido' => 'Nienow', 'telefono' => '+1 (986) 218-4006', 'direccion' => '4607 Jeramy Ranch O\'Connellview, NY 83422', 'email' => 'schamberger.landen@example.net', 'identificacion' => null],
-            ['id_aval' => 24, 'id_empresa' => 2, 'id_cliente' => 24, 'nombre' => 'Sandrine', 'apellido' => 'Roberts', 'telefono' => '223-320-4898', 'direccion' => '123 Odessa Circles Apt. 723 Julianaborough, NV 24881-5116', 'email' => 'vincent.marquardt@example.net', 'identificacion' => null],
-            ['id_aval' => 25, 'id_empresa' => 2, 'id_cliente' => 25, 'nombre' => 'Martina', 'apellido' => 'Blanda', 'telefono' => '1-475-203-5324', 'direccion' => '13711 Alice Plaza Apt. 287 Port Luisstad, ID 43866-1060', 'email' => 'nboehm@example.com', 'identificacion' => null],
-            ['id_aval' => 26, 'id_empresa' => 2, 'id_cliente' => 26, 'nombre' => 'Dedrick', 'apellido' => 'Sawayn', 'telefono' => '720.761.6963', 'direccion' => '37169 Quinton Club Apt. 110 Greenfelderton, OR 14244', 'email' => 'lincoln.shanahan@example.com', 'identificacion' => null],
-            ['id_aval' => 27, 'id_empresa' => 2, 'id_cliente' => 27, 'nombre' => 'Zackery', 'apellido' => 'Schimmel', 'telefono' => '(831) 652-3289', 'direccion' => '6385 Eula Fork Isadorefort, CT 25919', 'email' => 'romaguera.chester@example.org', 'identificacion' => null],
-            ['id_aval' => 28, 'id_empresa' => 2, 'id_cliente' => 28, 'nombre' => 'Trenton', 'apellido' => 'Murray', 'telefono' => '971.780.3417', 'direccion' => '559 Friesen Fall Terryhaven, IA 68819', 'email' => 'cronin.daisha@example.org', 'identificacion' => null],
-            ['id_aval' => 29, 'id_empresa' => 2, 'id_cliente' => 29, 'nombre' => 'Annetta', 'apellido' => 'Hane', 'telefono' => '+17545930854', 'direccion' => '1522 Haley Burg Apt. 075 South Caitlyn, MI 97014-7089', 'email' => 'phalvorson@example.com', 'identificacion' => null],
-            ['id_aval' => 30, 'id_empresa' => 2, 'id_cliente' => 30, 'nombre' => 'Larue', 'apellido' => 'Metz', 'telefono' => '726.254.4184', 'direccion' => '61570 Shanahan Station Apt. 302 Erlingburgh, NV 47934-2947', 'email' => 'idaugherty@example.net', 'identificacion' => null],
-            ['id_aval' => 31, 'id_empresa' => 3, 'id_cliente' => 31, 'nombre' => 'Levi', 'apellido' => 'O\'Connell', 'telefono' => '540-555-9451', 'direccion' => '466 Jabari Ridge Durganchester, AR 12022', 'email' => 'carissa38@example.org', 'identificacion' => null],
-            ['id_aval' => 32, 'id_empresa' => 3, 'id_cliente' => 32, 'nombre' => 'Elyssa', 'apellido' => 'Jacobs', 'telefono' => '283-856-1444', 'direccion' => '8585 Fahey Common North Russelfurt, SC 06397-7235', 'email' => 'darwin94@example.com', 'identificacion' => null],
-            ['id_aval' => 33, 'id_empresa' => 3, 'id_cliente' => 33, 'nombre' => 'Rafaela', 'apellido' => 'Hand', 'telefono' => '781.437.9119', 'direccion' => '916 Ned Row Abdulville, NM 12140', 'email' => 'sarina52@example.org', 'identificacion' => null],
-            ['id_aval' => 34, 'id_empresa' => 3, 'id_cliente' => 34, 'nombre' => 'Braeden', 'apellido' => 'Goodwin', 'telefono' => '+1.239.552.9207', 'direccion' => '458 Cummings Course Apt. 344 South Hortense, TN 81367-9019', 'email' => 'audra08@example.org', 'identificacion' => null],
-            ['id_aval' => 35, 'id_empresa' => 3, 'id_cliente' => 35, 'nombre' => 'Harry', 'apellido' => 'Hill', 'telefono' => '+13644798002', 'direccion' => '595 Bernhard Drive Ciarahaven, AL 86185-7063', 'email' => 'yvette65@example.net', 'identificacion' => null],
-            ['id_aval' => 36, 'id_empresa' => 3, 'id_cliente' => 36, 'nombre' => 'Zoey', 'apellido' => 'Willms', 'telefono' => '(445) 406-7055', 'direccion' => '55963 Blair Mountains Lennaburgh, MI 20802', 'email' => 'adams.darby@example.org', 'identificacion' => null],
-            ['id_aval' => 37, 'id_empresa' => 3, 'id_cliente' => 37, 'nombre' => 'Francisca', 'apellido' => 'Powlowski', 'telefono' => '+1 (484) 895-9571', 'direccion' => '802 Runolfsson Burgs Port Tiannaberg, UT 91686', 'email' => 'brenden96@example.net', 'identificacion' => null],
-            ['id_aval' => 38, 'id_empresa' => 3, 'id_cliente' => 38, 'nombre' => 'Norberto', 'apellido' => 'Quigley', 'telefono' => '1-986-306-5626', 'direccion' => '73138 Lowe Run Suite 866 West Mckenziefort, RI 98797-8785', 'email' => 'ikris@example.net', 'identificacion' => null],
-            ['id_aval' => 39, 'id_empresa' => 3, 'id_cliente' => 39, 'nombre' => 'Fletcher', 'apellido' => 'Kozey', 'telefono' => '562.780.9791', 'direccion' => '4964 Creola Lodge East Alysha, HI 96434', 'email' => 'tromp.burley@example.net', 'identificacion' => null],
-            ['id_aval' => 40, 'id_empresa' => 3, 'id_cliente' => 40, 'nombre' => 'Johan', 'apellido' => 'Hammes', 'telefono' => '(989) 862-4758', 'direccion' => '67907 Bauch Drives Thielton, IA 72122-3560', 'email' => 'alysson.morissette@example.net', 'identificacion' => null],
-            ['id_aval' => 41, 'id_empresa' => 3, 'id_cliente' => 41, 'nombre' => 'Cynthia', 'apellido' => 'Padberg', 'telefono' => '1-463-313-5446', 'direccion' => '721 Stroman Avenue South Emilchester, MA 55122-7811', 'email' => 'hyman01@example.com', 'identificacion' => null],
-            ['id_aval' => 42, 'id_empresa' => 3, 'id_cliente' => 42, 'nombre' => 'Kimberly', 'apellido' => 'Conroy', 'telefono' => '484.493.3091', 'direccion' => '148 Douglas Walks Apt. 169 Millerside, DC 25117', 'email' => 'conroy.melisa@example.org', 'identificacion' => null],
-            ['id_aval' => 43, 'id_empresa' => 3, 'id_cliente' => 43, 'nombre' => 'Gregory', 'apellido' => 'Cremin', 'telefono' => '+1 (937) 374-2950', 'direccion' => '7255 Magnolia Pine Suite 159 Lelandside, NJ 37267', 'email' => 'jmraz@example.org', 'identificacion' => null],
-            ['id_aval' => 44, 'id_empresa' => 3, 'id_cliente' => 44, 'nombre' => 'Florine', 'apellido' => 'Gleason', 'telefono' => '1-929-246-2541', 'direccion' => '7588 Merl Island North Opalton, MO 90243-0943', 'email' => 'kenton97@example.org', 'identificacion' => null],
-            ['id_aval' => 45, 'id_empresa' => 3, 'id_cliente' => 45, 'nombre' => 'Clarissa', 'apellido' => 'Stamm', 'telefono' => '(785) 930-1480', 'direccion' => '98818 Magdalena Overpass Apt. 356 South Brendon, CO 43727', 'email' => 'thea26@example.org', 'identificacion' => null],
-        ]);
+        $empresaIds = [];
+        foreach ($empresas as $empresa) {
+            $id = DB::table('empresa')->insertGetId([
+                'nombre' => substr($empresa['nombre'], 0, 100),
+                'nombre_comercial' => substr($empresa['nombre_comercial'], 0, 100),
+                'rfc' => substr($empresa['rfc'], 0, 13),
+                'telefono' => substr($empresa['telefono'], 0, 20),
+                'email' => substr($empresa['email'], 0, 100),
+                'direccion' => substr($empresa['direccion'], 0, 255),
+                'ciudad' => substr($empresa['ciudad'], 0, 100),
+                'estado' => substr($empresa['estado'], 0, 100),
+                'codigo_postal' => substr($empresa['codigo_postal'], 0, 10),
+                'activo' => 1,
+                'fecha_registro' => now()
+            ]);
+            $empresaIds[] = $id;
+        }
+        $this->command->info("✅ Empresas creadas: " . count($empresaIds));
 
-        // ==========================================
-        // 9. PRENDAS (depende de empresas)
-        // ==========================================
-        DB::table('prendas')->insert([
-            ['id_prenda' => 1, 'id_empresa' => 3, 'descripcion' => 'Artículo de Relojes hecho de acero, en buen estado.', 'tipo' => 'Relojes', 'material' => 'acero', 'peso_gramos' => 185.00, 'valor_estimado' => 36333.00, 'estado' => 'Vencido', 'quitas' => null, 'fecha_registro' => '2026-06-25 09:55:32', 'codigo_barras' => '0435306270701', 'imagen_url' => null],
-            ['id_prenda' => 2, 'id_empresa' => 1, 'descripcion' => 'Artículo de Otros hecho de acero, en buen estado.', 'tipo' => 'Otros', 'material' => 'acero', 'peso_gramos' => 267.00, 'valor_estimado' => 17990.00, 'estado' => 'Disponible', 'quitas' => null, 'fecha_registro' => '2026-06-25 09:55:32', 'codigo_barras' => '7073749597639', 'imagen_url' => null],
-            ['id_prenda' => 3, 'id_empresa' => 1, 'descripcion' => 'Artículo de Otros hecho de madera, en buen estado.', 'tipo' => 'Otros', 'material' => 'madera', 'peso_gramos' => 161.00, 'valor_estimado' => 49392.00, 'estado' => 'Apartado', 'quitas' => null, 'fecha_registro' => '2026-06-25 09:55:32', 'codigo_barras' => '6916666093277', 'imagen_url' => null],
-            ['id_prenda' => 4, 'id_empresa' => 2, 'descripcion' => 'Artículo de Electrónica hecho de acero, en buen estado.', 'tipo' => 'Electrónica', 'material' => 'acero', 'peso_gramos' => 117.00, 'valor_estimado' => 11754.00, 'estado' => 'Disponible', 'quitas' => null, 'fecha_registro' => '2026-06-25 09:55:32', 'codigo_barras' => '6462964743425', 'imagen_url' => null],
-            ['id_prenda' => 5, 'id_empresa' => 1, 'descripcion' => 'Artículo de Instrumentos hecho de plástico, en buen estado.', 'tipo' => 'Instrumentos', 'material' => 'plástico', 'peso_gramos' => 27.00, 'valor_estimado' => 6095.00, 'estado' => 'Vencido', 'quitas' => null, 'fecha_registro' => '2026-06-25 09:55:32', 'codigo_barras' => '7613854287485', 'imagen_url' => null],
-            // ==========================================
-            // AQUÍ VAN TODAS LAS PRENDAS (200)
-            // ==========================================
-            // ... (inserción de todas las prendas del dump)
-        ]);
+        /* =====================
+           ROLES (CON id_empresa)
+        =====================*/
 
-        // ==========================================
-        // 10. EMPEÑOS (depende de clientes, prendas, avales, tasas)
-        // ==========================================
-        DB::table('empeno')->insert([
-            ['id_empeno' => 1, 'id_empresa' => 3, 'id_cliente' => 42, 'id_prenda' => 28, 'id_aval' => 41, 'id_tasa' => 5, 'fecha_empeno' => '2026-04-18', 'monto_prestado' => 12605.00, 'intereses' => 15.00, 'iva_porcentaje' => 16.00, 'fecha_vencimiento' => '2026-07-17', 'estado' => 'pagado', 'folio' => 'EMP203SLF'],
-            ['id_empeno' => 2, 'id_empresa' => 1, 'id_cliente' => 7, 'id_prenda' => 102, 'id_aval' => 53, 'id_tasa' => 4, 'fecha_empeno' => '2026-04-16', 'monto_prestado' => 1073.00, 'intereses' => 12.00, 'iva_porcentaje' => 16.00, 'fecha_vencimiento' => '2026-06-15', 'estado' => 'pagado', 'folio' => 'EMP797TNM'],
-            ['id_empeno' => 3, 'id_empresa' => 2, 'id_cliente' => 16, 'id_prenda' => 138, 'id_aval' => 61, 'id_tasa' => 5, 'fecha_empeno' => '2026-05-08', 'monto_prestado' => 5680.00, 'intereses' => 15.00, 'iva_porcentaje' => 16.00, 'fecha_vencimiento' => '2026-08-06', 'estado' => 'vencido', 'folio' => 'EMP808HPH'],
-            // ... (todos los empeños del dump)
-        ]);
+        $rolesBase = ["Administrador", "Gerente", "Cajero", "Cliente"];
+        $rolIds = [];
 
-        // ==========================================
-        // 11. AMORTIZACIONES (depende de empeños)
-        // ==========================================
-        DB::table('amortizacion')->insert([
-            ['id_amortizacion' => 1, 'id_empeno' => 1, 'saldo_inicial' => 14798.27, 'saldo_final' => 0.00, 'numero_pago' => 1, 'fecha_pago_programado' => '2026-07-17', 'fecha_pago_real' => '2026-07-05', 'capital' => 12605.00, 'interes' => 1890.75, 'iva_interes' => 302.52, 'monto_total' => 14798.27, 'monto_pagado' => 14798.27, 'tipo_pago' => null, 'estado' => 'pagado'],
-            // ... (todas las amortizaciones del dump)
-        ]);
+        foreach ($empresaIds as $empresaId) {
+            foreach ($rolesBase as $nivel => $nombre) {
+                $descripcion = match($nombre) {
+                    'Administrador' => 'Acceso total al sistema',
+                    'Gerente' => 'Gestión de clientes y empeños',
+                    'Cajero' => 'Solo ventas y pagos',
+                    'Cliente' => 'Portal de clientes',
+                    default => 'Rol del sistema'
+                };
+                
+                $id = DB::table('rol')->insertGetId([
+                    'id_empresa' => $empresaId,
+                    'nombre' => $nombre,
+                    'descripcion' => substr($descripcion . " - " . $faker->sentence(2), 0, 255),
+                    'nivel' => $nivel + 1
+                ]);
+                
+                if (!isset($rolIds[$empresaId])) {
+                    $rolIds[$empresaId] = [];
+                }
+                $rolIds[$empresaId][$nombre] = $id;
+            }
+        }
+        $this->command->info("✅ Roles creados: " . (count($empresaIds) * count($rolesBase)));
 
-        // ==========================================
-        // 12. PAGOS (depende de empeños y amortizaciones)
-        // ==========================================
-        DB::table('pagos')->insert([
-            ['id_pago' => 1, 'id_empeno' => 1, 'id_amortizacion' => 1, 'fecha_pago' => '2026-07-05', 'capital_pagado' => 12605.00, 'interes_pagado' => 1890.75, 'iva_pagado' => 302.52, 'monto_total' => 14798.27, 'tipo_pago' => 'liquidacion', 'metodo_pago' => 'tarjeta', 'referencia' => null, 'comprobante' => null, 'fecha_registro' => '2026-06-25 09:55:32'],
-            // ... (todos los pagos del dump)
-        ]);
+        /* =====================
+           PERMISOS (CON id_empresa)
+        =====================*/
 
-        // ==========================================
-        // 13. PRODUCTO TIENDA (depende de prendas)
-        // ==========================================
-        DB::table('producto_tienda')->insert([
-            ['id_producto' => 1, 'id_empresa' => 1, 'id_prenda' => 119, 'nombre' => 'atque asperiores', 'descripcion' => 'Sequi recusandae officia nam ut veritatis aut velit.', 'precio' => 10252.62, 'descuento' => 0, 'stock' => 16, 'estado_producto' => 'Aceptable', 'visible' => 1, 'destacado' => 0, 'imagen_url' => null, 'fecha_publicacion' => '2026-06-25'],
-            // ... (todos los productos del dump)
-        ]);
+        $permisosBase = [
+            "ver_dashboard", "ver_clientes", "crear_clientes", "editar_clientes", "eliminar_clientes",
+            "ver_empenos", "crear_empenos", "editar_empenos", "cancelar_empenos",
+            "ver_pagos", "registrar_pagos",
+            "ver_tienda", "crear_productos", "editar_productos",
+            "ver_caja", "registrar_movimientos",
+            "ver_reportes"
+        ];
 
-        // ==========================================
-        // 14. VENTA TIENDA (depende de clientes)
-        // ==========================================
-        DB::table('venta_tienda')->insert([
-            ['id_venta' => 1, 'id_cliente' => 5, 'fecha_venta' => '2026-06-25 09:55:34', 'total' => 7423.00, 'metodo_pago' => 'transferencia', 'estado' => 'completada', 'folio' => 'VT874CCW'],
-            // ... (todas las ventas del dump)
-        ]);
+        $permisoIds = [];
 
-        // ==========================================
-        // 15. DETALLE VENTA (depende de ventas y productos)
-        // ==========================================
-        DB::table('detalle_venta')->insert([
-            ['id_detalle' => 1, 'id_venta' => 50, 'id_producto' => 41, 'cantidad' => 4, 'precio_unitario' => 4683.00, 'subtotal' => 18732.00],
-            // ... (todos los detalles del dump)
-        ]);
+        foreach ($empresaIds as $empresaId) {
+            foreach ($permisosBase as $permiso) {
+                $modulo = match(true) {
+                    str_contains($permiso, 'clientes') => 'clientes',
+                    str_contains($permiso, 'empenos') => 'empenos',
+                    str_contains($permiso, 'pagos') => 'pagos',
+                    str_contains($permiso, 'tienda') || str_contains($permiso, 'productos') => 'tienda',
+                    str_contains($permiso, 'caja') => 'caja',
+                    str_contains($permiso, 'reportes') => 'reportes',
+                    str_contains($permiso, 'dashboard') => 'dashboard',
+                    default => 'general'
+                };
+                
+                $descripcion = "Permiso para " . str_replace('_', ' ', $permiso);
+                
+                $id = DB::table('permisos')->insertGetId([
+                    'id_empresa' => $empresaId,
+                    'nombre' => $permiso,
+                    'descripcion' => substr($descripcion, 0, 255),
+                    'modulo' => $modulo,
+                    'estado' => 'activo'
+                ]);
+                
+                if (!isset($permisoIds[$empresaId])) {
+                    $permisoIds[$empresaId] = [];
+                }
+                $permisoIds[$empresaId][$permiso] = $id;
+            }
+        }
+        $this->command->info("✅ Permisos creados: " . (count($empresaIds) * count($permisosBase)));
 
-        // ==========================================
-        // 16. PERMISOS (depende de empresas)
-        // ==========================================
-        DB::table('permisos')->insert([
-            ['id_permiso' => 1, 'id_empresa' => 1, 'nombre' => 'ver_dashboard', 'descripcion' => 'Permiso para ver el dashboard', 'modulo' => 'dashboard', 'estado' => 'activo'],
-            // ... (todos los permisos del dump)
-        ]);
+        /* =====================
+           ROL_PERMISO
+        =====================*/
 
-        // ==========================================
-        // 17. ROL PERMISO (depende de roles y permisos)
-        // ==========================================
-        DB::table('rol_permiso')->insert([
-            ['id_rol_permiso' => 1, 'id_empresa' => 1, 'id_rol' => 1, 'id_permiso' => 1, 'permitido' => 1],
-            // ... (todos los rol_permiso del dump)
-        ]);
+        foreach ($empresaIds as $empresaId) {
+            // Administrador tiene todos los permisos
+            $adminRolId = $rolIds[$empresaId]['Administrador'];
+            foreach ($permisoIds[$empresaId] as $permisoId) {
+                DB::table('rol_permiso')->insert([
+                    'id_empresa' => $empresaId,
+                    'id_rol' => $adminRolId,
+                    'id_permiso' => $permisoId,
+                    'permitido' => 1
+                ]);
+            }
+            
+            // Gerente tiene permisos limitados
+            $gerenteRolId = $rolIds[$empresaId]['Gerente'];
+            $permisosGerente = ['ver_clientes', 'crear_clientes', 'editar_clientes', 'ver_empenos', 'crear_empenos', 
+                                'ver_pagos', 'registrar_pagos', 'ver_tienda', 'ver_reportes'];
+            foreach ($permisosGerente as $permiso) {
+                if (isset($permisoIds[$empresaId][$permiso])) {
+                    DB::table('rol_permiso')->insert([
+                        'id_empresa' => $empresaId,
+                        'id_rol' => $gerenteRolId,
+                        'id_permiso' => $permisoIds[$empresaId][$permiso],
+                        'permitido' => 1
+                    ]);
+                }
+            }
+            
+            // Cajero tiene permisos de pagos y caja
+            $cajeroRolId = $rolIds[$empresaId]['Cajero'];
+            $permisosCajero = ['ver_pagos', 'registrar_pagos', 'ver_caja', 'registrar_movimientos'];
+            foreach ($permisosCajero as $permiso) {
+                if (isset($permisoIds[$empresaId][$permiso])) {
+                    DB::table('rol_permiso')->insert([
+                        'id_empresa' => $empresaId,
+                        'id_rol' => $cajeroRolId,
+                        'id_permiso' => $permisoIds[$empresaId][$permiso],
+                        'permitido' => 1
+                    ]);
+                }
+            }
+            
+            // Cliente tiene permisos básicos
+            $clienteRolId = $rolIds[$empresaId]['Cliente'];
+            $permisosCliente = ['ver_dashboard', 'ver_clientes', 'ver_empenos', 'ver_pagos', 'ver_tienda'];
+            foreach ($permisosCliente as $permiso) {
+                if (isset($permisoIds[$empresaId][$permiso])) {
+                    DB::table('rol_permiso')->insert([
+                        'id_empresa' => $empresaId,
+                        'id_rol' => $clienteRolId,
+                        'id_permiso' => $permisoIds[$empresaId][$permiso],
+                        'permitido' => 1
+                    ]);
+                }
+            }
+        }
+        $this->command->info("✅ Permisos asignados a roles");
 
-        // ==========================================
-        // 18. MOVIMIENTOS CAJA (depende de usuarios y pagos)
-        // ==========================================
-        DB::table('movimientos_caja')->insert([
-            ['id_movimiento' => 1, 'tipo' => 'pago', 'monto' => 3086.00, 'descripcion' => 'Tempora dolor quibusdam reprehenderit incidunt.', 'fecha' => '2026-06-25 09:55:34', 'id_usuario' => 5, 'id_pago' => 59],
-            // ... (todos los movimientos del dump)
-        ]);
+        /* =====================
+           USUARIOS
+        =====================*/
 
-        $this->command->info('✅ Datos importados correctamente.');
-        $this->command->info('📌 Usuarios: password = "password"');
-        $this->command->info('📌 Admin: juanprendas@admin.com / password');
-        $this->command->info('📌 Admin: tulaempeños@admin.com / password');
-        $this->command->info('📌 Admin: expressempeños@admin.com / password');
+        $todosUsuarios = [];
+        $clientesUsuarios = [];
+
+        foreach ($empresaIds as $empresaId) {
+            // Administrador de la empresa
+            $adminRolId = $rolIds[$empresaId]['Administrador'];
+            $email = strtolower(str_replace(' ', '', $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'])) . '@admin.com';
+            
+            $id = DB::table('usuario')->insertGetId([
+                'id_rol' => $adminRolId,
+                'id_empresa' => $empresaId,
+                'nombre' => substr("Admin " . $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'], 0, 100),
+                'correo' => substr($email, 0, 100),
+                'contrasena' => Hash::make('123456'),
+                'telefono' => substr($faker->phoneNumber(), 0, 20),
+                'activo' => 1,
+                'fecha_registro' => now()
+            ]);
+            $todosUsuarios[] = $id;
+            
+            // Gerentes (2 por empresa)
+            $gerenteRolId = $rolIds[$empresaId]['Gerente'];
+            for ($i = 0; $i < 2; $i++) {
+                $id = DB::table('usuario')->insertGetId([
+                    'id_rol' => $gerenteRolId,
+                    'id_empresa' => $empresaId,
+                    'nombre' => substr($faker->name(), 0, 100),
+                    'correo' => substr($faker->unique()->safeEmail(), 0, 100),
+                    'contrasena' => Hash::make('123456'),
+                    'telefono' => substr($faker->phoneNumber(), 0, 20),
+                    'activo' => 1,
+                    'fecha_registro' => now()
+                ]);
+                $todosUsuarios[] = $id;
+            }
+            
+            // Cajeros (3 por empresa)
+            $cajeroRolId = $rolIds[$empresaId]['Cajero'];
+            for ($i = 0; $i < 3; $i++) {
+                $id = DB::table('usuario')->insertGetId([
+                    'id_rol' => $cajeroRolId,
+                    'id_empresa' => $empresaId,
+                    'nombre' => substr($faker->name(), 0, 100),
+                    'correo' => substr($faker->unique()->safeEmail(), 0, 100),
+                    'contrasena' => Hash::make('123456'),
+                    'telefono' => substr($faker->phoneNumber(), 0, 20),
+                    'activo' => 1,
+                    'fecha_registro' => now()
+                ]);
+                $todosUsuarios[] = $id;
+            }
+            
+            // Clientes (15 por empresa)
+            $clienteRolId = $rolIds[$empresaId]['Cliente'];
+            for ($i = 0; $i < 15; $i++) {
+                $nombre = $faker->firstName();
+                $apellido = $faker->lastName();
+                $email = $faker->unique()->safeEmail();
+                
+                $id = DB::table('usuario')->insertGetId([
+                    'id_rol' => $clienteRolId,
+                    'id_empresa' => $empresaId,
+                    'nombre' => substr("$nombre $apellido", 0, 100),
+                    'correo' => substr($email, 0, 100),
+                    'contrasena' => Hash::make('123456'),
+                    'telefono' => substr($faker->phoneNumber(), 0, 20),
+                    'activo' => 1,
+                    'fecha_registro' => now()
+                ]);
+                $todosUsuarios[] = $id;
+                $clientesUsuarios[] = [
+                    'id_usuario' => $id,
+                    'nombre' => $nombre,
+                    'apellido' => $apellido,
+                    'email' => $email,
+                    'id_empresa' => $empresaId
+                ];
+            }
+        }
+        $this->command->info("✅ Usuarios creados: " . count($todosUsuarios));
+
+        /* =====================
+           CLIENTES
+        =====================*/
+
+        $clientes = [];
+        foreach ($clientesUsuarios as $clienteUsuario) {
+            $id = DB::table('clientes')->insertGetId([
+                'id_usuario' => $clienteUsuario['id_usuario'],
+                'id_empresa' => $clienteUsuario['id_empresa'],
+                'nombre' => substr($clienteUsuario['nombre'], 0, 100),
+                'apellido' => substr($clienteUsuario['apellido'], 0, 100),
+                'telefono' => substr($faker->phoneNumber(), 0, 20),
+                'correo' => substr($clienteUsuario['email'], 0, 100),
+                'direccion' => substr($faker->streetAddress(), 0, 255),
+                'codigo_postal' => substr($faker->postcode(), 0, 10),
+                'ciudad' => substr($faker->city(), 0, 100),
+                'estado' => substr($faker->state(), 0, 100),
+                'fecha_registro' => now(),
+                'activo' => 1
+            ]);
+            $clientes[] = [
+                'id' => $id,
+                'id_usuario' => $clienteUsuario['id_usuario'],
+                'id_empresa' => $clienteUsuario['id_empresa'],
+                'nombre' => $clienteUsuario['nombre'],
+                'apellido' => $clienteUsuario['apellido']
+            ];
+        }
+        $this->command->info("✅ Clientes creados: " . count($clientes));
+
+        /* =====================
+           AVALES (CON id_empresa)
+        =====================*/
+
+        $avales = [];
+        for ($i = 0; $i < 60; $i++) {
+            $idEmpresa = $empresaIds[array_rand($empresaIds)];
+            
+            $id = DB::table('aval')->insertGetId([
+                'id_empresa' => $idEmpresa,
+                'nombre' => substr($faker->firstName(), 0, 100),
+                'apellido' => substr($faker->lastName(), 0, 100),
+                'telefono' => substr($faker->phoneNumber(), 0, 20),
+                'direccion' => substr($faker->address(), 0, 255),
+                'email' => substr($faker->safeEmail(), 0, 100)
+            ]);
+            $avales[] = [
+                'id' => $id,
+                'id_empresa' => $idEmpresa
+            ];
+        }
+        $this->command->info("✅ Avales creados: " . count($avales));
+
+        /* =====================
+           PRENDAS (CON id_empresa)
+        =====================*/
+
+        $tipos = ["Joyería", "Electrónica", "Relojes", "Herramientas", "Instrumentos", "Otros"];
+        $materiales = ["oro", "plata", "acero", "platino", "madera", "plástico"];
+        $estadosPrenda = ["Disponible", "En Empeño", "Vendido", "Vencido", "Apartado"];
+
+        $prendas = [];
+        for ($i = 0; $i < 200; $i++) {
+            $idEmpresa = $empresaIds[array_rand($empresaIds)];
+            $tipo = $tipos[array_rand($tipos)];
+            $material = $materiales[array_rand($materiales)];
+            $estadoPrenda = $estadosPrenda[array_rand($estadosPrenda)];
+            
+            $descripcion = "Artículo de $tipo hecho de $material, en buen estado.";
+            $valorEstimado = rand(500, 50000);
+            
+            $id = DB::table('prendas')->insertGetId([
+                'id_empresa' => $idEmpresa,
+                'descripcion' => substr($descripcion, 0, 255),
+                'tipo' => $tipo,
+                'material' => substr($material, 0, 100),
+                'peso_gramos' => rand(10, 500),
+                'valor_estimado' => $valorEstimado,
+                'codigo_barras' => substr($faker->ean13(), 0, 50),
+                'estado' => $estadoPrenda,
+                'fecha_registro' => now()
+            ]);
+            $prendas[] = [
+                'id' => $id,
+                'id_empresa' => $idEmpresa,
+                'valor_estimado' => $valorEstimado,
+                'estado' => $estadoPrenda
+            ];
+        }
+        $this->command->info("✅ Prendas creadas: " . count($prendas));
+
+        /* =====================
+           TASAS INTERES
+        =====================*/
+
+        $tasasInteres = [
+            ['nombre' => 'Basico', 'porcentaje' => 5.00, 'plazo_dias' => 15],
+            ['nombre' => 'Estandar', 'porcentaje' => 8.00, 'plazo_dias' => 30],
+            ['nombre' => 'Premium', 'porcentaje' => 10.00, 'plazo_dias' => 45],
+            ['nombre' => 'Extendido', 'porcentaje' => 12.00, 'plazo_dias' => 60],
+            ['nombre' => 'Flexible', 'porcentaje' => 15.00, 'plazo_dias' => 90]
+        ];
+
+        $tasas = [];
+        foreach ($tasasInteres as $tasa) {
+            $id = DB::table('tasas_interes')->insertGetId([
+                'nombre' => $tasa['nombre'],
+                'porcentaje' => $tasa['porcentaje'],
+                'plazo_dias' => $tasa['plazo_dias'],
+                'activo' => 1
+            ]);
+            $tasas[] = $id;
+        }
+        $this->command->info("✅ Tasas de interés creadas: " . count($tasas));
+
+        /* =====================
+           EMPEÑOS, AMORTIZACIONES Y PAGOS
+        =====================*/
+
+        $empenos = [];
+        $amortizacionesTotales = 0;
+        $pagosRegistrados = 0;
+
+        for ($i = 0; $i < 150; $i++) {
+            $cliente = $clientes[array_rand($clientes)];
+            $prenda = $prendas[array_rand($prendas)];
+            $aval = $avales[array_rand($avales)];
+            $idTasa = $tasas[array_rand($tasas)];
+            
+            $tasa = DB::table('tasas_interes')->where('id_tasa', $idTasa)->first();
+            
+            $montoPrestado = rand(500, 15000);
+            $interesPorcentaje = $tasa->porcentaje;
+            $plazoDias = $tasa->plazo_dias;
+            
+            $interesMonto = $montoPrestado * ($interesPorcentaje / 100);
+            $ivaInteres = $interesMonto * 0.16;
+            $montoTotal = $montoPrestado + $interesMonto + $ivaInteres;
+            
+            $randomEstado = rand(1, 10);
+            if ($randomEstado <= 4) {
+                $fechaEmpeno = $faker->dateTimeBetween('-30 days', 'now')->format('Y-m-d');
+                $fechaVencimiento = (new \DateTime($fechaEmpeno))->modify("+$plazoDias days")->format('Y-m-d');
+                $estado = 'activo';
+            } elseif ($randomEstado <= 7) {
+                $fechaEmpeno = $faker->dateTimeBetween('-90 days', '-30 days')->format('Y-m-d');
+                $fechaVencimiento = (new \DateTime($fechaEmpeno))->modify("+$plazoDias days")->format('Y-m-d');
+                $estado = 'pagado';
+            } else {
+                $fechaEmpeno = $faker->dateTimeBetween('-60 days', '-15 days')->format('Y-m-d');
+                $fechaVencimiento = (new \DateTime($fechaEmpeno))->modify("+$plazoDias days")->format('Y-m-d');
+                $estado = 'vencido';
+            }
+            
+            $idEmpeno = DB::table('empeno')->insertGetId([
+                'id_empresa' => $cliente['id_empresa'],
+                'id_cliente' => $cliente['id'],
+                'id_prenda' => $prenda['id'],
+                'id_aval' => $aval['id'],
+                'id_tasa' => $idTasa,
+                'fecha_empeno' => $fechaEmpeno,
+                'monto_prestado' => $montoPrestado,
+                'intereses' => $interesPorcentaje,
+                'iva_porcentaje' => 16.00,
+                'fecha_vencimiento' => $fechaVencimiento,
+                'estado' => $estado,
+                'folio' => strtoupper(substr($faker->bothify("EMP###???"), 0, 20))
+            ]);
+            
+            $fechaPagoProgramado = (new \DateTime($fechaEmpeno))->modify("+$plazoDias days")->format('Y-m-d');
+            
+            $idAmortizacion = DB::table('amortizacion')->insertGetId([
+                'id_empeno' => $idEmpeno,
+                'saldo_inicial' => $montoTotal,
+                'saldo_final' => $montoTotal,
+                'numero_pago' => 1,
+                'fecha_pago_programado' => $fechaPagoProgramado,
+                'capital' => $montoPrestado,
+                'interes' => $interesMonto,
+                'iva_interes' => $ivaInteres,
+                'monto_total' => $montoTotal,
+                'monto_pagado' => 0,
+                'estado' => 'pendiente'
+            ]);
+            $amortizacionesTotales++;
+            
+            if ($estado == 'pagado') {
+                $fechaPago = $faker->dateTimeBetween($fechaEmpeno, $fechaVencimiento)->format('Y-m-d');
+                
+                DB::table('pagos')->insert([
+                    'id_empeno' => $idEmpeno,
+                    'id_amortizacion' => $idAmortizacion,
+                    'fecha_pago' => $fechaPago,
+                    'capital_pagado' => $montoPrestado,
+                    'interes_pagado' => $interesMonto,
+                    'iva_pagado' => $ivaInteres,
+                    'monto_total' => $montoTotal,
+                    'tipo_pago' => 'liquidacion',
+                    'metodo_pago' => $faker->randomElement(['efectivo', 'transferencia', 'tarjeta']),
+                    'fecha_registro' => now()
+                ]);
+                $pagosRegistrados++;
+                
+                DB::table('amortizacion')
+                    ->where('id_amortizacion', $idAmortizacion)
+                    ->update([
+                        'monto_pagado' => $montoTotal,
+                        'saldo_final' => 0,
+                        'estado' => 'pagado',
+                        'fecha_pago_real' => $fechaPago
+                    ]);
+                
+            } elseif ($estado == 'activo') {
+                $numPagos = rand(0, 2);
+                $montoRestante = $montoTotal;
+                $totalPagado = 0;
+                
+                for ($p = 1; $p <= $numPagos; $p++) {
+                    if ($montoRestante <= 0) break;
+                    
+                    $porcentajePago = rand(10, 40) / 100;
+                    if ($p == $numPagos) {
+                        $porcentajePago = min($porcentajePago, 0.7);
+                    }
+                    
+                    $capitalPagado = round($montoPrestado * $porcentajePago, 2);
+                    $interesPagado = round($interesMonto * $porcentajePago, 2);
+                    $ivaPagado = round($ivaInteres * $porcentajePago, 2);
+                    $montoPagado = $capitalPagado + $interesPagado + $ivaPagado;
+                    
+                    if ($montoPagado > $montoRestante) {
+                        $montoPagado = $montoRestante;
+                        $factor = $montoPagado / $montoTotal;
+                        $capitalPagado = round($montoPrestado * $factor, 2);
+                        $interesPagado = round($interesMonto * $factor, 2);
+                        $ivaPagado = round($ivaInteres * $factor, 2);
+                    }
+                    
+                    $fechaPago = $faker->dateTimeBetween($fechaEmpeno, 'now')->format('Y-m-d');
+                    
+                    DB::table('pagos')->insert([
+                        'id_empeno' => $idEmpeno,
+                        'id_amortizacion' => $idAmortizacion,
+                        'fecha_pago' => $fechaPago,
+                        'capital_pagado' => $capitalPagado,
+                        'interes_pagado' => $interesPagado,
+                        'iva_pagado' => $ivaPagado,
+                        'monto_total' => $montoPagado,
+                        'tipo_pago' => 'abono',
+                        'metodo_pago' => $faker->randomElement(['efectivo', 'transferencia', 'tarjeta']),
+                        'fecha_registro' => now()
+                    ]);
+                    $pagosRegistrados++;
+                    
+                    $totalPagado += $montoPagado;
+                    $montoRestante = $montoTotal - $totalPagado;
+                }
+                
+                if ($totalPagado > 0) {
+                    DB::table('amortizacion')
+                        ->where('id_amortizacion', $idAmortizacion)
+                        ->update([
+                            'monto_pagado' => $totalPagado,
+                            'saldo_final' => $montoRestante
+                        ]);
+                }
+                
+                $empenos[] = ['id' => $idEmpeno, 'estado' => $estado];
+            } else {
+                $empenos[] = ['id' => $idEmpeno, 'estado' => $estado];
+            }
+        }
+
+        $this->command->info("✅ Empeños creados: " . count($empenos));
+        $this->command->info("✅ Amortizaciones creadas: $amortizacionesTotales");
+        $this->command->info("✅ Pagos registrados: $pagosRegistrados");
+
+        /* =====================
+           PRODUCTOS TIENDA
+        =====================*/
+
+        $productos = [];
+        for ($i = 0; $i < 80; $i++) {
+            $prenda = $prendas[array_rand($prendas)];
+            $precioVenta = round($prenda['valor_estimado'] * (rand(70, 130) / 100), 2);
+            $estadosProducto = ['Nuevo', 'Como nuevo', 'Buen estado', 'Aceptable'];
+            
+            $id = DB::table('producto_tienda')->insertGetId([
+                'id_empresa' => $prenda['id_empresa'],
+                'id_prenda' => $prenda['id'],
+                'nombre' => substr($faker->words(2, true), 0, 100),
+                'descripcion' => substr($faker->sentence(), 0, 255),
+                'precio' => $precioVenta,
+                'stock' => rand(1, 25),
+                'estado_producto' => $estadosProducto[array_rand($estadosProducto)],
+                'visible' => 1,
+                'destacado' => rand(0, 1),
+                'fecha_publicacion' => now()->toDateString()
+            ]);
+            $productos[] = $id;
+        }
+        $this->command->info("✅ Productos tienda creados: " . count($productos));
+
+        /* =====================
+           VENTAS Y DETALLES
+        =====================*/
+
+        $ventasIds = [];
+        for ($i = 0; $i < 60; $i++) {
+            $cliente = $clientes[array_rand($clientes)];
+            $totalVenta = rand(500, 15000);
+            
+            $id = DB::table('venta_tienda')->insertGetId([
+                'id_cliente' => $cliente['id'],
+                'total' => $totalVenta,
+                'metodo_pago' => $faker->randomElement(['efectivo', 'tarjeta', 'transferencia']),
+                'estado' => 'completada',
+                'folio' => strtoupper(substr($faker->bothify("VT###???"), 0, 20)),
+                'fecha_venta' => now()
+            ]);
+            $ventasIds[] = $id;
+        }
+        $this->command->info("✅ Ventas creadas: " . count($ventasIds));
+
+        $detallesCount = 0;
+        for ($i = 0; $i < 150; $i++) {
+            $venta = $ventasIds[array_rand($ventasIds)];
+            $producto = $productos[array_rand($productos)];
+            $cantidad = rand(1, 5);
+            $precio = rand(300, 5000);
+            $subtotal = $cantidad * $precio;
+            
+            DB::table('detalle_venta')->insert([
+                'id_venta' => $venta,
+                'id_producto' => $producto,
+                'cantidad' => $cantidad,
+                'precio_unitario' => $precio,
+                'subtotal' => $subtotal
+            ]);
+            $detallesCount++;
+        }
+        $this->command->info("✅ Detalles de venta creados: $detallesCount");
+
+        /* =====================
+           MOVIMIENTOS CAJA
+        =====================*/
+
+        $pagosExistentes = DB::table('pagos')->pluck('id_pago')->toArray();
+        $usuariosLista = DB::table('usuario')->pluck('id_usuario')->toArray();
+
+        $movimientos = 0;
+        $tiposMovimiento = ['prestamo', 'pago', 'venta', 'gasto'];
+
+        for ($i = 0; $i < 200; $i++) {
+            $usuario = $usuariosLista[array_rand($usuariosLista)];
+            $pago = !empty($pagosExistentes) && rand(1, 3) == 1 ? $pagosExistentes[array_rand($pagosExistentes)] : null;
+            $tipo = $tiposMovimiento[array_rand($tiposMovimiento)];
+            
+            $monto = match($tipo) {
+                'prestamo' => rand(1000, 20000),
+                'pago' => rand(500, 10000),
+                'venta' => rand(300, 8000),
+                'gasto' => rand(100, 2000),
+                default => rand(500, 5000)
+            };
+            
+            DB::table('movimientos_caja')->insert([
+                'tipo' => $tipo,
+                'monto' => $monto,
+                'descripcion' => substr($faker->sentence(3), 0, 255),
+                'id_usuario' => $usuario,
+                'id_pago' => $pago,
+                'fecha' => now()
+            ]);
+            $movimientos++;
+        }
+        $this->command->info("✅ Movimientos de caja creados: $movimientos");
+
+        /* =====================
+           RESUMEN FINAL
+        =====================*/
+
+        $this->command->info("\n========================================");
+        $this->command->info(" DATABASE SEEDED SUCCESSFULLY!");
+        $this->command->info("========================================");
+        $this->command->info("\nRESUMEN FINAL:");
+        $this->command->info("├─ Empresas: " . count($empresaIds));
+        $this->command->info("├─ Roles por empresa: " . count($rolesBase));
+        $this->command->info("├─ Permisos por empresa: " . count($permisosBase));
+        $this->command->info("├─ Usuarios: " . count($todosUsuarios));
+        $this->command->info("├─ Clientes: " . count($clientes));
+        $this->command->info("├─ Avales: " . count($avales));
+        $this->command->info("├─ Prendas: " . count($prendas));
+        $this->command->info("├─ Tasas: " . count($tasas));
+        $this->command->info("├─ Empeños: " . count($empenos));
+        $this->command->info("├─ Amortizaciones: $amortizacionesTotales");
+        $this->command->info("├─ Pagos: $pagosRegistrados");
+        $this->command->info("├─ Productos tienda: " . count($productos));
+        $this->command->info("├─ Ventas: " . count($ventasIds));
+        $this->command->info("├─ Detalle ventas: $detallesCount");
+        $this->command->info("└─ Movimientos caja: $movimientos");
+        $this->command->info("\n📌 CREDENCIALES DE ACCESO:");
+        foreach ($empresas as $index => $empresa) {
+            $email = strtolower(str_replace(' ', '', $empresa['nombre_comercial'])) . '@admin.com';
+            $this->command->info("├─ {$empresa['nombre_comercial']}: $email / 123456");
+        }
     }
 }
