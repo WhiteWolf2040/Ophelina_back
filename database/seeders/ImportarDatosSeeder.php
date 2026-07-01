@@ -5,16 +5,15 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Foundation\Testing\WithFaker; // ✅ TRAIT DE LARAVEL
+use Faker\Factory;
 
 class ImportarDatosSeeder extends Seeder
 {
-    use WithFaker; // ✅ PROPORCIONA $this->faker
+    
 
     public function run(): void
     {
-        // ✅ USAR $this->faker (NO Faker\Factory::create)
-        $faker = $this->faker;
+       $faker = Factory::create('es_MX');
 
         // Limpiar tablas
         $tables = [
