@@ -5,20 +5,18 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Faker\Factory as Faker;
-use Illuminate\Foundation\Testing\WithFaker; 
+use Illuminate\Foundation\Testing\WithFaker;
 
 class ImportarDatosSeeder extends Seeder
 {
-        use WithFaker;
+    use WithFaker;
+
     public function run(): void
     {
+        // ✅ CORRECTO: Usar $this->faker (NO Faker\Factory::create)
         $faker = $this->faker;
-        $faker = Faker::create('es_MX');
 
-        echo "Seeding database...\n\n";
-
-        // Limpiar tablas existentes (orden inverso para evitar conflictos FK)
+        // Limpiar tablas existentes
         $tables = [
             'movimientos_caja', 'detalle_venta', 'venta_tienda', 'apartados',
             'pagos', 'amortizacion', 'empeno', 'producto_tienda', 'imagen_prenda',
@@ -27,7 +25,6 @@ class ImportarDatosSeeder extends Seeder
             'tasas_interes', 'usuario', 'rol', 'empresa'
         ];
 
-        // 🔥 PostgreSQL TRUNCATE (sin SET FOREIGN_KEY_CHECKS)
         DB::statement('SET session_replication_role = replica;');
         foreach ($tables as $table) {
             try {
@@ -41,42 +38,39 @@ class ImportarDatosSeeder extends Seeder
 
         $this->command->info("\n");
 
-        /* =====================
-           EMPRESAS
-        =====================*/
-
+        // ===================== EMPRESAS =====================
         $empresas = [
             [
-                'nombre' => 'Empresa Juan', 
-                'nombre_comercial' => 'Juan Prendas', 
-                'rfc' => 'JUAN123456ABC', 
-                'telefono' => '5551234567', 
-                'email' => 'juan@empresa.com', 
-                'direccion' => 'Calle Principal 123', 
-                'ciudad' => 'Ciudad de México', 
-                'estado' => 'CDMX', 
+                'nombre' => 'Empresa Juan',
+                'nombre_comercial' => 'Juan Prendas',
+                'rfc' => 'JUAN123456ABC',
+                'telefono' => '5551234567',
+                'email' => 'juan@empresa.com',
+                'direccion' => 'Calle Principal 123',
+                'ciudad' => 'Ciudad de México',
+                'estado' => 'CDMX',
                 'codigo_postal' => '12345'
             ],
             [
-                'nombre' => 'Empresa Tula', 
-                'nombre_comercial' => 'Tula Empeños', 
-                'rfc' => 'TULA987654XYZ', 
-                'telefono' => '5557654321', 
-                'email' => 'tula@empresa.com', 
-                'direccion' => 'Av. Reforma 456', 
-                'ciudad' => 'Tula', 
-                'estado' => 'Hidalgo', 
+                'nombre' => 'Empresa Tula',
+                'nombre_comercial' => 'Tula Empeños',
+                'rfc' => 'TULA987654XYZ',
+                'telefono' => '5557654321',
+                'email' => 'tula@empresa.com',
+                'direccion' => 'Av. Reforma 456',
+                'ciudad' => 'Tula',
+                'estado' => 'Hidalgo',
                 'codigo_postal' => '67890'
             ],
             [
-                'nombre' => 'Empeños Express', 
-                'nombre_comercial' => 'Express Empeños', 
-                'rfc' => 'EXP123456ABC', 
-                'telefono' => '5559876543', 
-                'email' => 'express@empresa.com', 
-                'direccion' => 'Boulevard Central 789', 
-                'ciudad' => 'Guadalajara', 
-                'estado' => 'Jalisco', 
+                'nombre' => 'Empeños Express',
+                'nombre_comercial' => 'Express Empeños',
+                'rfc' => 'EXP123456ABC',
+                'telefono' => '5559876543',
+                'email' => 'express@empresa.com',
+                'direccion' => 'Boulevard Central 789',
+                'ciudad' => 'Guadalajara',
+                'estado' => 'Jalisco',
                 'codigo_postal' => '44100'
             ]
         ];
@@ -100,10 +94,7 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Empresas creadas: " . count($empresaIds));
 
-        /* =====================
-           ROLES (CON id_empresa)
-        =====================*/
-
+        // ===================== ROLES =====================
         $rolesBase = ["Administrador", "Gerente", "Cajero", "Cliente"];
         $rolIds = [];
 
@@ -116,14 +107,14 @@ class ImportarDatosSeeder extends Seeder
                     'Cliente' => 'Portal de clientes',
                     default => 'Rol del sistema'
                 };
-                
+
                 $id = DB::table('rol')->insertGetId([
                     'id_empresa' => $empresaId,
                     'nombre' => $nombre,
                     'descripcion' => substr($descripcion . " - " . $faker->sentence(2), 0, 255),
                     'nivel' => $nivel + 1
                 ]);
-                
+
                 if (!isset($rolIds[$empresaId])) {
                     $rolIds[$empresaId] = [];
                 }
@@ -132,10 +123,7 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Roles creados: " . (count($empresaIds) * count($rolesBase)));
 
-        /* =====================
-           PERMISOS (CON id_empresa)
-        =====================*/
-
+        // ===================== PERMISOS =====================
         $permisosBase = [
             "ver_dashboard", "ver_clientes", "crear_clientes", "editar_clientes", "eliminar_clientes",
             "ver_empenos", "crear_empenos", "editar_empenos", "cancelar_empenos",
@@ -159,9 +147,9 @@ class ImportarDatosSeeder extends Seeder
                     str_contains($permiso, 'dashboard') => 'dashboard',
                     default => 'general'
                 };
-                
+
                 $descripcion = "Permiso para " . str_replace('_', ' ', $permiso);
-                
+
                 $id = DB::table('permisos')->insertGetId([
                     'id_empresa' => $empresaId,
                     'nombre' => $permiso,
@@ -169,7 +157,7 @@ class ImportarDatosSeeder extends Seeder
                     'modulo' => $modulo,
                     'estado' => 'activo'
                 ]);
-                
+
                 if (!isset($permisoIds[$empresaId])) {
                     $permisoIds[$empresaId] = [];
                 }
@@ -178,12 +166,9 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Permisos creados: " . (count($empresaIds) * count($permisosBase)));
 
-        /* =====================
-           ROL_PERMISO
-        =====================*/
-
+        // ===================== ROL_PERMISO =====================
         foreach ($empresaIds as $empresaId) {
-            // Administrador tiene todos los permisos
+            // Administrador: todos los permisos
             $adminRolId = $rolIds[$empresaId]['Administrador'];
             foreach ($permisoIds[$empresaId] as $permisoId) {
                 DB::table('rol_permiso')->insert([
@@ -193,10 +178,10 @@ class ImportarDatosSeeder extends Seeder
                     'permitido' => 1
                 ]);
             }
-            
-            // Gerente tiene permisos limitados
+
+            // Gerente: permisos limitados
             $gerenteRolId = $rolIds[$empresaId]['Gerente'];
-            $permisosGerente = ['ver_clientes', 'crear_clientes', 'editar_clientes', 'ver_empenos', 'crear_empenos', 
+            $permisosGerente = ['ver_clientes', 'crear_clientes', 'editar_clientes', 'ver_empenos', 'crear_empenos',
                                 'ver_pagos', 'registrar_pagos', 'ver_tienda', 'ver_reportes'];
             foreach ($permisosGerente as $permiso) {
                 if (isset($permisoIds[$empresaId][$permiso])) {
@@ -208,8 +193,8 @@ class ImportarDatosSeeder extends Seeder
                     ]);
                 }
             }
-            
-            // Cajero tiene permisos de pagos y caja
+
+            // Cajero: pagos y caja
             $cajeroRolId = $rolIds[$empresaId]['Cajero'];
             $permisosCajero = ['ver_pagos', 'registrar_pagos', 'ver_caja', 'registrar_movimientos'];
             foreach ($permisosCajero as $permiso) {
@@ -222,8 +207,8 @@ class ImportarDatosSeeder extends Seeder
                     ]);
                 }
             }
-            
-            // Cliente tiene permisos básicos
+
+            // Cliente: permisos básicos
             $clienteRolId = $rolIds[$empresaId]['Cliente'];
             $permisosCliente = ['ver_dashboard', 'ver_clientes', 'ver_empenos', 'ver_pagos', 'ver_tienda'];
             foreach ($permisosCliente as $permiso) {
@@ -239,10 +224,7 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Permisos asignados a roles");
 
-        /* =====================
-           USUARIOS
-        =====================*/
-
+        // ===================== USUARIOS =====================
         $todosUsuarios = [];
         $clientesUsuarios = [];
 
@@ -250,7 +232,7 @@ class ImportarDatosSeeder extends Seeder
             // Administrador de la empresa
             $adminRolId = $rolIds[$empresaId]['Administrador'];
             $email = strtolower(str_replace(' ', '', $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'])) . '@admin.com';
-            
+
             $id = DB::table('usuario')->insertGetId([
                 'id_rol' => $adminRolId,
                 'id_empresa' => $empresaId,
@@ -262,7 +244,7 @@ class ImportarDatosSeeder extends Seeder
                 'fecha_registro' => now()
             ]);
             $todosUsuarios[] = $id;
-            
+
             // Gerentes (2 por empresa)
             $gerenteRolId = $rolIds[$empresaId]['Gerente'];
             for ($i = 0; $i < 2; $i++) {
@@ -278,7 +260,7 @@ class ImportarDatosSeeder extends Seeder
                 ]);
                 $todosUsuarios[] = $id;
             }
-            
+
             // Cajeros (3 por empresa)
             $cajeroRolId = $rolIds[$empresaId]['Cajero'];
             for ($i = 0; $i < 3; $i++) {
@@ -294,14 +276,14 @@ class ImportarDatosSeeder extends Seeder
                 ]);
                 $todosUsuarios[] = $id;
             }
-            
+
             // Clientes (15 por empresa)
             $clienteRolId = $rolIds[$empresaId]['Cliente'];
             for ($i = 0; $i < 15; $i++) {
                 $nombre = $faker->firstName();
                 $apellido = $faker->lastName();
                 $email = $faker->unique()->safeEmail();
-                
+
                 $id = DB::table('usuario')->insertGetId([
                     'id_rol' => $clienteRolId,
                     'id_empresa' => $empresaId,
@@ -324,10 +306,7 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Usuarios creados: " . count($todosUsuarios));
 
-        /* =====================
-           CLIENTES
-        =====================*/
-
+        // ===================== CLIENTES =====================
         $clientes = [];
         foreach ($clientesUsuarios as $clienteUsuario) {
             $id = DB::table('clientes')->insertGetId([
@@ -354,14 +333,11 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Clientes creados: " . count($clientes));
 
-        /* =====================
-           AVALES (CON id_empresa)
-        =====================*/
-
+        // ===================== AVALES =====================
         $avales = [];
         for ($i = 0; $i < 60; $i++) {
             $idEmpresa = $empresaIds[array_rand($empresaIds)];
-            
+
             $id = DB::table('aval')->insertGetId([
                 'id_empresa' => $idEmpresa,
                 'nombre' => substr($faker->firstName(), 0, 100),
@@ -377,10 +353,7 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Avales creados: " . count($avales));
 
-        /* =====================
-           PRENDAS (CON id_empresa)
-        =====================*/
-
+        // ===================== PRENDAS =====================
         $tipos = ["Joyería", "Electrónica", "Relojes", "Herramientas", "Instrumentos", "Otros"];
         $materiales = ["oro", "plata", "acero", "platino", "madera", "plástico"];
         $estadosPrenda = ["Disponible", "En Empeño", "Vendido", "Vencido", "Apartado"];
@@ -391,10 +364,10 @@ class ImportarDatosSeeder extends Seeder
             $tipo = $tipos[array_rand($tipos)];
             $material = $materiales[array_rand($materiales)];
             $estadoPrenda = $estadosPrenda[array_rand($estadosPrenda)];
-            
+
             $descripcion = "Artículo de $tipo hecho de $material, en buen estado.";
             $valorEstimado = rand(500, 50000);
-            
+
             $id = DB::table('prendas')->insertGetId([
                 'id_empresa' => $idEmpresa,
                 'descripcion' => substr($descripcion, 0, 255),
@@ -415,10 +388,7 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Prendas creadas: " . count($prendas));
 
-        /* =====================
-           TASAS INTERES
-        =====================*/
-
+        // ===================== TASAS INTERÉS =====================
         $tasasInteres = [
             ['nombre' => 'Basico', 'porcentaje' => 5.00, 'plazo_dias' => 15],
             ['nombre' => 'Estandar', 'porcentaje' => 8.00, 'plazo_dias' => 30],
@@ -439,10 +409,7 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Tasas de interés creadas: " . count($tasas));
 
-        /* =====================
-           EMPEÑOS, AMORTIZACIONES Y PAGOS
-        =====================*/
-
+        // ===================== EMPEÑOS, AMORTIZACIONES Y PAGOS =====================
         $empenos = [];
         $amortizacionesTotales = 0;
         $pagosRegistrados = 0;
@@ -452,17 +419,17 @@ class ImportarDatosSeeder extends Seeder
             $prenda = $prendas[array_rand($prendas)];
             $aval = $avales[array_rand($avales)];
             $idTasa = $tasas[array_rand($tasas)];
-            
+
             $tasa = DB::table('tasas_interes')->where('id_tasa', $idTasa)->first();
-            
+
             $montoPrestado = rand(500, 15000);
             $interesPorcentaje = $tasa->porcentaje;
             $plazoDias = $tasa->plazo_dias;
-            
+
             $interesMonto = $montoPrestado * ($interesPorcentaje / 100);
             $ivaInteres = $interesMonto * 0.16;
             $montoTotal = $montoPrestado + $interesMonto + $ivaInteres;
-            
+
             $randomEstado = rand(1, 10);
             if ($randomEstado <= 4) {
                 $fechaEmpeno = $faker->dateTimeBetween('-30 days', 'now')->format('Y-m-d');
@@ -477,7 +444,7 @@ class ImportarDatosSeeder extends Seeder
                 $fechaVencimiento = (new \DateTime($fechaEmpeno))->modify("+$plazoDias days")->format('Y-m-d');
                 $estado = 'vencido';
             }
-            
+
             $idEmpeno = DB::table('empeno')->insertGetId([
                 'id_empresa' => $cliente['id_empresa'],
                 'id_cliente' => $cliente['id'],
@@ -492,9 +459,9 @@ class ImportarDatosSeeder extends Seeder
                 'estado' => $estado,
                 'folio' => strtoupper(substr($faker->bothify("EMP###???"), 0, 20))
             ]);
-            
+
             $fechaPagoProgramado = (new \DateTime($fechaEmpeno))->modify("+$plazoDias days")->format('Y-m-d');
-            
+
             $idAmortizacion = DB::table('amortizacion')->insertGetId([
                 'id_empeno' => $idEmpeno,
                 'saldo_inicial' => $montoTotal,
@@ -509,10 +476,10 @@ class ImportarDatosSeeder extends Seeder
                 'estado' => 'pendiente'
             ]);
             $amortizacionesTotales++;
-            
+
             if ($estado == 'pagado') {
                 $fechaPago = $faker->dateTimeBetween($fechaEmpeno, $fechaVencimiento)->format('Y-m-d');
-                
+
                 DB::table('pagos')->insert([
                     'id_empeno' => $idEmpeno,
                     'id_amortizacion' => $idAmortizacion,
@@ -526,7 +493,7 @@ class ImportarDatosSeeder extends Seeder
                     'fecha_registro' => now()
                 ]);
                 $pagosRegistrados++;
-                
+
                 DB::table('amortizacion')
                     ->where('id_amortizacion', $idAmortizacion)
                     ->update([
@@ -535,25 +502,25 @@ class ImportarDatosSeeder extends Seeder
                         'estado' => 'pagado',
                         'fecha_pago_real' => $fechaPago
                     ]);
-                
+
             } elseif ($estado == 'activo') {
                 $numPagos = rand(0, 2);
                 $montoRestante = $montoTotal;
                 $totalPagado = 0;
-                
+
                 for ($p = 1; $p <= $numPagos; $p++) {
                     if ($montoRestante <= 0) break;
-                    
+
                     $porcentajePago = rand(10, 40) / 100;
                     if ($p == $numPagos) {
                         $porcentajePago = min($porcentajePago, 0.7);
                     }
-                    
+
                     $capitalPagado = round($montoPrestado * $porcentajePago, 2);
                     $interesPagado = round($interesMonto * $porcentajePago, 2);
                     $ivaPagado = round($ivaInteres * $porcentajePago, 2);
                     $montoPagado = $capitalPagado + $interesPagado + $ivaPagado;
-                    
+
                     if ($montoPagado > $montoRestante) {
                         $montoPagado = $montoRestante;
                         $factor = $montoPagado / $montoTotal;
@@ -561,9 +528,9 @@ class ImportarDatosSeeder extends Seeder
                         $interesPagado = round($interesMonto * $factor, 2);
                         $ivaPagado = round($ivaInteres * $factor, 2);
                     }
-                    
+
                     $fechaPago = $faker->dateTimeBetween($fechaEmpeno, 'now')->format('Y-m-d');
-                    
+
                     DB::table('pagos')->insert([
                         'id_empeno' => $idEmpeno,
                         'id_amortizacion' => $idAmortizacion,
@@ -577,11 +544,11 @@ class ImportarDatosSeeder extends Seeder
                         'fecha_registro' => now()
                     ]);
                     $pagosRegistrados++;
-                    
+
                     $totalPagado += $montoPagado;
                     $montoRestante = $montoTotal - $totalPagado;
                 }
-                
+
                 if ($totalPagado > 0) {
                     DB::table('amortizacion')
                         ->where('id_amortizacion', $idAmortizacion)
@@ -590,7 +557,7 @@ class ImportarDatosSeeder extends Seeder
                             'saldo_final' => $montoRestante
                         ]);
                 }
-                
+
                 $empenos[] = ['id' => $idEmpeno, 'estado' => $estado];
             } else {
                 $empenos[] = ['id' => $idEmpeno, 'estado' => $estado];
@@ -601,16 +568,13 @@ class ImportarDatosSeeder extends Seeder
         $this->command->info("✅ Amortizaciones creadas: $amortizacionesTotales");
         $this->command->info("✅ Pagos registrados: $pagosRegistrados");
 
-        /* =====================
-           PRODUCTOS TIENDA
-        =====================*/
-
+        // ===================== PRODUCTOS TIENDA =====================
         $productos = [];
         for ($i = 0; $i < 80; $i++) {
             $prenda = $prendas[array_rand($prendas)];
             $precioVenta = round($prenda['valor_estimado'] * (rand(70, 130) / 100), 2);
             $estadosProducto = ['Nuevo', 'Como nuevo', 'Buen estado', 'Aceptable'];
-            
+
             $id = DB::table('producto_tienda')->insertGetId([
                 'id_empresa' => $prenda['id_empresa'],
                 'id_prenda' => $prenda['id'],
@@ -627,15 +591,12 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Productos tienda creados: " . count($productos));
 
-        /* =====================
-           VENTAS Y DETALLES
-        =====================*/
-
+        // ===================== VENTAS Y DETALLES =====================
         $ventasIds = [];
         for ($i = 0; $i < 60; $i++) {
             $cliente = $clientes[array_rand($clientes)];
             $totalVenta = rand(500, 15000);
-            
+
             $id = DB::table('venta_tienda')->insertGetId([
                 'id_cliente' => $cliente['id'],
                 'total' => $totalVenta,
@@ -655,7 +616,7 @@ class ImportarDatosSeeder extends Seeder
             $cantidad = rand(1, 5);
             $precio = rand(300, 5000);
             $subtotal = $cantidad * $precio;
-            
+
             DB::table('detalle_venta')->insert([
                 'id_venta' => $venta,
                 'id_producto' => $producto,
@@ -667,10 +628,7 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Detalles de venta creados: $detallesCount");
 
-        /* =====================
-           MOVIMIENTOS CAJA
-        =====================*/
-
+        // ===================== MOVIMIENTOS CAJA =====================
         $pagosExistentes = DB::table('pagos')->pluck('id_pago')->toArray();
         $usuariosLista = DB::table('usuario')->pluck('id_usuario')->toArray();
 
@@ -681,7 +639,7 @@ class ImportarDatosSeeder extends Seeder
             $usuario = $usuariosLista[array_rand($usuariosLista)];
             $pago = !empty($pagosExistentes) && rand(1, 3) == 1 ? $pagosExistentes[array_rand($pagosExistentes)] : null;
             $tipo = $tiposMovimiento[array_rand($tiposMovimiento)];
-            
+
             $monto = match($tipo) {
                 'prestamo' => rand(1000, 20000),
                 'pago' => rand(500, 10000),
@@ -689,7 +647,7 @@ class ImportarDatosSeeder extends Seeder
                 'gasto' => rand(100, 2000),
                 default => rand(500, 5000)
             };
-            
+
             DB::table('movimientos_caja')->insert([
                 'tipo' => $tipo,
                 'monto' => $monto,
@@ -702,10 +660,7 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Movimientos de caja creados: $movimientos");
 
-        /* =====================
-           RESUMEN FINAL
-        =====================*/
-
+        // ===================== RESUMEN FINAL =====================
         $this->command->info("\n========================================");
         $this->command->info(" DATABASE SEEDED SUCCESSFULLY!");
         $this->command->info("========================================");
