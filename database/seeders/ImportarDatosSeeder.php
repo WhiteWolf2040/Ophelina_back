@@ -9,6 +9,7 @@ use Faker\Factory as Faker;
 
 class ImportarDatosSeeder extends Seeder
 {
+     use \Illuminate\Database\Console\Seeds\WithFaker;
     public function run(): void
     {
         $faker = $this->faker;
