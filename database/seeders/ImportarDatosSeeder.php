@@ -11,7 +11,7 @@ class ImportarDatosSeeder extends Seeder
 {
     public function run(): void
     {
-                $this->limpiarTablas();
+            
 
                 
 
