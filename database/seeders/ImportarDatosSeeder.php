@@ -5,14 +5,16 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Faker\Factory as Faker; // ✅ IMPORTAR FAKER MANUALMENTE
+use Illuminate\Foundation\Testing\WithFaker; // ✅ TRAIT DE LARAVEL
 
 class ImportarDatosSeeder extends Seeder
 {
+    use WithFaker; // ✅ PROPORCIONA $this->faker
+
     public function run(): void
     {
-        // ✅ CREAR INSTANCIA DE FAKER MANUALMENTE
-        $faker = Faker::create('es_MX');
+        // ✅ USAR $this->faker (NO Faker\Factory::create)
+        $faker = $this->faker;
 
         // Limpiar tablas
         $tables = [
