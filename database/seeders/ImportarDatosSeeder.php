@@ -11,7 +11,10 @@ class ImportarDatosSeeder extends Seeder
 {
     public function run(): void
     {
-        // Desactivar restricciones de clave foránea
+                $this->limpiarTablas();
+
+                
+                // Desactivar restricciones de clave foránea
         //DB::statement('SET session_replication_role = replica;');
 
           // ==========================================
@@ -248,11 +251,9 @@ class ImportarDatosSeeder extends Seeder
             ['id_aval' => 45, 'id_empresa' => 3, 'id_cliente' => 45, 'nombre' => 'Clarissa', 'apellido' => 'Stamm', 'telefono' => '(785) 930-1480', 'direccion' => '98818 Magdalena Overpass Apt. 356 South Brendon, CO 43727', 'email' => 'thea26@example.org', 'identificacion' => null],
         ]);
 
-        // ==========================================
+       
         // 9. PRENDAS (SOLO LAS PRIMERAS 10 COMO EJEMPLO, LAS 200 SON MUY EXTENSAS)
-        // ==========================================
-        // NOTA: Por la extensión del archivo, aquí deberías incluir todas las prendas
-        // Te recomiendo generar un array con todas las prendas del dump
+       
         DB::table('prendas')->insert([
             ['id_prenda' => 1, 'id_empresa' => 3, 'descripcion' => 'Artículo de Relojes hecho de acero, en buen estado.', 'tipo' => 'Relojes', 'material' => 'acero', 'peso_gramos' => 185.00, 'valor_estimado' => 36333.00, 'estado' => 'Vencido', 'quitas' => null, 'fecha_registro' => '2026-06-25 09:55:32', 'codigo_barras' => '0435306270701', 'imagen_url' => null],
             ['id_prenda' => 2, 'id_empresa' => 1, 'descripcion' => 'Artículo de Otros hecho de acero, en buen estado.', 'tipo' => 'Otros', 'material' => 'acero', 'peso_gramos' => 267.00, 'valor_estimado' => 17990.00, 'estado' => 'Disponible', 'quitas' => null, 'fecha_registro' => '2026-06-25 09:55:32', 'codigo_barras' => '7073749597639', 'imagen_url' => null],
@@ -261,92 +262,104 @@ class ImportarDatosSeeder extends Seeder
             ['id_prenda' => 5, 'id_empresa' => 1, 'descripcion' => 'Artículo de Instrumentos hecho de plástico, en buen estado.', 'tipo' => 'Instrumentos', 'material' => 'plástico', 'peso_gramos' => 27.00, 'valor_estimado' => 6095.00, 'estado' => 'Vencido', 'quitas' => null, 'fecha_registro' => '2026-06-25 09:55:32', 'codigo_barras' => '7613854287485', 'imagen_url' => null],
         ]);
 
-        // ==========================================
+        
         // 10. EMPEÑOS (SOLO EJEMPLO)
-        // ==========================================
+       
         DB::table('empeno')->insert([
             ['id_empeno' => 1, 'id_empresa' => 3, 'id_cliente' => 42, 'id_prenda' => 28, 'id_aval' => 41, 'id_tasa' => 5, 'fecha_empeno' => '2026-04-18', 'monto_prestado' => 12605.00, 'intereses' => 15.00, 'iva_porcentaje' => 16.00, 'fecha_vencimiento' => '2026-07-17', 'estado' => 'pagado', 'folio' => 'EMP203SLF'],
             ['id_empeno' => 2, 'id_empresa' => 1, 'id_cliente' => 7, 'id_prenda' => 102, 'id_aval' => 53, 'id_tasa' => 4, 'fecha_empeno' => '2026-04-16', 'monto_prestado' => 1073.00, 'intereses' => 12.00, 'iva_porcentaje' => 16.00, 'fecha_vencimiento' => '2026-06-15', 'estado' => 'pagado', 'folio' => 'EMP797TNM'],
             ['id_empeno' => 3, 'id_empresa' => 2, 'id_cliente' => 16, 'id_prenda' => 138, 'id_aval' => 61, 'id_tasa' => 5, 'fecha_empeno' => '2026-05-08', 'monto_prestado' => 5680.00, 'intereses' => 15.00, 'iva_porcentaje' => 16.00, 'fecha_vencimiento' => '2026-08-06', 'estado' => 'vencido', 'folio' => 'EMP808HPH'],
         ]);
 
-        // ==========================================
+       
         // 11. AMORTIZACIONES (SOLO EJEMPLO)
-        // ==========================================
+       
         DB::table('amortizacion')->insert([
             ['id_amortizacion' => 1, 'id_empeno' => 1, 'saldo_inicial' => 14798.27, 'saldo_final' => 0.00, 'numero_pago' => 1, 'fecha_pago_programado' => '2026-07-17', 'fecha_pago_real' => '2026-07-05', 'capital' => 12605.00, 'interes' => 1890.75, 'iva_interes' => 302.52, 'monto_total' => 14798.27, 'monto_pagado' => 14798.27, 'tipo_pago' => null, 'estado' => 'pagado'],
             ['id_amortizacion' => 2, 'id_empeno' => 2, 'saldo_inicial' => 1222.36, 'saldo_final' => 0.00, 'numero_pago' => 1, 'fecha_pago_programado' => '2026-06-15', 'fecha_pago_real' => '2026-05-04', 'capital' => 1073.00, 'interes' => 128.76, 'iva_interes' => 20.60, 'monto_total' => 1222.36, 'monto_pagado' => 1222.36, 'tipo_pago' => null, 'estado' => 'pagado'],
             ['id_amortizacion' => 3, 'id_empeno' => 3, 'saldo_inicial' => 6668.32, 'saldo_final' => 6668.32, 'numero_pago' => 1, 'fecha_pago_programado' => '2026-08-06', 'fecha_pago_real' => null, 'capital' => 5680.00, 'interes' => 852.00, 'iva_interes' => 136.32, 'monto_total' => 6668.32, 'monto_pagado' => 0.00, 'tipo_pago' => null, 'estado' => 'pendiente'],
         ]);
 
-        // ==========================================
+       
         // 12. PAGOS (SOLO EJEMPLO)
-        // ==========================================
+       
         DB::table('pagos')->insert([
             ['id_pago' => 1, 'id_empeno' => 1, 'id_amortizacion' => 1, 'fecha_pago' => '2026-07-05', 'capital_pagado' => 12605.00, 'interes_pagado' => 1890.75, 'iva_pagado' => 302.52, 'monto_total' => 14798.27, 'tipo_pago' => 'liquidacion', 'metodo_pago' => 'tarjeta', 'referencia' => null, 'comprobante' => null, 'fecha_registro' => '2026-06-25 09:55:32'],
             ['id_pago' => 2, 'id_empeno' => 2, 'id_amortizacion' => 2, 'fecha_pago' => '2026-05-04', 'capital_pagado' => 1073.00, 'interes_pagado' => 128.76, 'iva_pagado' => 20.60, 'monto_total' => 1222.36, 'tipo_pago' => 'liquidacion', 'metodo_pago' => 'tarjeta', 'referencia' => null, 'comprobante' => null, 'fecha_registro' => '2026-06-25 09:55:32'],
         ]);
 
-        // ==========================================
+     
         // 13. PRODUCTO TIENDA (SOLO EJEMPLO)
-        // ==========================================
+       
         DB::table('producto_tienda')->insert([
             ['id_producto' => 1, 'id_empresa' => 1, 'id_prenda' => 119, 'nombre' => 'atque asperiores', 'descripcion' => 'Sequi recusandae officia nam ut veritatis aut velit.', 'precio' => 10252.62, 'descuento' => 0, 'stock' => 16, 'estado_producto' => 'Aceptable', 'visible' => 1, 'destacado' => 0, 'imagen_url' => null, 'fecha_publicacion' => '2026-06-25'],
             ['id_producto' => 2, 'id_empresa' => 3, 'id_prenda' => 88, 'nombre' => 'omnis voluptas', 'descripcion' => 'Quia aliquam vero debitis.', 'precio' => 46009.89, 'descuento' => 0, 'stock' => 3, 'estado_producto' => 'Buen estado', 'visible' => 1, 'destacado' => 0, 'imagen_url' => null, 'fecha_publicacion' => '2026-06-25'],
         ]);
 
-        // ==========================================
+        
         // 14. VENTA TIENDA (SOLO EJEMPLO)
-        // ==========================================
+     
         DB::table('venta_tienda')->insert([
             ['id_venta' => 1, 'id_cliente' => 5, 'fecha_venta' => '2026-06-25 09:55:34', 'total' => 7423.00, 'metodo_pago' => 'transferencia', 'estado' => 'completada', 'folio' => 'VT874CCW'],
             ['id_venta' => 2, 'id_cliente' => 27, 'fecha_venta' => '2026-06-25 09:55:34', 'total' => 12750.00, 'metodo_pago' => 'efectivo', 'estado' => 'completada', 'folio' => 'VT157UKV'],
             ['id_venta' => 3, 'id_cliente' => 33, 'fecha_venta' => '2026-06-25 09:55:34', 'total' => 13563.00, 'metodo_pago' => 'tarjeta', 'estado' => 'completada', 'folio' => 'VT380TTG'],
         ]);
 
-        // ==========================================
+        
         // 15. DETALLE VENTA (SOLO EJEMPLO)
-        // ==========================================
+        
         DB::table('detalle_venta')->insert([
             ['id_detalle' => 1, 'id_venta' => 50, 'id_producto' => 41, 'cantidad' => 4, 'precio_unitario' => 4683.00, 'subtotal' => 18732.00],
             ['id_detalle' => 2, 'id_venta' => 5, 'id_producto' => 19, 'cantidad' => 4, 'precio_unitario' => 2667.00, 'subtotal' => 10668.00],
             ['id_detalle' => 3, 'id_venta' => 21, 'id_producto' => 48, 'cantidad' => 2, 'precio_unitario' => 2035.00, 'subtotal' => 4070.00],
         ]);
 
-        // ==========================================
+        
         // 16. PERMISOS (SOLO EJEMPLO)
-        // ==========================================
+      
         DB::table('permisos')->insert([
             ['id_permiso' => 1, 'id_empresa' => 1, 'nombre' => 'ver_dashboard', 'descripcion' => 'Permiso para ver el dashboard', 'modulo' => 'dashboard', 'estado' => 'activo'],
             ['id_permiso' => 2, 'id_empresa' => 1, 'nombre' => 'ver_clientes', 'descripcion' => 'Permiso para ver clientes', 'modulo' => 'clientes', 'estado' => 'activo'],
             ['id_permiso' => 3, 'id_empresa' => 1, 'nombre' => 'crear_clientes', 'descripcion' => 'Permiso para crear clientes', 'modulo' => 'clientes', 'estado' => 'activo'],
         ]);
 
-        // ==========================================
+      
         // 17. ROL PERMISO (SOLO EJEMPLO)
-        // ==========================================
+    
         DB::table('rol_permiso')->insert([
             ['id_rol_permiso' => 1, 'id_empresa' => 1, 'id_rol' => 1, 'id_permiso' => 1, 'permitido' => 1],
             ['id_rol_permiso' => 2, 'id_empresa' => 1, 'id_rol' => 1, 'id_permiso' => 2, 'permitido' => 1],
             ['id_rol_permiso' => 3, 'id_empresa' => 1, 'id_rol' => 1, 'id_permiso' => 3, 'permitido' => 1],
         ]);
 
-        // ==========================================
+       
         // 18. MOVIMIENTOS CAJA (SOLO EJEMPLO)
-        // ==========================================
+      
         DB::table('movimientos_caja')->insert([
             ['id_movimiento' => 1, 'tipo' => 'pago', 'monto' => 3086.00, 'descripcion' => 'Tempora dolor quibusdam reprehenderit incidunt.', 'fecha' => '2026-06-25 09:55:34', 'id_usuario' => 5, 'id_pago' => 59],
             ['id_movimiento' => 2, 'tipo' => 'venta', 'monto' => 2583.00, 'descripcion' => 'Et atque placeat.', 'fecha' => '2026-06-25 09:55:34', 'id_usuario' => 18, 'id_pago' => null],
             ['id_movimiento' => 3, 'tipo' => 'pago', 'monto' => 6953.00, 'descripcion' => 'Libero nam animi a.', 'fecha' => '2026-06-25 09:55:34', 'id_usuario' => 3, 'id_pago' => null],
         ]);
 
-        // Reactivar restricciones de clave foránea
-       // DB::statement('SET session_replication_role = DEFAULT');
+   
 
         $this->command->info('✅ Datos importados correctamente.');
         $this->command->info('📌 Usuarios: password = "password"');
         $this->command->info('📌 Admin: juanprendas@admin.com / password');
         $this->command->info('📌 Admin: tulaempeños@admin.com / password');
         $this->command->info('📌 Admin: expressempeños@admin.com / password');
+    }
+
+     private function limpiarTablas(): void
+    {
+        $tablas = ['usuario', 'empresa', 'planes_saas', 'rol', 'clientes', 'prendas', 'empeno'];
+        
+        DB::statement('SET session_replication_role = replica;');
+        
+        foreach ($tablas as $tabla) {
+            DB::table($tabla)->truncate();
+        }
+        
+        DB::statement('SET session_replication_role = DEFAULT;');
     }
 }
