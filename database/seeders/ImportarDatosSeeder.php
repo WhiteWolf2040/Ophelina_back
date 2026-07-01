@@ -9,11 +9,9 @@ use Faker\Factory;
 
 class ImportarDatosSeeder extends Seeder
 {
-    
-
     public function run(): void
     {
-       $faker = Factory::create('es_MX');
+        $faker = Factory::create('es_MX');
 
         // Limpiar tablas
         $tables = [
@@ -35,7 +33,9 @@ class ImportarDatosSeeder extends Seeder
 
         $this->command->info("\n");
 
-        // ===================== EMPRESAS =====================
+        // ==========================================
+        // 1. EMPRESAS
+        // ==========================================
         $empresas = [
             [
                 'nombre' => 'Empresa Juan',
@@ -94,7 +94,9 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Empresas creadas: " . count($empresaIds));
 
-        // ===================== ROLES =====================
+        // ==========================================
+        // 2. ROLES
+        // ==========================================
         $rolesBase = ["Administrador", "Gerente", "Cajero", "Cliente"];
         $rolIds = [];
 
@@ -126,7 +128,9 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Roles creados: " . (count($empresaIds) * count($rolesBase)));
 
-        // ===================== PERMISOS =====================
+        // ==========================================
+        // 3. PERMISOS
+        // ==========================================
         $permisosBase = [
             "ver_dashboard", "ver_clientes", "crear_clientes", "editar_clientes", "eliminar_clientes",
             "ver_empenos", "crear_empenos", "editar_empenos", "cancelar_empenos",
@@ -172,7 +176,9 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Permisos creados: " . (count($empresaIds) * count($permisosBase)));
 
-        // ===================== ROL_PERMISO =====================
+        // ==========================================
+        // 4. ROL_PERMISO
+        // ==========================================
         foreach ($empresaIds as $empresaId) {
             $adminRolId = $rolIds[$empresaId]['Administrador'];
             foreach ($permisoIds[$empresaId] as $permisoId) {
@@ -226,7 +232,9 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Permisos asignados a roles");
 
-        // ===================== USUARIOS =====================
+        // ==========================================
+        // 5. USUARIOS
+        // ==========================================
         $todosUsuarios = [];
         $clientesUsuarios = [];
 
@@ -316,7 +324,9 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Usuarios creados: " . count($todosUsuarios));
 
-        // ===================== CLIENTES =====================
+        // ==========================================
+        // 6. CLIENTES
+        // ==========================================
         $clientes = [];
         foreach ($clientesUsuarios as $clienteUsuario) {
             $id = DB::table('clientes')->insertGetId(
@@ -346,42 +356,85 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Clientes creados: " . count($clientes));
 
-// ===================== AVALES =====================
-$avales = [];
-for ($i = 0; $i < 60; $i++) {
-    $idEmpresa = $empresaIds[array_rand($empresaIds)];
-    
-    // Obtener clientes de la misma empresa
-    $clientesDeEmpresa = array_filter($clientes, function($cliente) use ($idEmpresa) {
-        return $cliente['id_empresa'] == $idEmpresa;
-    });
-    
-    // Si no hay clientes en esa empresa, usar cualquier cliente
-    if (empty($clientesDeEmpresa)) {
-        $cliente = $clientes[array_rand($clientes)];
-    } else {
-        $cliente = $clientesDeEmpresa[array_rand($clientesDeEmpresa)];
-    }
+        // ==========================================
+        // 7. PRENDAS (ANTES DE AVALES)
+        // ==========================================
+        $tipos = ["Joyería", "Electrónica", "Relojes", "Herramientas", "Instrumentos", "Otros"];
+        $materiales = ["oro", "plata", "acero", "platino", "madera", "plástico"];
+        $estadosPrenda = ["Disponible", "En Empeño", "Vendido", "Vencido", "Apartado"];
 
-    $id = DB::table('aval')->insertGetId(
-        [
-            'id_empresa' => $idEmpresa,
-            'id_cliente' => $cliente['id'], // ✅ CAMPO OBLIGATORIO
-            'nombre' => substr($faker->firstName(), 0, 100),
-            'apellido' => substr($faker->lastName(), 0, 100),
-            'telefono' => substr($faker->phoneNumber(), 0, 20),
-            'direccion' => substr($faker->address(), 0, 255),
-            'email' => substr($faker->safeEmail(), 0, 100)
-        ],
-        'id_aval'
-    );
-    $avales[] = [
-        'id' => $id,
-        'id_empresa' => $idEmpresa
-    ];
-}
+        $prendas = [];
+        for ($i = 0; $i < 200; $i++) {
+            $idEmpresa = $empresaIds[array_rand($empresaIds)];
+            $tipo = $tipos[array_rand($tipos)];
+            $material = $materiales[array_rand($materiales)];
+            $estadoPrenda = $estadosPrenda[array_rand($estadosPrenda)];
 
-        // ===================== TASAS INTERÉS =====================
+            $descripcion = "Artículo de $tipo hecho de $material, en buen estado.";
+            $valorEstimado = rand(500, 50000);
+
+            $id = DB::table('prendas')->insertGetId(
+                [
+                    'id_empresa' => $idEmpresa,
+                    'descripcion' => substr($descripcion, 0, 255),
+                    'tipo' => $tipo,
+                    'material' => substr($material, 0, 100),
+                    'peso_gramos' => rand(10, 500),
+                    'valor_estimado' => $valorEstimado,
+                    'codigo_barras' => substr($faker->ean13(), 0, 50),
+                    'estado' => $estadoPrenda,
+                    'fecha_registro' => now()
+                ],
+                'id_prenda'
+            );
+            $prendas[] = [
+                'id' => $id,
+                'id_empresa' => $idEmpresa,
+                'valor_estimado' => $valorEstimado,
+                'estado' => $estadoPrenda
+            ];
+        }
+        $this->command->info("✅ Prendas creadas: " . count($prendas));
+
+        // ==========================================
+        // 8. AVALES (DESPUÉS DE PRENDAS)
+        // ==========================================
+        $avales = [];
+        for ($i = 0; $i < 60; $i++) {
+            $idEmpresa = $empresaIds[array_rand($empresaIds)];
+            
+            $clientesDeEmpresa = array_filter($clientes, function($cliente) use ($idEmpresa) {
+                return $cliente['id_empresa'] == $idEmpresa;
+            });
+            
+            if (empty($clientesDeEmpresa)) {
+                $cliente = $clientes[array_rand($clientes)];
+            } else {
+                $cliente = $clientesDeEmpresa[array_rand($clientesDeEmpresa)];
+            }
+
+            $id = DB::table('aval')->insertGetId(
+                [
+                    'id_empresa' => $idEmpresa,
+                    'id_cliente' => $cliente['id'],
+                    'nombre' => substr($faker->firstName(), 0, 100),
+                    'apellido' => substr($faker->lastName(), 0, 100),
+                    'telefono' => substr($faker->phoneNumber(), 0, 20),
+                    'direccion' => substr($faker->address(), 0, 255),
+                    'email' => substr($faker->safeEmail(), 0, 100)
+                ],
+                'id_aval'
+            );
+            $avales[] = [
+                'id' => $id,
+                'id_empresa' => $idEmpresa
+            ];
+        }
+        $this->command->info("✅ Avales creados: " . count($avales));
+
+        // ==========================================
+        // 9. TASAS INTERÉS
+        // ==========================================
         $tasasInteres = [
             ['nombre' => 'Basico', 'porcentaje' => 5.00, 'plazo_dias' => 15],
             ['nombre' => 'Estandar', 'porcentaje' => 8.00, 'plazo_dias' => 30],
@@ -405,7 +458,9 @@ for ($i = 0; $i < 60; $i++) {
         }
         $this->command->info("✅ Tasas de interés creadas: " . count($tasas));
 
-        // ===================== EMPEÑOS, AMORTIZACIONES Y PAGOS =====================
+        // ==========================================
+        // 10. EMPEÑOS
+        // ==========================================
         $empenos = [];
         $amortizacionesTotales = 0;
         $pagosRegistrados = 0;
@@ -576,7 +631,9 @@ for ($i = 0; $i < 60; $i++) {
         $this->command->info("✅ Amortizaciones creadas: $amortizacionesTotales");
         $this->command->info("✅ Pagos registrados: $pagosRegistrados");
 
-        // ===================== PRODUCTOS TIENDA =====================
+        // ==========================================
+        // 11. PRODUCTOS TIENDA
+        // ==========================================
         $productos = [];
         for ($i = 0; $i < 80; $i++) {
             $prenda = $prendas[array_rand($prendas)];
@@ -602,7 +659,9 @@ for ($i = 0; $i < 60; $i++) {
         }
         $this->command->info("✅ Productos tienda creados: " . count($productos));
 
-        // ===================== VENTAS Y DETALLES =====================
+        // ==========================================
+        // 12. VENTAS Y DETALLES
+        // ==========================================
         $ventasIds = [];
         for ($i = 0; $i < 60; $i++) {
             $cliente = $clientes[array_rand($clientes)];
@@ -645,7 +704,9 @@ for ($i = 0; $i < 60; $i++) {
         }
         $this->command->info("✅ Detalles de venta creados: $detallesCount");
 
-        // ===================== MOVIMIENTOS CAJA =====================
+        // ==========================================
+        // 13. MOVIMIENTOS CAJA
+        // ==========================================
         $pagosExistentes = DB::table('pagos')->pluck('id_pago')->toArray();
         $usuariosLista = DB::table('usuario')->pluck('id_usuario')->toArray();
 
@@ -680,7 +741,9 @@ for ($i = 0; $i < 60; $i++) {
         }
         $this->command->info("✅ Movimientos de caja creados: $movimientos");
 
-        // ===================== RESUMEN FINAL =====================
+        // ==========================================
+        // RESUMEN FINAL
+        // ==========================================
         $this->command->info("\n========================================");
         $this->command->info(" DATABASE SEEDED SUCCESSFULLY!");
         $this->command->info("========================================");
@@ -690,8 +753,8 @@ for ($i = 0; $i < 60; $i++) {
         $this->command->info("├─ Permisos por empresa: " . count($permisosBase));
         $this->command->info("├─ Usuarios: " . count($todosUsuarios));
         $this->command->info("├─ Clientes: " . count($clientes));
-        $this->command->info("├─ Avales: " . count($avales));
         $this->command->info("├─ Prendas: " . count($prendas));
+        $this->command->info("├─ Avales: " . count($avales));
         $this->command->info("├─ Tasas: " . count($tasas));
         $this->command->info("├─ Empeños: " . count($empenos));
         $this->command->info("├─ Amortizaciones: $amortizacionesTotales");
