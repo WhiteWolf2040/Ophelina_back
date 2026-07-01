@@ -85,22 +85,19 @@ public function user(Request $request)
 {
     $usuario = $request->user()->load(['rol', 'rol.permisos', 'empresa.plan']);
     
-    // Obtener el plan de la empresa
+    // ✅ OBTENER PERMISOS DEL ROL
+    $permisos = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
+    
+    // ✅ OBTENER MÓDULOS ÚNICOS DE LOS PERMISOS (NO SOBREESCRIBIR)
+    $modulos = $usuario->rol ? $usuario->rol->permisos->pluck('modulo')->unique()->toArray() : [];
+    
+    // Si no hay módulos, asignar un conjunto mínimo
+    if (empty($modulos)) {
+        $modulos = ['home'];
+    }
+    
+    // Obtener información del plan
     $planId = $usuario->empresa->id_plan ?? 1;
-    
-    // Módulos permitidos por plan
-    $modulosPorPlan = [
-        1 => ['home', 'clientes', 'empenos'],
-        3 => ['home', 'clientes', 'pagos', 'empenos', 'configuracion'],
-        4 => ['home', 'clientes', 'pagos', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion']
-    ];
-    
-    $modulos = $modulosPorPlan[$planId] ?? $modulosPorPlan[1];
-    
-    // Obtener permisos del rol
-    $permisosDelRol = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
-    
-    // Obtener nombre del plan
     $planNombre = 'Free';
     if ($usuario->empresa && $usuario->empresa->plan) {
         $planNombre = $usuario->empresa->plan->nombre;
@@ -123,8 +120,8 @@ public function user(Request $request)
                 "id_empresa" => $usuario->id_empresa,
                 "plan_id" => $planId,
                 "plan_nombre" => $planNombre,
-                "modulos" => $modulos,
-                "permisos" => $permisosDelRol,
+                "modulos" => $modulos,        //  AHORA USA LOS MÓDULOS REALES
+                "permisos" => $permisos,      //  AHORA USA LOS PERMISOS REALES
                 "empresa" => $usuario->empresa ? [
                     "id" => $usuario->empresa->id_empresa,
                     "nombre" => $usuario->empresa->nombre,
