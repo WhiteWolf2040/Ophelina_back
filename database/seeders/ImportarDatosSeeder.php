@@ -13,10 +13,9 @@ class ImportarDatosSeeder extends Seeder
 
     public function run(): void
     {
-       
         $faker = $this->faker;
 
-        // Limpiar tablas existentes
+        // Limpiar tablas
         $tables = [
             'movimientos_caja', 'detalle_venta', 'venta_tienda', 'apartados',
             'pagos', 'amortizacion', 'empeno', 'producto_tienda', 'imagen_prenda',
@@ -25,7 +24,6 @@ class ImportarDatosSeeder extends Seeder
             'tasas_interes', 'usuario', 'rol', 'empresa'
         ];
 
-        
         foreach ($tables as $table) {
             try {
                 DB::table($table)->truncate();
@@ -34,7 +32,6 @@ class ImportarDatosSeeder extends Seeder
                 $this->command->warn("⚠️ No se pudo limpiar {$table}: " . $e->getMessage());
             }
         }
-       
 
         $this->command->info("\n");
 
@@ -77,19 +74,23 @@ class ImportarDatosSeeder extends Seeder
 
         $empresaIds = [];
         foreach ($empresas as $empresa) {
-            $id = DB::table('empresa')->insertGetId([
-                'nombre' => substr($empresa['nombre'], 0, 100),
-                'nombre_comercial' => substr($empresa['nombre_comercial'], 0, 100),
-                'rfc' => substr($empresa['rfc'], 0, 13),
-                'telefono' => substr($empresa['telefono'], 0, 20),
-                'email' => substr($empresa['email'], 0, 100),
-                'direccion' => substr($empresa['direccion'], 0, 255),
-                'ciudad' => substr($empresa['ciudad'], 0, 100),
-                'estado' => substr($empresa['estado'], 0, 100),
-                'codigo_postal' => substr($empresa['codigo_postal'], 0, 10),
-                'activo' => 1,
-                'fecha_registro' => now()
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_empresa'
+            $id = DB::table('empresa')->insertGetId(
+                [
+                    'nombre' => substr($empresa['nombre'], 0, 100),
+                    'nombre_comercial' => substr($empresa['nombre_comercial'], 0, 100),
+                    'rfc' => substr($empresa['rfc'], 0, 13),
+                    'telefono' => substr($empresa['telefono'], 0, 20),
+                    'email' => substr($empresa['email'], 0, 100),
+                    'direccion' => substr($empresa['direccion'], 0, 255),
+                    'ciudad' => substr($empresa['ciudad'], 0, 100),
+                    'estado' => substr($empresa['estado'], 0, 100),
+                    'codigo_postal' => substr($empresa['codigo_postal'], 0, 10),
+                    'activo' => 1,
+                    'fecha_registro' => now()
+                ],
+                'id_empresa' // 👈 Especificar la columna de la clave primaria
+            );
             $empresaIds[] = $id;
         }
         $this->command->info("✅ Empresas creadas: " . count($empresaIds));
@@ -108,12 +109,16 @@ class ImportarDatosSeeder extends Seeder
                     default => 'Rol del sistema'
                 };
 
-                $id = DB::table('rol')->insertGetId([
-                    'id_empresa' => $empresaId,
-                    'nombre' => $nombre,
-                    'descripcion' => substr($descripcion . " - " . $faker->sentence(2), 0, 255),
-                    'nivel' => $nivel + 1
-                ]);
+                // ✅ CORREGIDO: Especificar la clave primaria 'id_rol'
+                $id = DB::table('rol')->insertGetId(
+                    [
+                        'id_empresa' => $empresaId,
+                        'nombre' => $nombre,
+                        'descripcion' => substr($descripcion . " - " . $faker->sentence(2), 0, 255),
+                        'nivel' => $nivel + 1
+                    ],
+                    'id_rol' // 👈 Especificar la clave primaria
+                );
 
                 if (!isset($rolIds[$empresaId])) {
                     $rolIds[$empresaId] = [];
@@ -150,13 +155,17 @@ class ImportarDatosSeeder extends Seeder
 
                 $descripcion = "Permiso para " . str_replace('_', ' ', $permiso);
 
-                $id = DB::table('permisos')->insertGetId([
-                    'id_empresa' => $empresaId,
-                    'nombre' => $permiso,
-                    'descripcion' => substr($descripcion, 0, 255),
-                    'modulo' => $modulo,
-                    'estado' => 'activo'
-                ]);
+                // ✅ CORREGIDO: Especificar la clave primaria 'id_permiso'
+                $id = DB::table('permisos')->insertGetId(
+                    [
+                        'id_empresa' => $empresaId,
+                        'nombre' => $permiso,
+                        'descripcion' => substr($descripcion, 0, 255),
+                        'modulo' => $modulo,
+                        'estado' => 'activo'
+                    ],
+                    'id_permiso' // 👈 Especificar la clave primaria
+                );
 
                 if (!isset($permisoIds[$empresaId])) {
                     $permisoIds[$empresaId] = [];
@@ -168,7 +177,6 @@ class ImportarDatosSeeder extends Seeder
 
         // ===================== ROL_PERMISO =====================
         foreach ($empresaIds as $empresaId) {
-            // Administrador: todos los permisos
             $adminRolId = $rolIds[$empresaId]['Administrador'];
             foreach ($permisoIds[$empresaId] as $permisoId) {
                 DB::table('rol_permiso')->insert([
@@ -179,7 +187,6 @@ class ImportarDatosSeeder extends Seeder
                 ]);
             }
 
-            // Gerente: permisos limitados
             $gerenteRolId = $rolIds[$empresaId]['Gerente'];
             $permisosGerente = ['ver_clientes', 'crear_clientes', 'editar_clientes', 'ver_empenos', 'crear_empenos',
                                 'ver_pagos', 'registrar_pagos', 'ver_tienda', 'ver_reportes'];
@@ -194,7 +201,6 @@ class ImportarDatosSeeder extends Seeder
                 }
             }
 
-            // Cajero: pagos y caja
             $cajeroRolId = $rolIds[$empresaId]['Cajero'];
             $permisosCajero = ['ver_pagos', 'registrar_pagos', 'ver_caja', 'registrar_movimientos'];
             foreach ($permisosCajero as $permiso) {
@@ -208,7 +214,6 @@ class ImportarDatosSeeder extends Seeder
                 }
             }
 
-            // Cliente: permisos básicos
             $clienteRolId = $rolIds[$empresaId]['Cliente'];
             $permisosCliente = ['ver_dashboard', 'ver_clientes', 'ver_empenos', 'ver_pagos', 'ver_tienda'];
             foreach ($permisosCliente as $permiso) {
@@ -229,71 +234,80 @@ class ImportarDatosSeeder extends Seeder
         $clientesUsuarios = [];
 
         foreach ($empresaIds as $empresaId) {
-            // Administrador de la empresa
             $adminRolId = $rolIds[$empresaId]['Administrador'];
             $email = strtolower(str_replace(' ', '', $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'])) . '@admin.com';
 
-            $id = DB::table('usuario')->insertGetId([
-                'id_rol' => $adminRolId,
-                'id_empresa' => $empresaId,
-                'nombre' => substr("Admin " . $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'], 0, 100),
-                'correo' => substr($email, 0, 100),
-                'contrasena' => Hash::make('123456'),
-                'telefono' => substr($faker->phoneNumber(), 0, 20),
-                'activo' => 1,
-                'fecha_registro' => now()
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_usuario'
+            $id = DB::table('usuario')->insertGetId(
+                [
+                    'id_rol' => $adminRolId,
+                    'id_empresa' => $empresaId,
+                    'nombre' => substr("Admin " . $empresas[array_search($empresaId, $empresaIds)]['nombre_comercial'], 0, 100),
+                    'correo' => substr($email, 0, 100),
+                    'contrasena' => Hash::make('123456'),
+                    'telefono' => substr($faker->phoneNumber(), 0, 20),
+                    'activo' => 1,
+                    'fecha_registro' => now()
+                ],
+                'id_usuario' // 👈 Especificar la clave primaria
+            );
             $todosUsuarios[] = $id;
 
-            // Gerentes (2 por empresa)
             $gerenteRolId = $rolIds[$empresaId]['Gerente'];
             for ($i = 0; $i < 2; $i++) {
-                $id = DB::table('usuario')->insertGetId([
-                    'id_rol' => $gerenteRolId,
-                    'id_empresa' => $empresaId,
-                    'nombre' => substr($faker->name(), 0, 100),
-                    'correo' => substr($faker->unique()->safeEmail(), 0, 100),
-                    'contrasena' => Hash::make('123456'),
-                    'telefono' => substr($faker->phoneNumber(), 0, 20),
-                    'activo' => 1,
-                    'fecha_registro' => now()
-                ]);
+                $id = DB::table('usuario')->insertGetId(
+                    [
+                        'id_rol' => $gerenteRolId,
+                        'id_empresa' => $empresaId,
+                        'nombre' => substr($faker->name(), 0, 100),
+                        'correo' => substr($faker->unique()->safeEmail(), 0, 100),
+                        'contrasena' => Hash::make('123456'),
+                        'telefono' => substr($faker->phoneNumber(), 0, 20),
+                        'activo' => 1,
+                        'fecha_registro' => now()
+                    ],
+                    'id_usuario'
+                );
                 $todosUsuarios[] = $id;
             }
 
-            // Cajeros (3 por empresa)
             $cajeroRolId = $rolIds[$empresaId]['Cajero'];
             for ($i = 0; $i < 3; $i++) {
-                $id = DB::table('usuario')->insertGetId([
-                    'id_rol' => $cajeroRolId,
-                    'id_empresa' => $empresaId,
-                    'nombre' => substr($faker->name(), 0, 100),
-                    'correo' => substr($faker->unique()->safeEmail(), 0, 100),
-                    'contrasena' => Hash::make('123456'),
-                    'telefono' => substr($faker->phoneNumber(), 0, 20),
-                    'activo' => 1,
-                    'fecha_registro' => now()
-                ]);
+                $id = DB::table('usuario')->insertGetId(
+                    [
+                        'id_rol' => $cajeroRolId,
+                        'id_empresa' => $empresaId,
+                        'nombre' => substr($faker->name(), 0, 100),
+                        'correo' => substr($faker->unique()->safeEmail(), 0, 100),
+                        'contrasena' => Hash::make('123456'),
+                        'telefono' => substr($faker->phoneNumber(), 0, 20),
+                        'activo' => 1,
+                        'fecha_registro' => now()
+                    ],
+                    'id_usuario'
+                );
                 $todosUsuarios[] = $id;
             }
 
-            // Clientes (15 por empresa)
             $clienteRolId = $rolIds[$empresaId]['Cliente'];
             for ($i = 0; $i < 15; $i++) {
                 $nombre = $faker->firstName();
                 $apellido = $faker->lastName();
                 $email = $faker->unique()->safeEmail();
 
-                $id = DB::table('usuario')->insertGetId([
-                    'id_rol' => $clienteRolId,
-                    'id_empresa' => $empresaId,
-                    'nombre' => substr("$nombre $apellido", 0, 100),
-                    'correo' => substr($email, 0, 100),
-                    'contrasena' => Hash::make('123456'),
-                    'telefono' => substr($faker->phoneNumber(), 0, 20),
-                    'activo' => 1,
-                    'fecha_registro' => now()
-                ]);
+                $id = DB::table('usuario')->insertGetId(
+                    [
+                        'id_rol' => $clienteRolId,
+                        'id_empresa' => $empresaId,
+                        'nombre' => substr("$nombre $apellido", 0, 100),
+                        'correo' => substr($email, 0, 100),
+                        'contrasena' => Hash::make('123456'),
+                        'telefono' => substr($faker->phoneNumber(), 0, 20),
+                        'activo' => 1,
+                        'fecha_registro' => now()
+                    ],
+                    'id_usuario'
+                );
                 $todosUsuarios[] = $id;
                 $clientesUsuarios[] = [
                     'id_usuario' => $id,
@@ -309,20 +323,24 @@ class ImportarDatosSeeder extends Seeder
         // ===================== CLIENTES =====================
         $clientes = [];
         foreach ($clientesUsuarios as $clienteUsuario) {
-            $id = DB::table('clientes')->insertGetId([
-                'id_usuario' => $clienteUsuario['id_usuario'],
-                'id_empresa' => $clienteUsuario['id_empresa'],
-                'nombre' => substr($clienteUsuario['nombre'], 0, 100),
-                'apellido' => substr($clienteUsuario['apellido'], 0, 100),
-                'telefono' => substr($faker->phoneNumber(), 0, 20),
-                'correo' => substr($clienteUsuario['email'], 0, 100),
-                'direccion' => substr($faker->streetAddress(), 0, 255),
-                'codigo_postal' => substr($faker->postcode(), 0, 10),
-                'ciudad' => substr($faker->city(), 0, 100),
-                'estado' => substr($faker->state(), 0, 100),
-                'fecha_registro' => now(),
-                'activo' => 1
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_cliente'
+            $id = DB::table('clientes')->insertGetId(
+                [
+                    'id_usuario' => $clienteUsuario['id_usuario'],
+                    'id_empresa' => $clienteUsuario['id_empresa'],
+                    'nombre' => substr($clienteUsuario['nombre'], 0, 100),
+                    'apellido' => substr($clienteUsuario['apellido'], 0, 100),
+                    'telefono' => substr($faker->phoneNumber(), 0, 20),
+                    'correo' => substr($clienteUsuario['email'], 0, 100),
+                    'direccion' => substr($faker->streetAddress(), 0, 255),
+                    'codigo_postal' => substr($faker->postcode(), 0, 10),
+                    'ciudad' => substr($faker->city(), 0, 100),
+                    'estado' => substr($faker->state(), 0, 100),
+                    'fecha_registro' => now(),
+                    'activo' => 1
+                ],
+                'id_cliente' // 👈 Especificar la clave primaria
+            );
             $clientes[] = [
                 'id' => $id,
                 'id_usuario' => $clienteUsuario['id_usuario'],
@@ -338,14 +356,18 @@ class ImportarDatosSeeder extends Seeder
         for ($i = 0; $i < 60; $i++) {
             $idEmpresa = $empresaIds[array_rand($empresaIds)];
 
-            $id = DB::table('aval')->insertGetId([
-                'id_empresa' => $idEmpresa,
-                'nombre' => substr($faker->firstName(), 0, 100),
-                'apellido' => substr($faker->lastName(), 0, 100),
-                'telefono' => substr($faker->phoneNumber(), 0, 20),
-                'direccion' => substr($faker->address(), 0, 255),
-                'email' => substr($faker->safeEmail(), 0, 100)
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_aval'
+            $id = DB::table('aval')->insertGetId(
+                [
+                    'id_empresa' => $idEmpresa,
+                    'nombre' => substr($faker->firstName(), 0, 100),
+                    'apellido' => substr($faker->lastName(), 0, 100),
+                    'telefono' => substr($faker->phoneNumber(), 0, 20),
+                    'direccion' => substr($faker->address(), 0, 255),
+                    'email' => substr($faker->safeEmail(), 0, 100)
+                ],
+                'id_aval' // 👈 Especificar la clave primaria
+            );
             $avales[] = [
                 'id' => $id,
                 'id_empresa' => $idEmpresa
@@ -368,17 +390,21 @@ class ImportarDatosSeeder extends Seeder
             $descripcion = "Artículo de $tipo hecho de $material, en buen estado.";
             $valorEstimado = rand(500, 50000);
 
-            $id = DB::table('prendas')->insertGetId([
-                'id_empresa' => $idEmpresa,
-                'descripcion' => substr($descripcion, 0, 255),
-                'tipo' => $tipo,
-                'material' => substr($material, 0, 100),
-                'peso_gramos' => rand(10, 500),
-                'valor_estimado' => $valorEstimado,
-                'codigo_barras' => substr($faker->ean13(), 0, 50),
-                'estado' => $estadoPrenda,
-                'fecha_registro' => now()
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_prenda'
+            $id = DB::table('prendas')->insertGetId(
+                [
+                    'id_empresa' => $idEmpresa,
+                    'descripcion' => substr($descripcion, 0, 255),
+                    'tipo' => $tipo,
+                    'material' => substr($material, 0, 100),
+                    'peso_gramos' => rand(10, 500),
+                    'valor_estimado' => $valorEstimado,
+                    'codigo_barras' => substr($faker->ean13(), 0, 50),
+                    'estado' => $estadoPrenda,
+                    'fecha_registro' => now()
+                ],
+                'id_prenda' // 👈 Especificar la clave primaria
+            );
             $prendas[] = [
                 'id' => $id,
                 'id_empresa' => $idEmpresa,
@@ -399,12 +425,16 @@ class ImportarDatosSeeder extends Seeder
 
         $tasas = [];
         foreach ($tasasInteres as $tasa) {
-            $id = DB::table('tasas_interes')->insertGetId([
-                'nombre' => $tasa['nombre'],
-                'porcentaje' => $tasa['porcentaje'],
-                'plazo_dias' => $tasa['plazo_dias'],
-                'activo' => 1
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_tasa'
+            $id = DB::table('tasas_interes')->insertGetId(
+                [
+                    'nombre' => $tasa['nombre'],
+                    'porcentaje' => $tasa['porcentaje'],
+                    'plazo_dias' => $tasa['plazo_dias'],
+                    'activo' => 1
+                ],
+                'id_tasa' // 👈 Especificar la clave primaria
+            );
             $tasas[] = $id;
         }
         $this->command->info("✅ Tasas de interés creadas: " . count($tasas));
@@ -445,53 +475,65 @@ class ImportarDatosSeeder extends Seeder
                 $estado = 'vencido';
             }
 
-            $idEmpeno = DB::table('empeno')->insertGetId([
-                'id_empresa' => $cliente['id_empresa'],
-                'id_cliente' => $cliente['id'],
-                'id_prenda' => $prenda['id'],
-                'id_aval' => $aval['id'],
-                'id_tasa' => $idTasa,
-                'fecha_empeno' => $fechaEmpeno,
-                'monto_prestado' => $montoPrestado,
-                'intereses' => $interesPorcentaje,
-                'iva_porcentaje' => 16.00,
-                'fecha_vencimiento' => $fechaVencimiento,
-                'estado' => $estado,
-                'folio' => strtoupper(substr($faker->bothify("EMP###???"), 0, 20))
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_empeno'
+            $idEmpeno = DB::table('empeno')->insertGetId(
+                [
+                    'id_empresa' => $cliente['id_empresa'],
+                    'id_cliente' => $cliente['id'],
+                    'id_prenda' => $prenda['id'],
+                    'id_aval' => $aval['id'],
+                    'id_tasa' => $idTasa,
+                    'fecha_empeno' => $fechaEmpeno,
+                    'monto_prestado' => $montoPrestado,
+                    'intereses' => $interesPorcentaje,
+                    'iva_porcentaje' => 16.00,
+                    'fecha_vencimiento' => $fechaVencimiento,
+                    'estado' => $estado,
+                    'folio' => strtoupper(substr($faker->bothify("EMP###???"), 0, 20))
+                ],
+                'id_empeno' // 👈 Especificar la clave primaria
+            );
 
             $fechaPagoProgramado = (new \DateTime($fechaEmpeno))->modify("+$plazoDias days")->format('Y-m-d');
 
-            $idAmortizacion = DB::table('amortizacion')->insertGetId([
-                'id_empeno' => $idEmpeno,
-                'saldo_inicial' => $montoTotal,
-                'saldo_final' => $montoTotal,
-                'numero_pago' => 1,
-                'fecha_pago_programado' => $fechaPagoProgramado,
-                'capital' => $montoPrestado,
-                'interes' => $interesMonto,
-                'iva_interes' => $ivaInteres,
-                'monto_total' => $montoTotal,
-                'monto_pagado' => 0,
-                'estado' => 'pendiente'
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_amortizacion'
+            $idAmortizacion = DB::table('amortizacion')->insertGetId(
+                [
+                    'id_empeno' => $idEmpeno,
+                    'saldo_inicial' => $montoTotal,
+                    'saldo_final' => $montoTotal,
+                    'numero_pago' => 1,
+                    'fecha_pago_programado' => $fechaPagoProgramado,
+                    'capital' => $montoPrestado,
+                    'interes' => $interesMonto,
+                    'iva_interes' => $ivaInteres,
+                    'monto_total' => $montoTotal,
+                    'monto_pagado' => 0,
+                    'estado' => 'pendiente'
+                ],
+                'id_amortizacion' // 👈 Especificar la clave primaria
+            );
             $amortizacionesTotales++;
 
             if ($estado == 'pagado') {
                 $fechaPago = $faker->dateTimeBetween($fechaEmpeno, $fechaVencimiento)->format('Y-m-d');
 
-                DB::table('pagos')->insert([
-                    'id_empeno' => $idEmpeno,
-                    'id_amortizacion' => $idAmortizacion,
-                    'fecha_pago' => $fechaPago,
-                    'capital_pagado' => $montoPrestado,
-                    'interes_pagado' => $interesMonto,
-                    'iva_pagado' => $ivaInteres,
-                    'monto_total' => $montoTotal,
-                    'tipo_pago' => 'liquidacion',
-                    'metodo_pago' => $faker->randomElement(['efectivo', 'transferencia', 'tarjeta']),
-                    'fecha_registro' => now()
-                ]);
+                // ✅ CORREGIDO: Especificar la clave primaria 'id_pago'
+                DB::table('pagos')->insertGetId(
+                    [
+                        'id_empeno' => $idEmpeno,
+                        'id_amortizacion' => $idAmortizacion,
+                        'fecha_pago' => $fechaPago,
+                        'capital_pagado' => $montoPrestado,
+                        'interes_pagado' => $interesMonto,
+                        'iva_pagado' => $ivaInteres,
+                        'monto_total' => $montoTotal,
+                        'tipo_pago' => 'liquidacion',
+                        'metodo_pago' => $faker->randomElement(['efectivo', 'transferencia', 'tarjeta']),
+                        'fecha_registro' => now()
+                    ],
+                    'id_pago' // 👈 Especificar la clave primaria
+                );
                 $pagosRegistrados++;
 
                 DB::table('amortizacion')
@@ -531,18 +573,21 @@ class ImportarDatosSeeder extends Seeder
 
                     $fechaPago = $faker->dateTimeBetween($fechaEmpeno, 'now')->format('Y-m-d');
 
-                    DB::table('pagos')->insert([
-                        'id_empeno' => $idEmpeno,
-                        'id_amortizacion' => $idAmortizacion,
-                        'fecha_pago' => $fechaPago,
-                        'capital_pagado' => $capitalPagado,
-                        'interes_pagado' => $interesPagado,
-                        'iva_pagado' => $ivaPagado,
-                        'monto_total' => $montoPagado,
-                        'tipo_pago' => 'abono',
-                        'metodo_pago' => $faker->randomElement(['efectivo', 'transferencia', 'tarjeta']),
-                        'fecha_registro' => now()
-                    ]);
+                    DB::table('pagos')->insertGetId(
+                        [
+                            'id_empeno' => $idEmpeno,
+                            'id_amortizacion' => $idAmortizacion,
+                            'fecha_pago' => $fechaPago,
+                            'capital_pagado' => $capitalPagado,
+                            'interes_pagado' => $interesPagado,
+                            'iva_pagado' => $ivaPagado,
+                            'monto_total' => $montoPagado,
+                            'tipo_pago' => 'abono',
+                            'metodo_pago' => $faker->randomElement(['efectivo', 'transferencia', 'tarjeta']),
+                            'fecha_registro' => now()
+                        ],
+                        'id_pago'
+                    );
                     $pagosRegistrados++;
 
                     $totalPagado += $montoPagado;
@@ -575,18 +620,22 @@ class ImportarDatosSeeder extends Seeder
             $precioVenta = round($prenda['valor_estimado'] * (rand(70, 130) / 100), 2);
             $estadosProducto = ['Nuevo', 'Como nuevo', 'Buen estado', 'Aceptable'];
 
-            $id = DB::table('producto_tienda')->insertGetId([
-                'id_empresa' => $prenda['id_empresa'],
-                'id_prenda' => $prenda['id'],
-                'nombre' => substr($faker->words(2, true), 0, 100),
-                'descripcion' => substr($faker->sentence(), 0, 255),
-                'precio' => $precioVenta,
-                'stock' => rand(1, 25),
-                'estado_producto' => $estadosProducto[array_rand($estadosProducto)],
-                'visible' => 1,
-                'destacado' => rand(0, 1),
-                'fecha_publicacion' => now()->toDateString()
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_producto'
+            $id = DB::table('producto_tienda')->insertGetId(
+                [
+                    'id_empresa' => $prenda['id_empresa'],
+                    'id_prenda' => $prenda['id'],
+                    'nombre' => substr($faker->words(2, true), 0, 100),
+                    'descripcion' => substr($faker->sentence(), 0, 255),
+                    'precio' => $precioVenta,
+                    'stock' => rand(1, 25),
+                    'estado_producto' => $estadosProducto[array_rand($estadosProducto)],
+                    'visible' => 1,
+                    'destacado' => rand(0, 1),
+                    'fecha_publicacion' => now()->toDateString()
+                ],
+                'id_producto' // 👈 Especificar la clave primaria
+            );
             $productos[] = $id;
         }
         $this->command->info("✅ Productos tienda creados: " . count($productos));
@@ -597,14 +646,18 @@ class ImportarDatosSeeder extends Seeder
             $cliente = $clientes[array_rand($clientes)];
             $totalVenta = rand(500, 15000);
 
-            $id = DB::table('venta_tienda')->insertGetId([
-                'id_cliente' => $cliente['id'],
-                'total' => $totalVenta,
-                'metodo_pago' => $faker->randomElement(['efectivo', 'tarjeta', 'transferencia']),
-                'estado' => 'completada',
-                'folio' => strtoupper(substr($faker->bothify("VT###???"), 0, 20)),
-                'fecha_venta' => now()
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_venta'
+            $id = DB::table('venta_tienda')->insertGetId(
+                [
+                    'id_cliente' => $cliente['id'],
+                    'total' => $totalVenta,
+                    'metodo_pago' => $faker->randomElement(['efectivo', 'tarjeta', 'transferencia']),
+                    'estado' => 'completada',
+                    'folio' => strtoupper(substr($faker->bothify("VT###???"), 0, 20)),
+                    'fecha_venta' => now()
+                ],
+                'id_venta' // 👈 Especificar la clave primaria
+            );
             $ventasIds[] = $id;
         }
         $this->command->info("✅ Ventas creadas: " . count($ventasIds));
@@ -617,13 +670,17 @@ class ImportarDatosSeeder extends Seeder
             $precio = rand(300, 5000);
             $subtotal = $cantidad * $precio;
 
-            DB::table('detalle_venta')->insert([
-                'id_venta' => $venta,
-                'id_producto' => $producto,
-                'cantidad' => $cantidad,
-                'precio_unitario' => $precio,
-                'subtotal' => $subtotal
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_detalle'
+            DB::table('detalle_venta')->insertGetId(
+                [
+                    'id_venta' => $venta,
+                    'id_producto' => $producto,
+                    'cantidad' => $cantidad,
+                    'precio_unitario' => $precio,
+                    'subtotal' => $subtotal
+                ],
+                'id_detalle' // 👈 Especificar la clave primaria
+            );
             $detallesCount++;
         }
         $this->command->info("✅ Detalles de venta creados: $detallesCount");
@@ -648,14 +705,18 @@ class ImportarDatosSeeder extends Seeder
                 default => rand(500, 5000)
             };
 
-            DB::table('movimientos_caja')->insert([
-                'tipo' => $tipo,
-                'monto' => $monto,
-                'descripcion' => substr($faker->sentence(3), 0, 255),
-                'id_usuario' => $usuario,
-                'id_pago' => $pago,
-                'fecha' => now()
-            ]);
+            // ✅ CORREGIDO: Especificar la clave primaria 'id_movimiento'
+            DB::table('movimientos_caja')->insertGetId(
+                [
+                    'tipo' => $tipo,
+                    'monto' => $monto,
+                    'descripcion' => substr($faker->sentence(3), 0, 255),
+                    'id_usuario' => $usuario,
+                    'id_pago' => $pago,
+                    'fecha' => now()
+                ],
+                'id_movimiento' // 👈 Especificar la clave primaria
+            );
             $movimientos++;
         }
         $this->command->info("✅ Movimientos de caja creados: $movimientos");
