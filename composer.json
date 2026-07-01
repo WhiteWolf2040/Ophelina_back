@@ -6,6 +6,7 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
+        "fakerphp/faker": "^1.24",
         "php": "^8.2",
         "guzzlehttp/guzzle": "^7.10",
         "izzuddinmohsin/laravel-whatsapp": "^1.0",
@@ -17,7 +18,7 @@
         "stripe/stripe-php": "^20.0"
     },
     "require-dev": {
-        "fakerphp/faker": "^1.24",
+        
         "kitloong/laravel-migrations-generator": "^7.4",
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.24",
