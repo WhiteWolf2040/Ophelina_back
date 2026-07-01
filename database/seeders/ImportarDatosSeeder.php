@@ -6,10 +6,11 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Faker\Factory as Faker;
+use Illuminate\Foundation\Testing\WithFaker; 
 
 class ImportarDatosSeeder extends Seeder
 {
-     use \Illuminate\Database\Console\Seeds\WithFaker;
+        use WithFaker;
     public function run(): void
     {
         $faker = $this->faker;
