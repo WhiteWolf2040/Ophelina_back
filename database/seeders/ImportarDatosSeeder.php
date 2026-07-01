@@ -346,66 +346,40 @@ class ImportarDatosSeeder extends Seeder
         }
         $this->command->info("✅ Clientes creados: " . count($clientes));
 
-        // ===================== AVALES =====================
-        $avales = [];
-        for ($i = 0; $i < 60; $i++) {
-            $idEmpresa = $empresaIds[array_rand($empresaIds)];
+// ===================== AVALES =====================
+$avales = [];
+for ($i = 0; $i < 60; $i++) {
+    $idEmpresa = $empresaIds[array_rand($empresaIds)];
+    
+    // Obtener clientes de la misma empresa
+    $clientesDeEmpresa = array_filter($clientes, function($cliente) use ($idEmpresa) {
+        return $cliente['id_empresa'] == $idEmpresa;
+    });
+    
+    // Si no hay clientes en esa empresa, usar cualquier cliente
+    if (empty($clientesDeEmpresa)) {
+        $cliente = $clientes[array_rand($clientes)];
+    } else {
+        $cliente = $clientesDeEmpresa[array_rand($clientesDeEmpresa)];
+    }
 
-            $id = DB::table('aval')->insertGetId(
-                [
-                    'id_empresa' => $idEmpresa,
-                    'nombre' => substr($faker->firstName(), 0, 100),
-                    'apellido' => substr($faker->lastName(), 0, 100),
-                    'telefono' => substr($faker->phoneNumber(), 0, 20),
-                    'direccion' => substr($faker->address(), 0, 255),
-                    'email' => substr($faker->safeEmail(), 0, 100)
-                ],
-                'id_aval'
-            );
-            $avales[] = [
-                'id' => $id,
-                'id_empresa' => $idEmpresa
-            ];
-        }
-        $this->command->info("✅ Avales creados: " . count($avales));
-
-        // ===================== PRENDAS =====================
-        $tipos = ["Joyería", "Electrónica", "Relojes", "Herramientas", "Instrumentos", "Otros"];
-        $materiales = ["oro", "plata", "acero", "platino", "madera", "plástico"];
-        $estadosPrenda = ["Disponible", "En Empeño", "Vendido", "Vencido", "Apartado"];
-
-        $prendas = [];
-        for ($i = 0; $i < 200; $i++) {
-            $idEmpresa = $empresaIds[array_rand($empresaIds)];
-            $tipo = $tipos[array_rand($tipos)];
-            $material = $materiales[array_rand($materiales)];
-            $estadoPrenda = $estadosPrenda[array_rand($estadosPrenda)];
-
-            $descripcion = "Artículo de $tipo hecho de $material, en buen estado.";
-            $valorEstimado = rand(500, 50000);
-
-            $id = DB::table('prendas')->insertGetId(
-                [
-                    'id_empresa' => $idEmpresa,
-                    'descripcion' => substr($descripcion, 0, 255),
-                    'tipo' => $tipo,
-                    'material' => substr($material, 0, 100),
-                    'peso_gramos' => rand(10, 500),
-                    'valor_estimado' => $valorEstimado,
-                    'codigo_barras' => substr($faker->ean13(), 0, 50),
-                    'estado' => $estadoPrenda,
-                    'fecha_registro' => now()
-                ],
-                'id_prenda'
-            );
-            $prendas[] = [
-                'id' => $id,
-                'id_empresa' => $idEmpresa,
-                'valor_estimado' => $valorEstimado,
-                'estado' => $estadoPrenda
-            ];
-        }
-        $this->command->info("✅ Prendas creadas: " . count($prendas));
+    $id = DB::table('aval')->insertGetId(
+        [
+            'id_empresa' => $idEmpresa,
+            'id_cliente' => $cliente['id'], // ✅ CAMPO OBLIGATORIO
+            'nombre' => substr($faker->firstName(), 0, 100),
+            'apellido' => substr($faker->lastName(), 0, 100),
+            'telefono' => substr($faker->phoneNumber(), 0, 20),
+            'direccion' => substr($faker->address(), 0, 255),
+            'email' => substr($faker->safeEmail(), 0, 100)
+        ],
+        'id_aval'
+    );
+    $avales[] = [
+        'id' => $id,
+        'id_empresa' => $idEmpresa
+    ];
+}
 
         // ===================== TASAS INTERÉS =====================
         $tasasInteres = [
