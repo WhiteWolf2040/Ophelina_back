@@ -35,11 +35,6 @@ COPY . .
 # Instalar dependencias
 RUN composer install --optimize-autoloader --no-interaction --no-dev
 
-# Optimizar Laravel (NO cachear en build, mejor en runtime)
-# RUN php artisan config:cache || true \
-#     && php artisan route:cache || true \
-#     && php artisan view:cache || true
-
 # Configurar permisos
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database
@@ -107,7 +102,7 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (CON SEEDER MEJORADO)
+# SCRIPT DE ARRANQUE (SOLO SEEDER - SIN MIGRACIONES)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
@@ -139,7 +134,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_PORT=5432' >> /usr/local/bin/start.sh && \
     echo 'DB_DATABASE=ophelina_v1_despliegue' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
-    echo 'DB_PASSWORD=v1lzeZoEmBpuvEgGq9DlaD7lbvuOBLB5' >> /usr/local/bin/start.sh && \
+    echo 'DB_PASSWORD=v1lzeZoEmBpuvEgGq9D1aD71bvu0BLB5' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
@@ -157,17 +152,27 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ Configuración optimizada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === EJECUTAR MIGRACIONES ===' >> /usr/local/bin/start.sh && \
-    echo 'php artisan migrate --force' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Migraciones ejecutadas"' >> /usr/local/bin/start.sh && \
+    echo '# === 🗑️ OPCIONAL: LIMPIAR TABLAS ANTES DE INSERTAR ===' >> /usr/local/bin/start.sh && \
+    echo '# Si quieres LIMPIAR los datos viejos, descomenta esta línea:' >> /usr/local/bin/start.sh && \
+    echo '# php artisan db:wipe --force' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === EJECUTAR SEEDER ===' >> /usr/local/bin/start.sh && \
+    echo '# === ✅ EJECUTAR SOLO SEEDER (LAS TABLAS YA EXISTEN) ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== INSERTANDO DATOS INICIALES ==="' >> /usr/local/bin/start.sh && \
+    echo 'echo "⚠️ Las tablas deben existir en la base de datos"' >> /usr/local/bin/start.sh && \
     echo 'if php artisan db:seed --class=ImportarDatosSeeder --force; then' >> /usr/local/bin/start.sh && \
     echo '    echo "✅ Seeder ejecutado correctamente"' >> /usr/local/bin/start.sh && \
     echo 'else' >> /usr/local/bin/start.sh && \
-    echo '    echo "⚠️ El seeder ya fue ejecutado o tiene datos duplicados"' >> /usr/local/bin/start.sh && \
+    echo '    echo "❌ Error al ejecutar el seeder"' >> /usr/local/bin/start.sh && \
+    echo '    echo "💡 Verifica que las tablas existan"' >> /usr/local/bin/start.sh && \
     echo 'fi' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# === MOSTRAR CREDENCIALES ===' >> /usr/local/bin/start.sh && \
+    echo 'echo "📌 ===== CREDENCIALES DE ACCESO ====="' >> /usr/local/bin/start.sh && \
+    echo 'echo "📧 juanprendas@admin.com"' >> /usr/local/bin/start.sh && \
+    echo 'echo "📧 tulaempeños@admin.com"' >> /usr/local/bin/start.sh && \
+    echo 'echo "📧 expressempeños@admin.com"' >> /usr/local/bin/start.sh && \
+    echo 'echo "🔑 password"' >> /usr/local/bin/start.sh && \
+    echo 'echo "======================================"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === INICIAR SUPERVISOR ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== 🟢 SERVIDOR LISTO ==="' >> /usr/local/bin/start.sh && \
