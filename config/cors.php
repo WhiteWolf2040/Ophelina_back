@@ -3,22 +3,26 @@
 return [
     //  Rutas donde se aplicará CORS
     'paths' => [
-        'api/*',                    // Todas las rutas API
-        'sanctum/csrf-cookie',      // Para Sanctum
-        'login',                    // Login
-        'logout',                   // Logout
-        'register',                 // Registro
-        '*',                        // O todas (para pruebas)
+        'api/*',
+        'sanctum/csrf-cookie',
+        'login',
+        'logout',
+        'register',
+        '*',
     ],
     
     //  Métodos HTTP permitidos
     'allowed_methods' => ['*'],
     
-    // ORÍGENES PERMITIDOS (TODAS las URLs de Vercel)
+    //  ORÍGENES PERMITIDOS (TODAS las URLs de Vercel)
     'allowed_origins' => [
-        'https://ophelina-front-ces96e1a9-test-ophelina-s-projects.vercel.app',
+        // URLs de Vercel (producción y previews)
         'https://ophelina-front.vercel.app',
+        'https://ophelina-front-4a6ksaggp-test-ophelina-s-projects.vercel.app', // ✅ NUEVA URL
+        'https://ophelina-front-ces96e1a9-test-ophelina-s-projects.vercel.app',
         'https://ophelina-front-ro74l47l6-test-ophelina-s-projects.vercel.app',
+        
+        // URLs locales para desarrollo
         'http://localhost:3000',
         'http://localhost:5173',
         'http://localhost:8000',
@@ -41,8 +45,8 @@ return [
     'exposed_headers' => [],
     
     //  Tiempo de caché para preflight (segundos)
-    'max_age' => 86400, // 24 horas
-
+    'max_age' => 86400,
+    
     //  Permitir credenciales (cookies, tokens)
     'supports_credentials' => true,
 ];
