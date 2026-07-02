@@ -13,43 +13,43 @@ use Illuminate\Support\Facades\Hash;
 
 class ClienteController extends Controller
 {
-    // ✅ LISTAR CLIENTES
     public function index(Request $request)
-    {
-        try {
-            $user = $request->user();
-            
-            $clientes = Cliente::where('id_empresa', $user->id_empresa)
-                ->select(
-                    'id_cliente',
-                    'nombre',
-                    'apellido',
-                    'telefono',
-                    'correo',
-                    'direccion',
-                    'codigo_postal',
-                    'ciudad',
-                    'estado',
-                    'fecha_registro',
-                    'tipo_identificacion',
-                    'numero_identificacion',
-                    'foto_perfil'
-                )
-                ->get();
+{
+    try {
+        $user = $request->user();
+        
+        $clientes = Cliente::where('id_empresa', $user->id_empresa)
+            ->select(
+                'id_cliente',
+                'nombre',
+                'apellido',
+                'telefono',
+                'correo',
+                'direccion',
+                'codigo_postal',
+                'ciudad',
+                'estado',
+                'fecha_registro',
+                'tipo_identificacion',
+                'numero_identificacion',
+                'foto_perfil'
+            )
+            ->get();
 
-            return response()->json([
-                'success' => true,
-                'data' => $clientes
-            ]);
+        //  DEVOLVER FORMATO CONSISTENTE
+        return response()->json([
+            'success' => true,
+            'data' => $clientes  // ← El frontend espera data
+        ]);
 
-        } catch (\Exception $e) {
-            \Log::error('Error en ClienteController::index: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al cargar clientes: ' . $e->getMessage()
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        \Log::error('Error en ClienteController::index: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al cargar clientes: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     // ✅ CREAR CLIENTE
     public function store(Request $request)
