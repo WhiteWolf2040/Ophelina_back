@@ -102,11 +102,11 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (SOLO SEEDER - SIN MIGRACIONES)
+# SCRIPT DE ARRANQUE (CON SEEDER COMENTADO)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== 🚀 INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
+    echo 'echo "===  INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === VERIFICAR CONEXIÓN A POSTGRESQL ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== ESPERANDO BASE DE DATOS ==="' >> /usr/local/bin/start.sh && \
@@ -114,13 +114,13 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'RETRY_COUNT=0' >> /usr/local/bin/start.sh && \
     echo 'until pg_isready -h dpg-d90rptf7f7vs73ct7nig-a.oregon-postgres.render.com -p 5432 -U root || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do' >> /usr/local/bin/start.sh && \
     echo '    RETRY_COUNT=$((RETRY_COUNT+1))' >> /usr/local/bin/start.sh && \
-    echo '    echo "⏳ Esperando PostgreSQL... $RETRY_COUNT/$MAX_RETRIES"' >> /usr/local/bin/start.sh && \
+    echo '    echo " Esperando PostgreSQL... $RETRY_COUNT/$MAX_RETRIES"' >> /usr/local/bin/start.sh && \
     echo '    sleep 2' >> /usr/local/bin/start.sh && \
     echo 'done' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === LIMPIAR CACHÉ ===' >> /usr/local/bin/start.sh && \
     echo 'rm -rf /var/www/html/bootstrap/cache/*.php' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Caché limpiada"' >> /usr/local/bin/start.sh && \
+    echo 'echo " Caché limpiada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === GENERAR .env ===' >> /usr/local/bin/start.sh && \
     echo 'cat > /var/www/html/.env << "ENVEOF"' >> /usr/local/bin/start.sh && \
@@ -138,39 +138,40 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ .env generado"' >> /usr/local/bin/start.sh && \
+    echo 'echo " .env generado"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === GENERAR APP_KEY ===' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
     echo 'php artisan key:generate --force' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ App Key generada"' >> /usr/local/bin/start.sh && \
+    echo 'echo " App Key generada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === LIMPIAR CONFIGURACIÓN ===' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Configuración optimizada"' >> /usr/local/bin/start.sh && \
+    echo 'echo " Configuración optimizada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === 🗑️ OPCIONAL: LIMPIAR TABLAS ANTES DE INSERTAR ===' >> /usr/local/bin/start.sh && \
+    echo '# ===  OPCIONAL: LIMPIAR TABLAS ANTES DE INSERTAR ===' >> /usr/local/bin/start.sh && \
     echo '# Si quieres LIMPIAR los datos viejos, descomenta esta línea:' >> /usr/local/bin/start.sh && \
     echo '# php artisan db:wipe --force' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === ✅ EJECUTAR SOLO SEEDER (LAS TABLAS YA EXISTEN) ===' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== INSERTANDO DATOS INICIALES ==="' >> /usr/local/bin/start.sh && \
-    echo 'echo "⚠️ Las tablas deben existir en la base de datos"' >> /usr/local/bin/start.sh && \
-    echo 'if php artisan db:seed --class=ImportarDatosSeeder --force; then' >> /usr/local/bin/start.sh && \
-    echo '    echo "✅ Seeder ejecutado correctamente"' >> /usr/local/bin/start.sh && \
-    echo 'else' >> /usr/local/bin/start.sh && \
-    echo '    echo "❌ Error al ejecutar el seeder"' >> /usr/local/bin/start.sh && \
-    echo '    echo "💡 Verifica que las tablas existan"' >> /usr/local/bin/start.sh && \
-    echo 'fi' >> /usr/local/bin/start.sh && \
+    echo '# ===  EJECUTAR SOLO SEEDER (LAS TABLAS YA EXISTEN) ===' >> /usr/local/bin/start.sh && \
+    echo '#  SEEDER COMENTADO - Los datos ya existen en la base de datos' >> /usr/local/bin/start.sh && \
+    echo '# echo "=== INSERTANDO DATOS INICIALES ==="' >> /usr/local/bin/start.sh && \
+    echo '# echo " Las tablas deben existir en la base de datos"' >> /usr/local/bin/start.sh && \
+    echo '# if php artisan db:seed --class=ImportarDatosSeeder --force; then' >> /usr/local/bin/start.sh && \
+    echo '#     echo "Seeder ejecutado correctamente"' >> /usr/local/bin/start.sh && \
+    echo '# else' >> /usr/local/bin/start.sh && \
+    echo '#     echo " Error al ejecutar el seeder"' >> /usr/local/bin/start.sh && \
+    echo '#     echo " Verifica que las tablas existan"' >> /usr/local/bin/start.sh && \
+    echo '# fi' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === MOSTRAR CREDENCIALES ===' >> /usr/local/bin/start.sh && \
-    echo 'echo "📌 ===== CREDENCIALES DE ACCESO ====="' >> /usr/local/bin/start.sh && \
-    echo 'echo "📧 juanprendas@admin.com"' >> /usr/local/bin/start.sh && \
-    echo 'echo "📧 tulaempeños@admin.com"' >> /usr/local/bin/start.sh && \
-    echo 'echo "📧 expressempeños@admin.com"' >> /usr/local/bin/start.sh && \
+    echo 'echo " ===== CREDENCIALES DE ACCESO ====="' >> /usr/local/bin/start.sh && \
+    echo 'echo " juanprendas@admin.com"' >> /usr/local/bin/start.sh && \
+    echo 'echo " tulaempeños@admin.com"' >> /usr/local/bin/start.sh && \
+    echo 'echo " expressempeños@admin.com"' >> /usr/local/bin/start.sh && \
     echo 'echo "🔑 password"' >> /usr/local/bin/start.sh && \
     echo 'echo "======================================"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
