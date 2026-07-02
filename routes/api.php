@@ -12,6 +12,7 @@ use App\Http\Controllers\API\RolController;
 use App\Http\Controllers\API\PermisoController;
 use App\Http\Controllers\API\PrecioOroController;
 use App\Http\Controllers\API\ContactController;
+use App\Http\Controllers\API\ReportesController; // ← NUEVO
 
 
 Route::post('/send-email', [ContactController::class, 'SendEmail']);
@@ -22,7 +23,7 @@ Route::post('/send-email', [ContactController::class, 'SendEmail']);
 |--------------------------------------------------------------------------
 */
 
-Route::post('/login',[AuthController::class,'login']);
+Route::post('/login', [AuthController::class, 'login']);
 
 /*
 |--------------------------------------------------------------------------
@@ -37,15 +38,14 @@ Route::middleware('auth:sanctum')->group(function () {
     USUARIO ACTUAL
     ==========================
     */
-    Route::get('/user',[AuthController::class,'user']);
+    Route::get('/user', [AuthController::class, 'user']);
 
     /*
     ==========================
     CERRAR SESIÓN
     ==========================
     */
-    Route::post('/logout',[AuthController::class,'logout']);
-
+    Route::post('/logout', [AuthController::class, 'logout']);
 
     /*
     ==========================
@@ -114,8 +114,8 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     /*
-    ==========================  
-    PRENDAS (FALTABAN ESTAS)
+    ==========================
+    PRENDAS
     ==========================
     */
     Route::get('/prendas/disponibles', [EmpenoController::class, 'getPrendasDisponibles']);
@@ -123,7 +123,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
-    TASAS DE INTERÉS (FALTABA ESTA)
+    TASAS DE INTERÉS
     ==========================
     */
     Route::get('/tasas-interes', [EmpenoController::class, 'getTasasInteres']);
@@ -140,7 +140,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [RolController::class, 'update']);
         Route::delete('/{id}', [RolController::class, 'destroy']);
     });
-    
+
     /*
     ==========================
     PERMISOS
@@ -169,4 +169,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/precio-oro/historial', [PrecioOroController::class, 'historialPrecios']);
     Route::post('/precio-oro/actualizar', [PrecioOroController::class, 'actualizarPrecio']);
 
-});
+    /*
+    ==========================
+    REPORTES ← NUEVO
+    ==========================
+    */
+    Route::prefix('reportes')->group(function () {
+        Route::get('/kpis',        [ReportesController::class, 'kpis']);
+        Route::get('/empenos',     [ReportesController::class, 'empenos']);
+        Route::get('/flujo-caja',  [ReportesController::class, 'flujoCaja']);
+        Route::get('/clientes',    [ReportesController::class, 'clientes']);
+        Route::get('/inventario',  [ReportesController::class, 'inventario']);
+    });
+
+}); // fin auth:sanctum

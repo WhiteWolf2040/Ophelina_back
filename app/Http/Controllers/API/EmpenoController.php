@@ -10,16 +10,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 // Api wahatsapp
 use App\Services\WhatsAppService;
-use IzzuddinMohsin\LaravelWhatsapp\Traits\WhatsappTrait;
+// use IzzuddinMohsin\LaravelWhatsapp\Traits\WhatsappTrait;
 use App\Models\Cliente;
 use Carbon\Carbon;
 
 class EmpenoController extends Controller
 {
 
- use WhatsappTrait;
+ 
 /**
- * Obtener todos los empeños (activos y vencidos)
+ * Obtener todos los empeños (activos y vencidos) use WhatsappTrait;
  */
 public function index(Request $request)
 {
