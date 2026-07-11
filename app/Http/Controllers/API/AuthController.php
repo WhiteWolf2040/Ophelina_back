@@ -98,12 +98,29 @@ public function user(Request $request)
     
     // Obtener información del plan
     $planId = $usuario->empresa->id_plan ?? 1;
+
+
+    
+    // Módulos permitidos por plan
+    $modulosPorPlan = [
+        1 => ['home', 'clientes', 'empenos'],
+        2 => ['home', 'clientes', 'pagos', 'empenos', 'configuracion'],
+        3 => ['home', 'clientes', 'pagos', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion']
+    ];
+    
+    $modulos = $modulosPorPlan[$planId] ?? $modulosPorPlan[1];
+    
+    // Obtener permisos del rol
+    $permisosDelRol = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
+    
+    // Obtener nombre del plan
+
     $planNombre = 'Free';
     if ($usuario->empresa && $usuario->empresa->plan) {
         $planNombre = $usuario->empresa->plan->nombre;
-    } elseif ($planId == 3) {
+    } elseif ($planId == 2) {
         $planNombre = 'Profesional';
-    } elseif ($planId == 4) {
+    } elseif ($planId == 3) {
         $planNombre = 'Premium';
     }
     
