@@ -12,56 +12,79 @@ use Illuminate\Support\Facades\Log;
 class StripeController extends Controller
 {
     // 1. Crear sesión de checkout
-    public function createCheckoutSession(Request $request)
-    {
-        try {
-            Log::info('createCheckoutSession - INICIO');
-            Log::info('plan_id: ' . $request->plan_id);
-            Log::info('plan_name: ' . $request->plan_name);
-            Log::info('price: ' . $request->price);
-            Log::info('empresa_id: ' . $request->empresa_id);
-            Log::info('customer_email: ' . $request->customer_email);
-            
-            Stripe::setApiKey(env('STRIPE_SECRET'));
-            
-            $session = Session::create([
-                'payment_method_types' => ['card'],
-                'line_items' => [[
-                    'price_data' => [
-                        'currency' => 'mxn',
-                        'product_data' => [
-                            'name' => 'Ophelina - Plan ' . $request->plan_name,
-                        ],
-                        'unit_amount' => $request->price,
-                        'recurring' => ['interval' => 'month'],
-                    ],
-                    'quantity' => 1,
-                ]],
-                'mode' => 'subscription',
-                'success_url' => env('STRIPE_SUCCESS_URL', 'http://localhost:5173/') . '?session_id={CHECKOUT_SESSION_ID}&payment=success',
-                'cancel_url' => env('STRIPE_CANCEL_URL', 'http://localhost:5173/planes'),
-                'metadata' => [
-                    'plan_id' => $request->plan_id,
-                    'plan_name' => $request->plan_name,
-                    'empresa_id' => $request->empresa_id ?? 'nueva',
-                ],
-                'customer_email' => $request->customer_email,
-            ]);
-            
-            Log::info('Sesión creada - session_id: ' . $session->id);
-            
+   // app/Http/Controllers/API/StripeController.php - método createCheckoutSession
+
+public function createCheckoutSession(Request $request)
+{
+    try {
+        Log::info('=== createCheckoutSession INICIO ===');
+        Log::info('📥 Datos recibidos:', $request->all());
+        
+        // ✅ OBTENER Y VERIFICAR LA URL DE ÉXITO
+        $successUrl = env('STRIPE_SUCCESS_URL');
+        $cancelUrl = env('STRIPE_CANCEL_URL');
+        
+        Log::info('📌 STRIPE_SUCCESS_URL desde ENV: ' . $successUrl);
+        Log::info('📌 STRIPE_CANCEL_URL desde ENV: ' . $cancelUrl);
+        
+        // ✅ VALIDAR QUE LAS URLS SEAN VÁLIDAS
+        if (empty($successUrl) || !filter_var($successUrl, FILTER_VALIDATE_URL)) {
+            Log::error('❌ STRIPE_SUCCESS_URL NO es una URL válida: ' . $successUrl);
             return response()->json([
-                'sessionId' => $session->id,
-                'url' => $session->url
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error('Error en createCheckoutSession: ' . $e->getMessage());
-            Log::error('Trace: ' . $e->getTraceAsString());
-            return response()->json(['error' => $e->getMessage()], 500);
+                'error' => 'La URL de éxito de Stripe no es válida',
+                'url' => $successUrl
+            ], 500);
         }
+        
+        if (empty($cancelUrl) || !filter_var($cancelUrl, FILTER_VALIDATE_URL)) {
+            Log::error('❌ STRIPE_CANCEL_URL NO es una URL válida: ' . $cancelUrl);
+            return response()->json([
+                'error' => 'La URL de cancelación de Stripe no es válida',
+                'url' => $cancelUrl
+            ], 500);
+        }
+        
+        // ✅ CONFIGURAR STRIPE
+        Stripe::setApiKey(env('STRIPE_SECRET'));
+        
+        // ✅ CREAR SESIÓN
+        $session = Session::create([
+            'payment_method_types' => ['card'],
+            'line_items' => [[
+                'price_data' => [
+                    'currency' => 'mxn',
+                    'product_data' => [
+                        'name' => 'Ophelina - Plan ' . $request->plan_name,
+                    ],
+                    'unit_amount' => $request->price,
+                    'recurring' => ['interval' => 'month'],
+                ],
+                'quantity' => 1,
+            ]],
+            'mode' => 'subscription',
+            'success_url' => $successUrl . '?session_id={CHECKOUT_SESSION_ID}&payment=success', // ✅ AGREGAR PARÁMETROS
+            'cancel_url' => $cancelUrl,
+            'metadata' => [
+                'plan_id' => $request->plan_id,
+                'plan_name' => $request->plan_name,
+                'empresa_id' => $request->empresa_id ?? 'nueva',
+            ],
+            'customer_email' => $request->customer_email,
+        ]);
+        
+        Log::info('✅ Sesión creada - session_id: ' . $session->id);
+        
+        return response()->json([
+            'sessionId' => $session->id,
+            'url' => $session->url
+        ]);
+        
+    } catch (\Exception $e) {
+        Log::error('❌ Error en createCheckoutSession: ' . $e->getMessage());
+        Log::error('Trace: ' . $e->getTraceAsString());
+        return response()->json(['error' => $e->getMessage()], 500);
     }
-    
+}
     // 2. Verificar pago y activar suscripción - VERSIÓN CON MÁS LOGS
 // app/Http/Controllers/API/StripeController.php
 
