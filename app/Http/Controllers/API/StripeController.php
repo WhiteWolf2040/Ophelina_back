@@ -62,7 +62,7 @@ public function createCheckoutSession(Request $request)
                 'quantity' => 1,
             ]],
             'mode' => 'subscription',
-            'success_url' => $successUrl . '?session_id={CHECKOUT_SESSION_ID}&payment=success', // ✅ AGREGAR PARÁMETROS
+            'success_url' => $successUrl ,// ✅ AGREGAR PARÁMETROS
             'cancel_url' => $cancelUrl,
             'metadata' => [
                 'plan_id' => $request->plan_id,
