@@ -33,7 +33,7 @@ class Rol extends Model
     public function permisos()
     {
         return $this->belongsToMany(Permiso::class, 'rol_permiso', 'id_rol', 'id_permiso')
-                    ->withPivot('permitido')
+                    ->withPivot('permitido', 'id_empresa') //  Un solo withPivot con todos los campos
                     ->wherePivot('permitido', 1);
     }
     

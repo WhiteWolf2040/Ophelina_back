@@ -91,8 +91,8 @@ public function user(Request $request)
     // Módulos permitidos por plan
     $modulosPorPlan = [
         1 => ['home', 'clientes', 'empenos'],
-        3 => ['home', 'clientes', 'pagos', 'empenos', 'configuracion'],
-        4 => ['home', 'clientes', 'pagos', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion']
+        2 => ['home', 'clientes', 'pagos', 'empenos', 'configuracion'],
+        3 => ['home', 'clientes', 'pagos', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion']
     ];
     
     $modulos = $modulosPorPlan[$planId] ?? $modulosPorPlan[1];
@@ -104,9 +104,9 @@ public function user(Request $request)
     $planNombre = 'Free';
     if ($usuario->empresa && $usuario->empresa->plan) {
         $planNombre = $usuario->empresa->plan->nombre;
-    } elseif ($planId == 3) {
+    } elseif ($planId == 2) {
         $planNombre = 'Profesional';
-    } elseif ($planId == 4) {
+    } elseif ($planId == 3) {
         $planNombre = 'Premium';
     }
     

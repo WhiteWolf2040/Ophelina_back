@@ -14,10 +14,10 @@ class CheckPlanModule
         1 => [  // Free Trial
             'home', 'clientes', 'empenos'
         ],
-        3 => [  // Profesional
+        2=> [  // Profesional
             'home', 'clientes', 'pagos', 'empenos', 'configuracion'
         ],
-        4 => [  // Empresarial (Premium)
+        3=> [  // Empresarial (Premium)
             'home', 'clientes', 'pagos', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion'
         ]
     ];
