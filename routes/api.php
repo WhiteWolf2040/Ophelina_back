@@ -23,24 +23,35 @@ use App\Http\Controllers\API\ConfiguracionController;
 |--------------------------------------------------------------------------
 */
 
+// Contacto
 Route::post('/send-email', [ContactController::class, 'SendEmail']);
 
 // Autenticación
 Route::post('/login', [AuthController::class, 'login']);
 
-// Stripe (pagos)
-Route::post('/create-checkout-session', [StripeController::class, 'createCheckoutSession']);
-Route::post('/verify-payment', [StripeController::class, 'verifyPayment']);
-Route::post('/activate-free-plan', [StripeController::class, 'activateFreePlan']);
-Route::get('/check-subscription/{empresaId}', [StripeController::class, 'checkSubscription']);
+// ✅ Stripe - Rutas PÚBLICAS (no requieren token de autenticación)
+Route::prefix('stripe')->group(function () {
+    Route::post('/create-checkout-session', [StripeController::class, 'createCheckoutSession']);
+    Route::post('/activate-free-plan', [StripeController::class, 'activateFreePlan']);
+});
 
 /*
 |--------------------------------------------------------------------------
-| RUTAS PROTEGIDAS (requieren token)
+| RUTAS PROTEGIDAS (requieren token de autenticación)
 |--------------------------------------------------------------------------
 */
 
 Route::middleware('auth:sanctum')->group(function () {
+
+    /*
+    ==========================
+    STRIPE - RUTAS PROTEGIDAS
+    ==========================
+    */
+    Route::prefix('stripe')->group(function () {
+        Route::post('/verify-payment', [StripeController::class, 'verifyPayment']);
+        Route::get('/check-subscription/{empresaId}', [StripeController::class, 'checkSubscription']);
+    });
 
     /*
     ==========================
@@ -146,7 +157,7 @@ Route::middleware('auth:sanctum')->group(function () {
     TIENDA EN LÍNEA (Solo plan Premium - id_plan=4)
     ==========================
     */
- /*    Route::middleware(['check.plan:tienda'])->group(function () {
+    /* Route::middleware(['check.plan:tienda'])->group(function () {
         Route::prefix('tienda')->group(function () {
             Route::get('/', [TiendaController::class, 'index']);
             Route::get('/productos', [TiendaController::class, 'getProductos']);
@@ -165,7 +176,7 @@ Route::middleware('auth:sanctum')->group(function () {
     REPORTES (Solo plan Premium - id_plan=4)
     ==========================
     */
-   /*  Route::middleware(['check.plan:reportes'])->group(function () {
+    /* Route::middleware(['check.plan:reportes'])->group(function () {
         Route::prefix('reportes')->group(function () {
             Route::get('/', [ReportesController::class, 'index']);
             Route::get('/ventas', [ReportesController::class, 'ventas']);
@@ -215,7 +226,7 @@ Route::middleware('auth:sanctum')->group(function () {
     CONFIGURACIÓN (Todos los planes pueden ver, pero algunos campos limitados)
     ==========================
     */
-  /*   Route::middleware(['check.plan:configuracion'])->group(function () {
+    /* Route::middleware(['check.plan:configuracion'])->group(function () {
         Route::prefix('configuracion')->group(function () {
             Route::get('/', [ConfiguracionController::class, 'index']);
             Route::get('/empresa', [ConfiguracionController::class, 'getEmpresa']);
