@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Log;
 // Api wahatsapp
 use App\Services\WhatsAppService;
 // use IzzuddinMohsin\LaravelWhatsapp\Traits\WhatsappTrait;
+
+/* use App\Services\WhatsAppService; */
 use App\Models\Cliente;
 use Carbon\Carbon;
 
@@ -18,6 +20,7 @@ class EmpenoController extends Controller
 {
 
  
+/*  use WhatsappTrait; */
 /**
  * Obtener todos los empeños (activos y vencidos) use WhatsappTrait;
  */
@@ -385,7 +388,7 @@ public function getTasasInteres(Request $request)
     }
 }
 
-public function enviarRecordatoriosVencimiento(Request $request)
+/* public function enviarRecordatoriosVencimiento(Request $request)
 {
     $whatsapp = new WhatsAppService();
     
@@ -413,7 +416,7 @@ public function enviarRecordatoriosVencimiento(Request $request)
     
     return response()->json(['success' => true]);
 }
-
+ */
 
 
 }

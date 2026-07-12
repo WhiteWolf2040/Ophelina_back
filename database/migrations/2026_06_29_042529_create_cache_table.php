@@ -11,8 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('aval', function (Blueprint $table) {
-            $table->foreign(['id_empresa'], 'aval_ibfk_empresa')->references(['id_empresa'])->on('empresa')->onUpdate('no action')->onDelete('cascade');
+        Schema::create('cache', function (Blueprint $table) {
+            $table->string('key')->primary();
+            $table->mediumText('value');
+            $table->integer('expiration')->index();
         });
     }
 
@@ -21,8 +23,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('aval', function (Blueprint $table) {
-            $table->dropForeign('aval_ibfk_empresa');
-        });
+        Schema::dropIfExists('cache');
     }
 };

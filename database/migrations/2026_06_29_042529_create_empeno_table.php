@@ -13,18 +13,18 @@ return new class extends Migration
     {
         Schema::create('empeno', function (Blueprint $table) {
             $table->integer('id_empeno', true);
-            $table->integer('id_empresa')->index('id_empresa');
-            $table->integer('id_cliente')->index('id_cliente');
-            $table->integer('id_prenda')->index('id_prenda');
-            $table->integer('id_aval')->nullable()->index('id_aval');
-            $table->integer('id_tasa')->nullable()->index('id_tasa');
+           $table->integer('id_empresa')->index('empeno_id_empresa_idx');
+            $table->integer('id_cliente')->index('empeno_id_cliente_idx');
+            $table->integer('id_prenda')->index('empeno_id_prenda_idx');
+            $table->integer('id_aval')->nullable()->index('empeno_id_aval_idx');
+            $table->integer('id_tasa')->nullable()->index('empeno_id_tasa_idx');
             $table->date('fecha_empeno')->nullable();
             $table->decimal('monto_prestado', 10)->nullable();
             $table->decimal('intereses', 5)->nullable();
             $table->decimal('iva_porcentaje', 5)->nullable()->default(16);
             $table->date('fecha_vencimiento')->nullable();
             $table->enum('estado', ['activo', 'pagado', 'vencido', 'prorrogado', 'cancelado'])->nullable()->default('activo');
-            $table->string('folio', 20)->nullable()->unique('folio');
+            $table->string('folio', 20)->nullable()->unique('empeno_folio_unique');
         });
     }
 

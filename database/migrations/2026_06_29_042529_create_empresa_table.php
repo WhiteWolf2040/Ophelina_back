@@ -27,7 +27,11 @@ return new class extends Migration
             $table->decimal('precio_oro_onza', 10)->nullable();
             $table->dateTime('ultima_actualizacion_oro')->nullable();
             $table->boolean('activo')->nullable()->default(true);
+            $table->integer('id_plan')->nullable()->index('idx_empresa_plan');
             $table->dateTime('fecha_registro')->nullable()->useCurrent();
+            $table->date('fecha_inicio_plan')->nullable();
+            $table->date('fecha_fin_plan')->nullable();
+            $table->boolean('plan_activo')->nullable()->default(true)->comment('1=activo, 0=inactivo/vencido');
         });
     }
 

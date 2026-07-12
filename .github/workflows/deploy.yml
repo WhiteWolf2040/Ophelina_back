@@ -1,0 +1,35 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches:
+      - rama-diego
+
+jobs:
+  ci-cd-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, bcmath, pdo, pdo_pgsql, pgsql
+          coverage: none
+
+      - name: Generar archivo .env desde secret
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+          echo "✅ .env generado correctamente"
+          echo "DB_CONNECTION=$(grep DB_CONNECTION .env | cut -d '=' -f2)"
+
+      - name: Instalar dependencias Composer
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Disparar despliegue en Render
+        run: |
+          curl --fail --silent --show-error \
+            -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"

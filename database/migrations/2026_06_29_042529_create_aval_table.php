@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('aval', function (Blueprint $table) {
             $table->integer('id_aval', true);
             $table->integer('id_empresa')->index('id_empresa');
+            $table->integer('id_cliente')->index('id_cliente');
             $table->string('nombre', 100);
             $table->string('apellido', 100);
             $table->string('telefono', 20);
