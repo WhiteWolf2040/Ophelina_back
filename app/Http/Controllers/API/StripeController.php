@@ -86,103 +86,68 @@ class StripeController extends Controller
 public function verifyPayment(Request $request)
 {
     try {
-        // ✅ SIEMPRE DEVOLVER JSON CON LOS HEADERS CORRECTOS
-        $response = response()->json([
-            'success' => false,
-            'message' => 'Error desconocido'
-        ], 500);
+        // ✅ LOG 1: Verificar que el request llega
+        Log::info('=== verifyPayment INICIO ===');
+        Log::info('📥 Datos recibidos:', $request->all());
         
-        // ✅ VALIDAR SESSION_ID
+        // ✅ LOG 2: Verificar session_id
         $sessionId = $request->session_id;
         if (empty($sessionId)) {
-            Log::error('❌ session_id vacío');
             return response()->json([
                 'success' => false,
                 'message' => 'session_id es requerido'
             ], 400);
         }
-        Log::info('🔍 Verificando pago - session_id: ' . $sessionId);
-
-        // ✅ VALIDAR STRIPE_SECRET
+        Log::info('📌 session_id: ' . $sessionId);
+        
+        // ✅ LOG 3: Verificar usuario autenticado
+       $user = auth()->user(); 
+        if (!$user) {
+            Log::error('❌ Usuario no autenticado');
+            return response()->json([
+                'success' => false,
+                'message' => 'Usuario no autenticado'
+            ], 401);
+        }
+        Log::info('👤 Usuario autenticado:', ['id' => $user->id, 'email' => $user->email]);
+        
+        // ✅ LOG 4: Verificar empresa
+        $empresa = $user->empresa;
+        if (!$empresa) {
+            Log::error('❌ Empresa no encontrada');
+            return response()->json([
+                'success' => false,
+                'message' => 'Empresa no encontrada',
+                'debug' => 'El usuario no tiene empresa asociada'
+            ], 404);
+        }
+        Log::info('🏢 Empresa encontrada:', [
+            'id' => $empresa->id_empresa,
+            'nombre' => $empresa->nombre,
+            'plan_actual' => $empresa->id_plan
+        ]);
+        
+        // ✅ LOG 5: Verificar STRIPE_SECRET
         $stripeSecret = env('STRIPE_SECRET');
         if (empty($stripeSecret)) {
-            Log::error('❌ STRIPE_SECRET no configurada en el entorno');
+            Log::error('❌ STRIPE_SECRET no configurada');
             return response()->json([
                 'success' => false,
                 'message' => 'STRIPE_SECRET no configurada'
             ], 500);
         }
-
-        // ✅ CONFIGURAR STRIPE
-        try {
-            $stripe = new \Stripe\StripeClient($stripeSecret);
-            $session = $stripe->checkout->sessions->retrieve($sessionId);
-        } catch (\Exception $e) {
-            Log::error('❌ Error al recuperar sesión de Stripe: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al recuperar sesión de Stripe: ' . $e->getMessage()
-            ], 500);
-        }
         
-        Log::info('📊 Estado del pago: ' . $session->payment_status);
-
-        if ($session->payment_status === 'paid') {
-            // ✅ ACTUALIZAR EL PLAN DEL USUARIO
-            $user = $request->user();
-            
-            if (!$user) {
-                Log::error('❌ Usuario no autenticado');
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
-            }
-            
-            $empresa = $user->empresa;
-            
-            if (!$empresa) {
-                Log::error('❌ Empresa no encontrada para el usuario: ' . $user->id);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Empresa no encontrada'
-                ], 404);
-            }
-            
-            // Obtener el plan desde los metadatos
-            $planId = $session->metadata->plan_id ?? 3;
-            $planName = $session->metadata->plan_name ?? 'Premium';
-            
-            Log::info('📝 Actualizando plan - empresa_id: ' . $empresa->id_empresa . ', plan_id: ' . $planId);
-            
-            try {
-                $empresa->id_plan = $planId;
-                $empresa->plan_activo = 1;
-                $empresa->fecha_inicio_plan = now();
-                $empresa->fecha_fin_plan = now()->addMonth();
-                $empresa->save();
-            } catch (\Exception $e) {
-                Log::error('❌ Error al guardar empresa: ' . $e->getMessage());
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Error al actualizar el plan: ' . $e->getMessage()
-                ], 500);
-            }
-            
-            Log::info('✅ Plan actualizado correctamente');
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Pago verificado y plan actualizado',
-                'data' => [
-                    'plan_id' => $planId,
-                    'plan_nombre' => $planName,
-                    'fecha_inicio' => $empresa->fecha_inicio_plan,
-                    'fecha_fin' => $empresa->fecha_fin_plan
-                ]
-            ]);
-        } else {
-            Log::warning('⚠️ Pago no completado - estado: ' . $session->payment_status);
+        // ✅ LOG 6: Recuperar sesión de Stripe
+        $stripe = new \Stripe\StripeClient($stripeSecret);
+        $session = $stripe->checkout->sessions->retrieve($sessionId);
+        Log::info('📊 Sesión de Stripe:', [
+            'id' => $session->id,
+            'payment_status' => $session->payment_status,
+            'metadata' => $session->metadata
+        ]);
+        
+        // ✅ LOG 7: Verificar estado del pago
+        if ($session->payment_status !== 'paid') {
             return response()->json([
                 'success' => false,
                 'message' => 'El pago no está completado',
@@ -190,12 +155,65 @@ public function verifyPayment(Request $request)
             ], 400);
         }
         
+        // ✅ LOG 8: Obtener plan de metadata
+        $planId = $session->metadata->plan_id ?? 3;
+        $planName = $session->metadata->plan_name ?? 'Premium';
+        Log::info('📝 Plan a actualizar:', ['plan_id' => $planId, 'plan_name' => $planName]);
+        
+        // ✅ LOG 9: Actualizar empresa con TRY-CATCH específico
+        try {
+            Log::info('🔄 Intentando actualizar empresa...');
+            
+            $empresa->id_plan = $planId;
+            $empresa->plan_activo = 1;
+            $empresa->fecha_inicio_plan = now();
+            $empresa->fecha_fin_plan = now()->addMonth();
+            
+            Log::info('📝 Datos a guardar:', [
+                'id_plan' => $empresa->id_plan,
+                'plan_activo' => $empresa->plan_activo,
+                'fecha_inicio_plan' => $empresa->fecha_inicio_plan,
+                'fecha_fin_plan' => $empresa->fecha_fin_plan
+            ]);
+            
+            $empresa->save();
+            Log::info('✅ Empresa actualizada correctamente');
+            
+        } catch (\Exception $e) {
+            Log::error('❌ Error al guardar empresa: ' . $e->getMessage());
+            Log::error('Trace: ' . $e->getTraceAsString());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el plan: ' . $e->getMessage(),
+                'debug' => [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]
+            ], 500);
+        }
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Pago verificado y plan actualizado',
+            'data' => [
+                'plan_id' => $planId,
+                'plan_nombre' => $planName,
+                'fecha_inicio' => $empresa->fecha_inicio_plan,
+                'fecha_fin' => $empresa->fecha_fin_plan
+            ]
+        ]);
+        
     } catch (\Exception $e) {
-        Log::error('❌ Error verificando pago: ' . $e->getMessage());
+        Log::error('❌ Error general en verifyPayment: ' . $e->getMessage());
         Log::error('Trace: ' . $e->getTraceAsString());
+        
         return response()->json([
             'success' => false,
-            'message' => 'Error al verificar el pago: ' . $e->getMessage()
+            'message' => 'Error al verificar el pago: ' . $e->getMessage(),
+            'debug' => [
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]
         ], 500);
     }
 }
