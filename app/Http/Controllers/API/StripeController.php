@@ -84,84 +84,105 @@ class StripeController extends Controller
         }
     }
 
-    // 2. Verificar pago y activar suscripción
-    public function verifyPayment(Request $request)
-    {
-        try {
-            $sessionId = $request->session_id;
-            
-            // ✅ CORREGIDO: Usar STRIPE_SECRET en lugar de STRIPE_SECRET_KEY
-            $stripe = new \Stripe\StripeClient(env('STRIPE_SECRET')); // ← ¡CAMBIO AQUÍ!
-            $session = $stripe->checkout->sessions->retrieve($sessionId);
-            
-            Log::info('🔍 Verificando pago - session_id: ' . $sessionId);
-            Log::info('📊 Estado del pago: ' . $session->payment_status);
-            
-            if ($session->payment_status === 'paid') {
-                // ✅ ACTUALIZAR EL PLAN DEL USUARIO
-                $user = $request->user();
-                
-                if (!$user) {
-                    Log::error('❌ Usuario no autenticado');
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Usuario no autenticado'
-                    ], 401);
-                }
-                
-                $empresa = $user->empresa;
-                
-                if (!$empresa) {
-                    Log::error('❌ Empresa no encontrada para el usuario: ' . $user->id);
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Empresa no encontrada'
-                    ], 404);
-                }
-                
-                // Obtener el plan desde los metadatos
-                $planId = $session->metadata->plan_id ?? 3; // Default: Premium
-                $planName = $session->metadata->plan_name ?? 'Premium';
-                
-                Log::info('📝 Actualizando plan - empresa_id: ' . $empresa->id_empresa . ', plan_id: ' . $planId);
-                
-                $empresa->id_plan = $planId;
-                $empresa->plan_activo = 1;
-                $empresa->fecha_inicio_plan = now();
-                $empresa->fecha_fin_plan = now()->addMonth();
-                $empresa->save();
-                
-                Log::info('✅ Plan actualizado correctamente');
-                
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Pago verificado y plan actualizado',
-                    'data' => [
-                        'plan_id' => $planId,
-                        'plan_nombre' => $planName,
-                        'fecha_inicio' => $empresa->fecha_inicio_plan,
-                        'fecha_fin' => $empresa->fecha_fin_plan
-                    ]
-                ]);
-            } else {
-                Log::warning('⚠️ Pago no completado - estado: ' . $session->payment_status);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'El pago no está completado',
-                    'payment_status' => $session->payment_status
-                ], 400);
-            }
-            
-        } catch (\Exception $e) {
-            Log::error('❌ Error verificando pago: ' . $e->getMessage());
-            Log::error('Trace: ' . $e->getTraceAsString());
+   public function verifyPayment(Request $request)
+{
+    try {
+        // ✅ VALIDAR SESSION_ID
+        $sessionId = $request->session_id;
+        if (empty($sessionId)) {
+            Log::error('❌ session_id vacío');
             return response()->json([
                 'success' => false,
-                'message' => 'Error al verificar el pago: ' . $e->getMessage()
+                'message' => 'session_id es requerido'
+            ], 400);
+        }
+        Log::info('🔍 Verificando pago - session_id: ' . $sessionId);
+
+        // ✅ VALIDAR STRIPE_SECRET
+        $stripeSecret = env('STRIPE_SECRET');
+        if (empty($stripeSecret)) {
+            Log::error('❌ STRIPE_SECRET no configurada en el entorno');
+            return response()->json([
+                'success' => false,
+                'message' => 'STRIPE_SECRET no configurada. Verifica las variables de entorno en Render.',
+                'debug' => 'La variable STRIPE_SECRET no está definida'
             ], 500);
         }
+
+        // ✅ CONFIGURAR STRIPE
+        $stripe = new \Stripe\StripeClient($stripeSecret);
+        $session = $stripe->checkout->sessions->retrieve($sessionId);
+        
+        Log::info('📊 Estado del pago: ' . $session->payment_status);
+
+        if ($session->payment_status === 'paid') {
+            // ✅ ACTUALIZAR EL PLAN DEL USUARIO
+            $user = $request->user();
+            
+            if (!$user) {
+                Log::error('❌ Usuario no autenticado');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+            
+            $empresa = $user->empresa;
+            
+            if (!$empresa) {
+                Log::error('❌ Empresa no encontrada para el usuario: ' . $user->id);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Empresa no encontrada'
+                ], 404);
+            }
+            
+            // Obtener el plan desde los metadatos
+            $planId = $session->metadata->plan_id ?? 3;
+            $planName = $session->metadata->plan_name ?? 'Premium';
+            
+            Log::info('📝 Actualizando plan - empresa_id: ' . $empresa->id_empresa . ', plan_id: ' . $planId);
+            
+            $empresa->id_plan = $planId;
+            $empresa->plan_activo = 1;
+            $empresa->fecha_inicio_plan = now();
+            $empresa->fecha_fin_plan = now()->addMonth();
+            $empresa->save();
+            
+            Log::info('✅ Plan actualizado correctamente');
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Pago verificado y plan actualizado',
+                'data' => [
+                    'plan_id' => $planId,
+                    'plan_nombre' => $planName,
+                    'fecha_inicio' => $empresa->fecha_inicio_plan,
+                    'fecha_fin' => $empresa->fecha_fin_plan
+                ]
+            ]);
+        } else {
+            Log::warning('⚠️ Pago no completado - estado: ' . $session->payment_status);
+            return response()->json([
+                'success' => false,
+                'message' => 'El pago no está completado',
+                'payment_status' => $session->payment_status
+            ], 400);
+        }
+        
+    } catch (\Exception $e) {
+        Log::error('❌ Error verificando pago: ' . $e->getMessage());
+        Log::error('Trace: ' . $e->getTraceAsString());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al verificar el pago: ' . $e->getMessage(),
+            'debug' => [
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]
+        ], 500);
     }
-    
+}
     // 3. Activar plan free
     public function activateFreePlan(Request $request)
     {
