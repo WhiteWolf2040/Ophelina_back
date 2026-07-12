@@ -83,10 +83,15 @@ class StripeController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-   public function verifyPayment(Request $request)
+public function verifyPayment(Request $request)
 {
     try {
+        // ✅ SIEMPRE DEVOLVER JSON CON LOS HEADERS CORRECTOS
+        $response = response()->json([
+            'success' => false,
+            'message' => 'Error desconocido'
+        ], 500);
+        
         // ✅ VALIDAR SESSION_ID
         $sessionId = $request->session_id;
         if (empty($sessionId)) {
@@ -104,14 +109,21 @@ class StripeController extends Controller
             Log::error('❌ STRIPE_SECRET no configurada en el entorno');
             return response()->json([
                 'success' => false,
-                'message' => 'STRIPE_SECRET no configurada. Verifica las variables de entorno en Render.',
-                'debug' => 'La variable STRIPE_SECRET no está definida'
+                'message' => 'STRIPE_SECRET no configurada'
             ], 500);
         }
 
         // ✅ CONFIGURAR STRIPE
-        $stripe = new \Stripe\StripeClient($stripeSecret);
-        $session = $stripe->checkout->sessions->retrieve($sessionId);
+        try {
+            $stripe = new \Stripe\StripeClient($stripeSecret);
+            $session = $stripe->checkout->sessions->retrieve($sessionId);
+        } catch (\Exception $e) {
+            Log::error('❌ Error al recuperar sesión de Stripe: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al recuperar sesión de Stripe: ' . $e->getMessage()
+            ], 500);
+        }
         
         Log::info('📊 Estado del pago: ' . $session->payment_status);
 
@@ -143,11 +155,19 @@ class StripeController extends Controller
             
             Log::info('📝 Actualizando plan - empresa_id: ' . $empresa->id_empresa . ', plan_id: ' . $planId);
             
-            $empresa->id_plan = $planId;
-            $empresa->plan_activo = 1;
-            $empresa->fecha_inicio_plan = now();
-            $empresa->fecha_fin_plan = now()->addMonth();
-            $empresa->save();
+            try {
+                $empresa->id_plan = $planId;
+                $empresa->plan_activo = 1;
+                $empresa->fecha_inicio_plan = now();
+                $empresa->fecha_fin_plan = now()->addMonth();
+                $empresa->save();
+            } catch (\Exception $e) {
+                Log::error('❌ Error al guardar empresa: ' . $e->getMessage());
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al actualizar el plan: ' . $e->getMessage()
+                ], 500);
+            }
             
             Log::info('✅ Plan actualizado correctamente');
             
@@ -175,11 +195,7 @@ class StripeController extends Controller
         Log::error('Trace: ' . $e->getTraceAsString());
         return response()->json([
             'success' => false,
-            'message' => 'Error al verificar el pago: ' . $e->getMessage(),
-            'debug' => [
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]
+            'message' => 'Error al verificar el pago: ' . $e->getMessage()
         ], 500);
     }
 }
