@@ -154,6 +154,19 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
+    REPORTES - NUEVAS RUTAS
+    ==========================
+    */
+    Route::prefix('reportes')->group(function () {
+        Route::get('/kpis', [ReportesController::class, 'kpis']);
+        Route::get('/empenos', [ReportesController::class, 'empenos']);
+        Route::get('/flujo-caja', [ReportesController::class, 'flujoCaja']);
+        Route::get('/clientes', [ReportesController::class, 'clientes']);
+        Route::get('/inventario', [ReportesController::class, 'inventario']);
+    });
+
+    /*
+    ==========================
     TIENDA EN LÍNEA (Solo plan Premium - id_plan=4)
     ==========================
     */
@@ -168,21 +181,6 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/apartados', [TiendaController::class, 'apartar']);
             Route::get('/apartados', [TiendaController::class, 'getApartados']);
             Route::get('/ventas', [TiendaController::class, 'getVentas']);
-        });
-    }); */
-
-    /*
-    ==========================
-    REPORTES (Solo plan Premium - id_plan=4)
-    ==========================
-    */
-    /* Route::middleware(['check.plan:reportes'])->group(function () {
-        Route::prefix('reportes')->group(function () {
-            Route::get('/', [ReportesController::class, 'index']);
-            Route::get('/ventas', [ReportesController::class, 'ventas']);
-            Route::get('/morosidad', [ReportesController::class, 'reporteMorosidad']);
-            Route::get('/ganancias', [ReportesController::class, 'ganancias']);
-            Route::get('/exportar', [ReportesController::class, 'exportar']);
         });
     }); */
 
