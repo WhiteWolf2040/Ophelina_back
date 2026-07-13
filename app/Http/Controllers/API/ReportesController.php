@@ -9,8 +9,6 @@ use Carbon\Carbon;
 
 class ReportesController extends Controller
 {
-    // middleware auth:sanctum aplicado desde api.php
-
     // ══════════════════════════════════════════════
     //  GET /api/reportes/kpis
     // ══════════════════════════════════════════════
@@ -21,13 +19,11 @@ class ReportesController extends Controller
         $inicioMes = Carbon::now()->startOfMonth();
         $finMes    = Carbon::now()->endOfMonth();
 
-        // ── 1. Capital prestado ──
         $capitalPrestado = DB::table('empeno')
             ->where('id_empresa', $idEmpresa)
             ->whereIn('estado', ['activo', 'vencido'])
             ->sum('monto_prestado');
 
-        // ── 2. Intereses cobrados este mes ──
         $interesesCobrados = DB::table('pagos')
             ->join('empeno', 'pagos.id_empeno', '=', 'empeno.id_empeno')
             ->where('empeno.id_empresa', $idEmpresa)
@@ -35,7 +31,6 @@ class ReportesController extends Controller
             ->whereBetween('pagos.fecha_pago', [$inicioMes, $finMes])
             ->sum('pagos.interes_pagado');
 
-        // ── 3. Intereses pendientes ──
         $interesesPendientes = DB::table('empeno')
             ->join('tasas_interes', 'empeno.id_tasa', '=', 'tasas_interes.id_tasa')
             ->where('empeno.id_empresa', $idEmpresa)
@@ -49,14 +44,12 @@ class ReportesController extends Controller
             ')
             ->value('total') ?? 0;
 
-        // ── 4. Cartera vigente ──
         $carteraVigente = DB::table('empeno')
             ->where('id_empresa', $idEmpresa)
             ->where('estado', 'activo')
             ->where('fecha_vencimiento', '>=', $hoy)
             ->sum('monto_prestado');
 
-        // ── 5. Cartera vencida ──
         $carteraVencida = DB::table('empeno')
             ->where('id_empresa', $idEmpresa)
             ->where(function ($q) use ($hoy) {
@@ -68,27 +61,23 @@ class ReportesController extends Controller
             })
             ->sum('monto_prestado');
 
-        // ── 6. Contratos que vencen en los próximos 7 días ──
         $vencenEsta7Dias = DB::table('empeno')
             ->where('id_empresa', $idEmpresa)
             ->where('estado', 'activo')
             ->whereBetween('fecha_vencimiento', [$hoy, $hoy->copy()->addDays(7)])
             ->count();
 
-        // ── 7. Ingresos del mes ──
         $ingresosMes = DB::table('pagos')
             ->join('empeno', 'pagos.id_empeno', '=', 'empeno.id_empeno')
             ->where('empeno.id_empresa', $idEmpresa)
             ->whereBetween('pagos.fecha_pago', [$inicioMes, $finMes])
             ->sum('pagos.monto_total');
 
-        // ── 8. Total empeños activos ──
         $totalActivos = DB::table('empeno')
             ->where('id_empresa', $idEmpresa)
             ->where('estado', 'activo')
             ->count();
 
-        // ── 9. Total clientes activos ──
         $clientesActivos = DB::table('empeno')
             ->where('id_empresa', $idEmpresa)
             ->whereIn('estado', ['activo', 'vencido'])
@@ -123,7 +112,6 @@ class ReportesController extends Controller
             $inicio    = $request->query('inicio', Carbon::now()->startOfMonth()->toDateString());
             $fin       = $request->query('fin',    Carbon::now()->endOfMonth()->toDateString());
 
-            // Conteos por estado
             $porEstado = DB::table('empeno')
                 ->where('id_empresa', $idEmpresa)
                 ->whereBetween('fecha_empeno', [$inicio, $fin])
@@ -132,22 +120,20 @@ class ReportesController extends Controller
                 ->get()
                 ->keyBy('estado');
 
-            // Tiempo promedio de recuperación (PostgreSQL)
+            // ✅ CORREGIDO: PostgreSQL - diferencia de fechas con AGE()
             $tiempoPromedio = DB::table('empeno')
                 ->where('id_empresa', $idEmpresa)
                 ->where('estado', 'pagado')
                 ->whereBetween('fecha_empeno', [$inicio, $fin])
-                ->selectRaw('AVG(EXTRACT(DAY FROM (fecha_vencimiento - fecha_empeno))) as dias_promedio')
+                ->selectRaw('AVG(EXTRACT(DAY FROM AGE(fecha_vencimiento, fecha_empeno))) as dias_promedio')
                 ->value('dias_promedio');
 
-            // Empeños refrendados
             $refrendados = DB::table('empeno')
                 ->where('id_empresa', $idEmpresa)
                 ->whereBetween('fecha_empeno', [$inicio, $fin])
                 ->where('estado', 'prorrogado')
                 ->count();
 
-            // Tendencia mensual (PostgreSQL)
             $tendencia = DB::table('empeno')
                 ->where('id_empresa', $idEmpresa)
                 ->where('fecha_empeno', '>=', Carbon::now()->subMonths(6)->startOfMonth())
@@ -191,7 +177,6 @@ class ReportesController extends Controller
             $inicio    = $request->query('inicio', Carbon::now()->startOfMonth()->toDateString());
             $fin       = $request->query('fin',    Carbon::now()->toDateString());
 
-            // Entradas: pagos recibidos
             $entradas = DB::table('pagos')
                 ->join('empeno', 'pagos.id_empeno', '=', 'empeno.id_empeno')
                 ->where('empeno.id_empresa', $idEmpresa)
@@ -206,7 +191,6 @@ class ReportesController extends Controller
                 ")
                 ->get();
 
-            // Entradas por ventas en tienda
             $ventas = DB::table('venta_tienda')
                 ->join('detalle_venta', 'venta_tienda.id_venta', '=', 'detalle_venta.id_venta')
                 ->join('producto_tienda', 'detalle_venta.id_producto', '=', 'producto_tienda.id_producto')
@@ -222,7 +206,6 @@ class ReportesController extends Controller
                 ->groupBy('venta_tienda.id_venta', 'venta_tienda.fecha_venta', 'venta_tienda.folio')
                 ->get();
 
-            // Salidas: préstamos otorgados
             $salidas = DB::table('empeno')
                 ->where('id_empresa', $idEmpresa)
                 ->whereBetween('fecha_empeno', [$inicio, $fin])
@@ -234,7 +217,6 @@ class ReportesController extends Controller
                 ")
                 ->get();
 
-            // Movimientos de caja adicionales
             $movimientosCaja = DB::table('movimientos_caja')
                 ->join('usuario', 'movimientos_caja.id_usuario', '=', 'usuario.id_usuario')
                 ->where('usuario.id_empresa', $idEmpresa)
@@ -247,7 +229,6 @@ class ReportesController extends Controller
                 ")
                 ->get();
 
-            // Unir y ordenar todos los movimientos
             $todos = collect()
                 ->merge($entradas)
                 ->merge($ventas)
@@ -294,14 +275,14 @@ class ReportesController extends Controller
     }
 
     // ══════════════════════════════════════════════
-    //  GET /api/reportes/clientes
+    //  GET /api/reportes/clientes - CORREGIDO
     // ══════════════════════════════════════════════
     public function clientes(Request $request)
     {
         try {
             $idEmpresa = $request->user()->id_empresa;
 
-            // ✅ Clientes frecuentes (3+ empeños)
+            // ✅ CORREGIDO: PostgreSQL no permite alias en HAVING
             $frecuentes = DB::table('clientes')
                 ->join('empeno', 'clientes.id_cliente', '=', 'empeno.id_cliente')
                 ->where('clientes.id_empresa', $idEmpresa)
@@ -314,12 +295,12 @@ class ReportesController extends Controller
                     DB::raw('MAX(empeno.fecha_empeno) as ultimo_empeno')
                 )
                 ->groupBy('clientes.id_cliente', 'clientes.nombre', 'clientes.apellido')
-                ->having('total_empenos', '>=', 3)
+                ->havingRaw('COUNT(empeno.id_empeno) >= 3') // ✅ Usar expresión completa
                 ->orderByDesc('total_empenos')
                 ->limit(10)
                 ->get();
 
-            // ✅ Clientes con empeños vencidos sin pagar (PostgreSQL)
+            // ✅ CORREGIDO: PostgreSQL - EXTRACT(DAY FROM AGE())
             $conAtraso = DB::table('clientes')
                 ->join('empeno', 'clientes.id_cliente', '=', 'empeno.id_cliente')
                 ->where('clientes.id_empresa', $idEmpresa)
@@ -330,13 +311,13 @@ class ReportesController extends Controller
                     'clientes.apellido',
                     DB::raw('COUNT(empeno.id_empeno) as empenos_vencidos'),
                     DB::raw('SUM(empeno.monto_prestado) as monto_en_riesgo'),
-                    DB::raw('MAX(EXTRACT(DAY FROM (NOW() - empeno.fecha_vencimiento))) as dias_max_atraso')
+                    DB::raw('MAX(EXTRACT(DAY FROM AGE(NOW(), empeno.fecha_vencimiento))) as dias_max_atraso')
                 )
                 ->groupBy('clientes.id_cliente', 'clientes.nombre', 'clientes.apellido')
                 ->orderByDesc('dias_max_atraso')
                 ->get();
 
-            // ✅ Clientes inactivos (sin empeños en los últimos 6 meses) (PostgreSQL)
+            // ✅ CORREGIDO: PostgreSQL - EXTRACT(DAY FROM AGE())
             $inactivos = DB::table('clientes')
                 ->join('empeno', 'clientes.id_cliente', '=', 'empeno.id_cliente')
                 ->where('clientes.id_empresa', $idEmpresa)
@@ -345,15 +326,14 @@ class ReportesController extends Controller
                     'clientes.nombre',
                     'clientes.apellido',
                     DB::raw('MAX(empeno.fecha_empeno) as ultimo_empeno'),
-                    DB::raw('EXTRACT(DAY FROM (NOW() - MAX(empeno.fecha_empeno))) as dias_inactivo')
+                    DB::raw('EXTRACT(DAY FROM AGE(NOW(), MAX(empeno.fecha_empeno))) as dias_inactivo')
                 )
                 ->groupBy('clientes.id_cliente', 'clientes.nombre', 'clientes.apellido')
-                ->havingRaw('dias_inactivo > 180')
+                ->havingRaw('EXTRACT(DAY FROM AGE(NOW(), MAX(empeno.fecha_empeno))) > 180')
                 ->orderByDesc('dias_inactivo')
                 ->limit(20)
                 ->get();
 
-            // Clientes nuevos este mes
             $nuevosEsteMes = DB::table('clientes')
                 ->where('id_empresa', $idEmpresa)
                 ->where('fecha_registro', '>=', Carbon::now()->startOfMonth())
@@ -387,7 +367,6 @@ class ReportesController extends Controller
         try {
             $idEmpresa = $request->user()->id_empresa;
 
-            // Inventario en garantía
             $enGarantia = DB::table('prendas')
                 ->join('empeno', 'prendas.id_prenda', '=', 'empeno.id_prenda')
                 ->where('prendas.id_empresa', $idEmpresa)
@@ -399,7 +378,6 @@ class ReportesController extends Controller
                 )
                 ->first();
 
-            // Inventario en tienda
             $enTienda = DB::table('producto_tienda')
                 ->join('prendas', 'producto_tienda.id_prenda', '=', 'prendas.id_prenda')
                 ->where('prendas.id_empresa', $idEmpresa)
@@ -410,7 +388,6 @@ class ReportesController extends Controller
                 )
                 ->first();
 
-            // Artículos más empeñados
             $masEmpenados = DB::table('prendas')
                 ->join('empeno', 'prendas.id_prenda', '=', 'empeno.id_prenda')
                 ->where('prendas.id_empresa', $idEmpresa)
@@ -425,7 +402,6 @@ class ReportesController extends Controller
                 ->limit(10)
                 ->get();
 
-            // Artículos vendidos este mes
             $vendidosMes = DB::table('detalle_venta')
                 ->join('venta_tienda', 'detalle_venta.id_venta', '=', 'venta_tienda.id_venta')
                 ->join('producto_tienda', 'detalle_venta.id_producto', '=', 'producto_tienda.id_producto')
@@ -438,7 +414,6 @@ class ReportesController extends Controller
                 )
                 ->first();
 
-            // Valor total del inventario
             $valorTotal = DB::table('prendas')
                 ->where('id_empresa', $idEmpresa)
                 ->sum('valor_estimado');
