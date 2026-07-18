@@ -14,58 +14,67 @@ class TiendaController extends Controller
     /**
      * Listar productos con filtros
      */
-    public function index(Request $request)
-    {
-        try {
-            $user = $request->user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
-            }
-
-            $query = ProductoTienda::where('id_empresa', $user->id_empresa);
-
-            // Filtros
-            if ($request->has('busqueda') && $request->busqueda) {
-                $query->where(function($q) use ($request) {
-                    $q->where('nombre', 'LIKE', "%{$request->busqueda}%")
-                      ->orWhere('descripcion', 'LIKE', "%{$request->busqueda}%")
-                      ->orWhere('categoria', 'LIKE', "%{$request->busqueda}%");
-                });
-            }
-
-            if ($request->has('categoria') && $request->categoria !== 'Todas') {
-                $query->where('categoria', $request->categoria);
-            }
-
-            if ($request->has('estado') && $request->estado !== 'Todos') {
-                $query->where('estado_producto', $request->estado); // ← CAMBIO: estado_producto
-            }
-
-            if ($request->has('solo_visibles') && $request->solo_visibles === 'true') {
-                $query->where('visible', true);
-            }
-
-            // ✅ USAR fecha_publicacion
-            $productos = $query->orderBy('fecha_publicacion', 'desc')->get();
-
-            return response()->json([
-                'success' => true,
-                'data' => $productos,
-                'total' => $productos->count()
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error en TiendaController@index: ' . $e->getMessage());
+   public function index(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al cargar productos: ' . $e->getMessage()
-            ], 500);
+                'message' => 'Usuario no autenticado'
+            ], 401);
         }
+
+        // ✅ Cargar la relación con prendas
+        $query = ProductoTienda::with('prenda')
+            ->where('id_empresa', $user->id_empresa)
+            ->whereNull('deleted_at');
+
+        // Filtro de búsqueda
+        if ($request->has('busqueda') && $request->busqueda) {
+            $query->where(function($q) use ($request) {
+                $q->where('nombre', 'LIKE', "%{$request->busqueda}%")
+                  ->orWhere('descripcion', 'LIKE', "%{$request->busqueda}%")
+                  // ✅ Buscar en 'tipo' de la tabla prendas
+                  ->orWhereHas('prenda', function($pq) use ($request) {
+                      $pq->where('tipo', 'LIKE', "%{$request->busqueda}%")
+                         ->orWhere('descripcion', 'LIKE', "%{$request->busqueda}%");
+                  });
+            });
+        }
+
+        // ✅ Filtro por categoría usando relación con prendas
+        if ($request->has('categoria') && $request->categoria !== 'Todas') {
+            $query->whereHas('prenda', function($q) use ($request) {
+                $q->where('tipo', $request->categoria);
+            });
+        }
+
+        if ($request->has('estado') && $request->estado !== 'Todos') {
+            $query->where('estado_producto', $request->estado);
+        }
+
+        if ($request->has('solo_visibles') && $request->solo_visibles === 'true') {
+            $query->where('visible', true);
+        }
+
+        $productos = $query->orderBy('fecha_publicacion', 'desc')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $productos,
+            'total' => $productos->count()
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error en TiendaController@index: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al cargar productos: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Obtener estadísticas
@@ -84,12 +93,25 @@ class TiendaController extends Controller
 
             $empresaId = $user->id_empresa;
             
-            $total = ProductoTienda::where('id_empresa', $empresaId)->count();
-            $visibles = ProductoTienda::where('id_empresa', $empresaId)->where('visible', true)->count();
-            $destacados = ProductoTienda::where('id_empresa', $empresaId)->where('destacado', true)->count();
+            // ✅ Solo contar NO eliminados
+            $total = ProductoTienda::where('id_empresa', $empresaId)
+                ->whereNull('deleted_at')
+                ->count();
+            
+            $visibles = ProductoTienda::where('id_empresa', $empresaId)
+                ->whereNull('deleted_at')
+                ->where('visible', true)
+                ->count();
+            
+            $destacados = ProductoTienda::where('id_empresa', $empresaId)
+                ->whereNull('deleted_at')
+                ->where('destacado', true)
+                ->count();
+            
             $ocultos = $total - $visibles;
             
             $valorTotal = ProductoTienda::where('id_empresa', $empresaId)
+                ->whereNull('deleted_at')
                 ->select(DB::raw('SUM(precio * stock) as total'))
                 ->value('total') ?? 0;
 
@@ -130,7 +152,7 @@ class TiendaController extends Controller
 
             $validated = $request->validate([
                 'nombre' => 'required|string|max:100',
-                'categoria' => 'required|string|max:100',
+              
                 'precio' => 'required|numeric|min:0',
                 'stock' => 'required|integer|min:0',
                 'descripcion' => 'nullable|string',
@@ -150,7 +172,7 @@ class TiendaController extends Controller
                 'precio' => $validated['precio'],
                 'stock' => $validated['stock'],
                 'descripcion' => $validated['descripcion'] ?? '',
-                'estado_producto' => $validated['estado'], // ← CAMBIO: estado_producto
+                'estado_producto' => $validated['estado'],
                 'visible' => $validated['visible'] ?? true,
                 'destacado' => $validated['destacado'] ?? false,
                 'descuento' => $validated['descuento'] ?? 0,
@@ -176,65 +198,65 @@ class TiendaController extends Controller
     /**
      * Actualizar producto
      */
-    public function update(Request $request, $id)
-    {
-        try {
-            $user = $request->user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
-            }
-
-            $producto = ProductoTienda::where('id_producto', $id)
-                ->where('id_empresa', $user->id_empresa)
-                ->firstOrFail();
-
-            $validated = $request->validate([
-                'nombre' => 'required|string|max:100',
-                'categoria' => 'required|string|max:100',
-                'precio' => 'required|numeric|min:0',
-                'stock' => 'required|integer|min:0',
-                'descripcion' => 'nullable|string',
-                'estado' => 'required|string|in:Nuevo,Como nuevo,Buen estado,Aceptable',
-                'visible' => 'boolean',
-                'destacado' => 'boolean',
-                'descuento' => 'numeric|min:0|max:100'
-            ]);
-
-            // Mapear campos
-            $producto->nombre = $validated['nombre'];
-            $producto->categoria = $validated['categoria'] ?? 'Otros';
-            $producto->precio = $validated['precio'];
-            $producto->stock = $validated['stock'];
-            $producto->descripcion = $validated['descripcion'] ?? '';
-            $producto->estado_producto = $validated['estado']; // ← CAMBIO
-            $producto->visible = $validated['visible'] ?? true;
-            $producto->destacado = $validated['destacado'] ?? false;
-            $producto->descuento = $validated['descuento'] ?? 0;
-            
-            if ($request->has('imagen')) {
-                $producto->imagen_url = $request->imagen;
-            }
-            
-            $producto->save();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Producto actualizado correctamente',
-                'data' => $producto
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error en TiendaController@update: ' . $e->getMessage());
+   public function update(Request $request, $id)
+{
+    try {
+        $user = $request->user();
+        
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar producto: ' . $e->getMessage()
-            ], 500);
+                'message' => 'Usuario no autenticado'
+            ], 401);
         }
+
+        $producto = ProductoTienda::where('id_producto', $id)
+            ->where('id_empresa', $user->id_empresa)
+            ->whereNull('deleted_at')
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'nombre' => 'required|string|max:100',
+            // ❌ ELIMINAR 'categoria' de la validación
+            'precio' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'descripcion' => 'nullable|string',
+            'estado' => 'required|string|in:Nuevo,Como nuevo,Buen estado,Aceptable',
+            'visible' => 'boolean',
+            'destacado' => 'boolean',
+            'descuento' => 'numeric|min:0|max:100'
+        ]);
+
+        // ✅ SIN categoria
+        $producto->nombre = $validated['nombre'];
+        $producto->precio = $validated['precio'];
+        $producto->stock = $validated['stock'];
+        $producto->descripcion = $validated['descripcion'] ?? '';
+        $producto->estado_producto = $validated['estado'];
+        $producto->visible = $validated['visible'] ?? true;
+        $producto->destacado = $validated['destacado'] ?? false;
+        $producto->descuento = $validated['descuento'] ?? 0;
+        
+        if ($request->has('imagen')) {
+            $producto->imagen_url = $request->imagen;
+        }
+        
+        $producto->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Producto actualizado correctamente',
+            'data' => $producto
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error en TiendaController@update: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al actualizar producto: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Cambiar visibilidad
@@ -253,6 +275,7 @@ class TiendaController extends Controller
 
             $producto = ProductoTienda::where('id_producto', $id)
                 ->where('id_empresa', $user->id_empresa)
+                ->whereNull('deleted_at') // ← Solo NO eliminados
                 ->firstOrFail();
 
             $producto->visible = !$producto->visible;
@@ -289,6 +312,7 @@ class TiendaController extends Controller
 
             $producto = ProductoTienda::where('id_producto', $id)
                 ->where('id_empresa', $user->id_empresa)
+                ->whereNull('deleted_at') // ← Solo NO eliminados
                 ->firstOrFail();
 
             $producto->destacado = !$producto->destacado;
@@ -309,7 +333,7 @@ class TiendaController extends Controller
     }
 
     /**
-     * Eliminar producto
+     * Eliminar producto (Soft Delete)
      */
     public function destroy($id)
     {
@@ -325,6 +349,7 @@ class TiendaController extends Controller
 
             $producto = ProductoTienda::where('id_producto', $id)
                 ->where('id_empresa', $user->id_empresa)
+                ->whereNull('deleted_at')
                 ->firstOrFail();
 
             $producto->delete();
@@ -335,6 +360,7 @@ class TiendaController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Error al eliminar producto: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error al eliminar producto: ' . $e->getMessage()
@@ -349,7 +375,8 @@ class TiendaController extends Controller
     {
         try {
             $query = ProductoTienda::where('visible', true)
-                ->where('stock', '>', 0);
+                ->where('stock', '>', 0)
+                ->whereNull('deleted_at'); // ← Solo NO eliminados
 
             if ($request->has('categoria') && $request->categoria) {
                 $query->where('categoria', $request->categoria);
@@ -388,6 +415,7 @@ class TiendaController extends Controller
             $producto = ProductoTienda::where('id_producto', $id)
                 ->where('visible', true)
                 ->where('stock', '>', 0)
+                ->whereNull('deleted_at') // ← Solo NO eliminados
                 ->firstOrFail();
 
             return response()->json([
@@ -452,7 +480,6 @@ class TiendaController extends Controller
                 'dias_gracia' => 'required|integer|min:0|max:30'
             ]);
 
-            // Guardar en empresa
             $empresa = $user->empresa;
             if ($empresa) {
                 $empresa->dias_gracia_publicacion = $request->dias_gracia;

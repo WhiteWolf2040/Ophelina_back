@@ -4,13 +4,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes; // ← IMPORTAR AQUÍ
 
 class ProductoTienda extends Model
 {
+    use SoftDeletes; // ← AGREGAR ESTO
+
     protected $table = 'producto_tienda';
     protected $primaryKey = 'id_producto';
-    
-    // ❌ No uses timestamps (no tienes created_at/updated_at)
     public $timestamps = false;
 
     protected $fillable = [
@@ -21,11 +22,12 @@ class ProductoTienda extends Model
         'precio',
         'descuento',
         'stock',
-        'estado_producto',  // ← CAMBIO: estado_producto
+        'estado_producto',
         'visible',
         'destacado',
         'imagen_url',
-        'fecha_publicacion'
+        'fecha_publicacion',
+        'deleted_at' // ← Debe estar en fillable
     ];
 
     protected $casts = [
@@ -37,7 +39,6 @@ class ProductoTienda extends Model
         'fecha_publicacion' => 'date'
     ];
 
-    // Relaciones
     public function empresa()
     {
         return $this->belongsTo(Empresa::class, 'id_empresa');
@@ -48,7 +49,6 @@ class ProductoTienda extends Model
         return $this->belongsTo(Prenda::class, 'id_prenda');
     }
 
-    // Scopes
     public function scopeVisible($query)
     {
         return $query->where('visible', true);
@@ -59,7 +59,6 @@ class ProductoTienda extends Model
         return $query->where('stock', '>', 0);
     }
 
-    // Accesor
     public function getEstadoAttribute()
     {
         return $this->estado_producto;
