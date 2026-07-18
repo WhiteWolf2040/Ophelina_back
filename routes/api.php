@@ -1,4 +1,5 @@
 <?php
+// routes/api.php
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -12,25 +13,33 @@ use App\Http\Controllers\API\RolController;
 use App\Http\Controllers\API\PermisoController;
 use App\Http\Controllers\API\PrecioOroController;
 use App\Http\Controllers\API\ContactController;
-use App\Http\Controllers\API\ReportesController; // ← NUEVO
-
-
-Route::post('/send-email', [ContactController::class, 'SendEmail']);
+use App\Http\Controllers\API\ReportesController;
+use App\Http\Controllers\Api\TiendaController; // ← Agregar
 
 /*
 |--------------------------------------------------------------------------
-| AUTENTICACIÓN
+| RUTAS PÚBLICAS
 |--------------------------------------------------------------------------
 */
+Route::post('/send-email', [ContactController::class, 'SendEmail']);
 
 Route::post('/login', [AuthController::class, 'login']);
+
+/*
+|--------------------------------------------------------------------------
+| RUTAS PÚBLICAS DE TIENDA (Catálogo sin autenticación)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('public')->group(function () {
+    Route::get('/productos', [TiendaController::class, 'catalogoPublico']);
+    Route::get('/productos/{id}', [TiendaController::class, 'detallePublico']);
+});
 
 /*
 |--------------------------------------------------------------------------
 | RUTAS PROTEGIDAS (requieren token)
 |--------------------------------------------------------------------------
 */
-
 Route::middleware('auth:sanctum')->group(function () {
 
     /*
@@ -59,6 +68,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/proximos', [DashboardController::class, 'proximos']);
         Route::get('/morosidad', [DashboardController::class, 'morosidad']);
         Route::get('/distribucion-categorias', [DashboardController::class, 'distribucionCategorias']);
+        
+        // Nuevas rutas de dashboard
+        Route::get('/resumen', [DashboardController::class, 'resumen']);
+        Route::get('/ventas', [DashboardController::class, 'ventas']);
+        Route::get('/reportes', [DashboardController::class, 'reportes']);
     });
 
     /*
@@ -102,22 +116,40 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
-    EMPEÑOS
+    EMPEÑOS (VERSIÓN UNIFICADA)
     ==========================
     */
     Route::prefix('empenos')->group(function () {
+        // Listados
         Route::get('/', [EmpenoController::class, 'index']);
-        Route::post('/', [EmpenoController::class, 'store']);
-        Route::get('/', [EmpenoController::class, 'getClientes']);
         Route::get('/activos-con-saldo', [EmpenoController::class, 'activosConSaldo']);
+        Route::get('/estadisticas', [EmpenoController::class, 'estadisticas']);
         Route::get('/{id}', [EmpenoController::class, 'show']);
+        
+        // Creación
+        Route::post('/', [EmpenoController::class, 'store']);
+        Route::post('/prendas', [EmpenoController::class, 'storePrenda']);
+        
+        // Acciones principales
+        Route::post('/{id}/recuperar', [EmpenoController::class, 'recuperar']);
+        Route::post('/{id}/renovar', [EmpenoController::class, 'renovar']);
+        
+        // Acciones masivas
+        Route::post('/publicar-vencidos', [EmpenoController::class, 'publicarVencidos']);
+        Route::post('/enviar-recordatorios', [EmpenoController::class, 'enviarRecordatorios']);
+        
+        // Catálogos para selects
+        Route::get('/clientes', [EmpenoController::class, 'getClientes']);
+        Route::get('/prendas-disponibles', [EmpenoController::class, 'getPrendasDisponibles']);
+        Route::get('/tasas', [EmpenoController::class, 'getTasas']);
     });
 
     /*
     ==========================
-    PRENDAS
+    PRENDAS (Rutas adicionales)
     ==========================
     */
+    // Ya están dentro del grupo de empenos, pero mantenemos estas para compatibilidad
     Route::get('/prendas/disponibles', [EmpenoController::class, 'getPrendasDisponibles']);
     Route::post('/prendas', [EmpenoController::class, 'storePrenda']);
 
@@ -127,6 +159,28 @@ Route::middleware('auth:sanctum')->group(function () {
     ==========================
     */
     Route::get('/tasas-interes', [EmpenoController::class, 'getTasasInteres']);
+
+    /*
+    ==========================
+    TIENDA ONLINE
+    ==========================
+    */
+    Route::prefix('tienda')->group(function () {
+        // Gestión de productos
+        Route::get('/productos', [TiendaController::class, 'index']);
+        Route::get('/productos/estadisticas', [TiendaController::class, 'estadisticas']);
+        Route::post('/productos', [TiendaController::class, 'store']);
+        Route::put('/productos/{id}', [TiendaController::class, 'update']);
+        Route::delete('/productos/{id}', [TiendaController::class, 'destroy']);
+        
+        // Acciones individuales
+        Route::patch('/productos/{id}/visibilidad', [TiendaController::class, 'toggleVisibilidad']);
+        Route::patch('/productos/{id}/destacado', [TiendaController::class, 'toggleDestacado']);
+        
+        // Configuración y automatización
+        Route::post('/publicacion-automatica', [TiendaController::class, 'publicacionAutomatica']);
+        Route::post('/configurar-dias-gracia', [TiendaController::class, 'configurarDiasGracia']);
+    });
 
     /*
     ==========================
@@ -164,22 +218,24 @@ Route::middleware('auth:sanctum')->group(function () {
     PRECIO DEL ORO
     ==========================
     */
-    Route::get('/precio-oro', [PrecioOroController::class, 'getPrecioActual']);
-    Route::get('/precio-oro/quilates', [PrecioOroController::class, 'getPreciosQuilates']);
-    Route::get('/precio-oro/historial', [PrecioOroController::class, 'historialPrecios']);
-    Route::post('/precio-oro/actualizar', [PrecioOroController::class, 'actualizarPrecio']);
+    Route::prefix('precio-oro')->group(function () {
+        Route::get('/', [PrecioOroController::class, 'getPrecioActual']);
+        Route::get('/quilates', [PrecioOroController::class, 'getPreciosQuilates']);
+        Route::get('/historial', [PrecioOroController::class, 'historialPrecios']);
+        Route::post('/actualizar', [PrecioOroController::class, 'actualizarPrecio']);
+    });
 
     /*
     ==========================
-    REPORTES ← NUEVO
+    REPORTES
     ==========================
     */
     Route::prefix('reportes')->group(function () {
-        Route::get('/kpis',        [ReportesController::class, 'kpis']);
-        Route::get('/empenos',     [ReportesController::class, 'empenos']);
-        Route::get('/flujo-caja',  [ReportesController::class, 'flujoCaja']);
-        Route::get('/clientes',    [ReportesController::class, 'clientes']);
-        Route::get('/inventario',  [ReportesController::class, 'inventario']);
+        Route::get('/kpis', [ReportesController::class, 'kpis']);
+        Route::get('/empenos', [ReportesController::class, 'empenos']);
+        Route::get('/flujo-caja', [ReportesController::class, 'flujoCaja']);
+        Route::get('/clientes', [ReportesController::class, 'clientes']);
+        Route::get('/inventario', [ReportesController::class, 'inventario']);
     });
 
 }); // fin auth:sanctum
