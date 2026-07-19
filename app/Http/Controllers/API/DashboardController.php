@@ -44,12 +44,18 @@ class DashboardController extends Controller
             $empenosActivos = DB::table('empeno')
                 ->where('estado', 'activo')
                 ->where('id_empresa', $idEmpresa)
+                ->where('fecha_vencimiento', '>=', now())
                 ->count();
-
-            // Empeños vencidos
+           // Empeños vencidos (reales: estado vencido O activos que ya pasaron su fecha)
             $empenosVencidos = DB::table('empeno')
-                ->where('estado', 'vencido')
                 ->where('id_empresa', $idEmpresa)
+                ->where(function($query) {
+                    $query->where('estado', 'vencido')
+                        ->orWhere(function($sub) {
+                            $sub->where('estado', 'activo')
+                                ->where('fecha_vencimiento', '<', now());
+                        });
+                })
                 ->count();
 
             // Próximos a vencer
@@ -235,70 +241,62 @@ class DashboardController extends Controller
     // ====================================
 
     public function activos(Request $request)
-    {
-        try {
-            $user = $request->user();
+{
+    try {
+        $user = $request->user();
 
-            $data = DB::table('empeno')
-                ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
-                ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
-                ->where('empeno.estado', 'activo')
-                ->where('empeno.id_empresa', $user->id_empresa)
-                ->select(
-                    'empeno.id_empeno',
-                    DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as cliente"),
-                    'prendas.descripcion as nombre',
-                    'empeno.monto_prestado as monto',
-                    'empeno.fecha_empeno as fecha'
-                )
-                ->get();
+        $data = DB::table('empeno')
+            ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
+            ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
+            ->where('empeno.estado', 'activo')
+            ->where('empeno.fecha_vencimiento', '>=', now()) // ✅ agregado
+            ->where('empeno.id_empresa', $user->id_empresa)
+            ->select(
+                'empeno.id_empeno',
+                DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as cliente"),
+                'prendas.descripcion as nombre',
+                'empeno.monto_prestado as monto',
+                'empeno.fecha_empeno as fecha'
+            )
+            ->get();
 
-            return response()->json([
-                "success" => true,
-                "data" => $data
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                "success" => false,
-                "message" => $e->getMessage()
-            ], 500);
-        }
+        return response()->json(["success" => true, "data" => $data]);
+    } catch (\Exception $e) {
+        return response()->json(["success" => false, "message" => $e->getMessage()], 500);
     }
+}
 
-    public function vencidos(Request $request)
-    {
-        try {
-            $user = $request->user();
+  public function vencidos(Request $request)
+{
+    try {
+        $user = $request->user();
 
-            $data = DB::table('empeno')
-                ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
-                ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
-                ->where('empeno.estado', 'vencido')
-                ->where('empeno.id_empresa', $user->id_empresa)
-                ->select(
-                    'empeno.id_empeno',
-                    DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as cliente"),
-                    'prendas.descripcion as nombre',
-                    'empeno.monto_prestado as monto',
-                    'empeno.fecha_vencimiento as fecha',
-                    DB::raw("EXTRACT(DAY FROM (NOW() - empeno.fecha_vencimiento)) as dias")
-                )
-                ->get();
+        $data = DB::table('empeno')
+            ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
+            ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
+            ->where('empeno.id_empresa', $user->id_empresa)
+            ->where(function($query) {                      // ✅ agregado
+                $query->where('empeno.estado', 'vencido')
+                      ->orWhere(function($sub) {
+                          $sub->where('empeno.estado', 'activo')
+                              ->where('empeno.fecha_vencimiento', '<', now());
+                      });
+            })
+            ->select(
+                'empeno.id_empeno',
+                DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as cliente"),
+                'prendas.descripcion as nombre',
+                'empeno.monto_prestado as monto',
+                'empeno.fecha_vencimiento as fecha',
+                DB::raw("EXTRACT(DAY FROM (NOW() - empeno.fecha_vencimiento)) as dias")
+            )
+            ->get();
 
-            return response()->json([
-                "success" => true,
-                "data" => $data
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                "success" => false,
-                "message" => $e->getMessage()
-            ], 500);
-        }
+        return response()->json(["success" => true, "data" => $data]);
+    } catch (\Exception $e) {
+        return response()->json(["success" => false, "message" => $e->getMessage()], 500);
     }
-
+}
     public function proximos(Request $request)
     {
         try {
