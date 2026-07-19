@@ -8,6 +8,8 @@ use App\Models\ProductoTienda;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Models\Prenda; // ← Agregar esta línea
+
 
 class TiendaController extends Controller
 {
@@ -136,65 +138,89 @@ class TiendaController extends Controller
     }
 
     /**
-     * Crear producto
-     */
-    public function store(Request $request)
-    {
-        try {
-            $user = $request->user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
-            }
+ * Crear producto (sincroniza Inventario + Tienda)
+ */
 
-            $validated = $request->validate([
-                'nombre' => 'required|string|max:100',
-              
-                'precio' => 'required|numeric|min:0',
-                'stock' => 'required|integer|min:0',
-                'descripcion' => 'nullable|string',
-                'estado' => 'required|string|in:Nuevo,Como nuevo,Buen estado,Aceptable',
-                'visible' => 'boolean',
-                'destacado' => 'boolean',
-                'descuento' => 'numeric|min:0|max:100',
-                'id_prenda' => 'nullable|exists:prendas,id_prenda',
-                'imagen' => 'nullable|string'
-            ]);
-
-            $producto = ProductoTienda::create([
-                'id_empresa' => $user->id_empresa,
-                'id_prenda' => $validated['id_prenda'] ?? null,
-                'nombre' => $validated['nombre'],
-                'categoria' => $validated['categoria'] ?? 'Otros',
-                'precio' => $validated['precio'],
-                'stock' => $validated['stock'],
-                'descripcion' => $validated['descripcion'] ?? '',
-                'estado_producto' => $validated['estado'],
-                'visible' => $validated['visible'] ?? true,
-                'destacado' => $validated['destacado'] ?? false,
-                'descuento' => $validated['descuento'] ?? 0,
-                'fecha_publicacion' => now()->format('Y-m-d'),
-                'imagen_url' => $request->imagen ?? null
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Producto creado correctamente',
-                'data' => $producto
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error en TiendaController@store: ' . $e->getMessage());
+public function store(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al crear producto: ' . $e->getMessage()
-            ], 500);
+                'message' => 'Usuario no autenticado'
+            ], 401);
         }
-    }
 
+        $validated = $request->validate([
+            'nombre' => 'required|string|max:100',
+            'categoria' => 'required|string|max:100',
+            'precio' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'descripcion' => 'nullable|string',
+            'estado' => 'required|string|in:Nuevo,Como nuevo,Buen estado,Aceptable',
+            'visible' => 'boolean',
+            'destacado' => 'boolean',
+            'descuento' => 'numeric|min:0|max:100',
+            'imagen' => 'nullable|string'
+        ]);
+
+        // ========================================
+        // 🔥 CREAR EN INVENTARIO (prendas) usando DB
+        // ========================================
+        $idPrenda = DB::table('prendas')->insertGetId([
+            'id_empresa' => $user->id_empresa,
+            'descripcion' => $validated['nombre'],
+            'tipo' => $validated['categoria'] ?? 'Otros',
+            'material' => null,
+            'peso_gramos' => null,
+            'valor_estimado' => $validated['precio'],
+            'estado' => 'Disponible',
+            'fecha_registro' => now(),
+            'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
+            'imagen_url' => $request->imagen ?? null
+        ]);
+
+        // Obtener la prenda creada
+        $prenda = Prenda::find($idPrenda);
+
+        // ========================================
+        // 🔥 CREAR EN TIENDA (producto_tienda)
+        // ========================================
+        $producto = ProductoTienda::create([
+            'id_empresa' => $user->id_empresa,
+            'id_prenda' => $prenda->id_prenda,
+            'nombre' => $prenda->descripcion,
+            'categoria' => $validated['categoria'] ?? 'Otros',
+            'precio' => $validated['precio'],
+            'stock' => $validated['stock'],
+            'descripcion' => $validated['descripcion'] ?? '',
+            'estado_producto' => $validated['estado'],
+            'visible' => $validated['visible'] ?? true,
+            'destacado' => $validated['destacado'] ?? false,
+            'descuento' => $validated['descuento'] ?? 0,
+            'fecha_publicacion' => now()->format('Y-m-d'),
+            'imagen_url' => $request->imagen ?? null
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => '✅ Producto creado en Inventario y Tienda',
+            'data' => [
+                'inventario' => $prenda,
+                'tienda' => $producto
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error en TiendaController@store: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear producto: ' . $e->getMessage()
+        ], 500);
+    }
+}
     /**
      * Actualizar producto
      */
