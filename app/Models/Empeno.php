@@ -5,15 +5,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes; // ← Agregar
 use Carbon\Carbon;
 
 class Empeno extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes; // ← Agregar SoftDeletes
 
     protected $table = 'empeno';
     protected $primaryKey = 'id_empeno';
-    public $timestamps = true; // Cambiar a true si tienes created_at/updated_at
+    public $timestamps = false; // ← Cambiar a false (no tienes created_at/updated_at)
 
     protected $fillable = [
         'id_empresa',
@@ -23,30 +24,26 @@ class Empeno extends Model
         'id_tasa',
         'folio',
         'fecha_empeno',
-        'fecha_inicio',        // Para compatibilidad
         'fecha_vencimiento',
         'fecha_recuperacion',
         'monto_prestado',
         'intereses',
-        'interes_generado',    // Para compatibilidad
         'iva_porcentaje',
-        'monto_total',
-        'estado',              // 'activo', 'pagado', 'vencido', 'recuperado'
+        'estado',
         'dias_gracia',
-        'notas'
+        'notas',
+        'deleted_at' // ← Agregar para SoftDelete
     ];
 
     protected $casts = [
         'monto_prestado' => 'decimal:2',
         'intereses' => 'decimal:2',
-        'interes_generado' => 'decimal:2',
-        'monto_total' => 'decimal:2',
         'iva_porcentaje' => 'decimal:2',
         'dias_gracia' => 'integer',
         'fecha_empeno' => 'date',
-        'fecha_inicio' => 'date',
         'fecha_vencimiento' => 'date',
-        'fecha_recuperacion' => 'date'
+        'fecha_recuperacion' => 'date',
+        'deleted_at' => 'datetime'
     ];
 
     // ==================== RELACIONES ====================
@@ -102,7 +99,8 @@ class Empeno extends Model
      */
     public function getSaldoPendienteAttribute()
     {
-        $totalPagado = $this->pagos()->sum('monto') ?? 0;
+        // ✅ Cambiar 'monto' por 'monto_total'
+        $totalPagado = $this->pagos()->sum('monto_total') ?? 0;
         return max(0, ($this->monto_prestado ?? 0) - $totalPagado);
     }
 
@@ -137,7 +135,8 @@ class Empeno extends Model
      */
     public function getMontoTotalAttribute()
     {
-        if ($this->attributes['monto_total']) {
+        // Si ya tiene monto_total en la base de datos
+        if (isset($this->attributes['monto_total']) && $this->attributes['monto_total']) {
             return $this->attributes['monto_total'];
         }
         
@@ -146,27 +145,13 @@ class Empeno extends Model
         return $this->monto_prestado + $interes + $iva;
     }
 
-    /**
-     * Obtiene la fecha de inicio (para compatibilidad)
-     */
-    public function getFechaInicioAttribute()
-    {
-        return $this->fecha_empeno ?? $this->attributes['fecha_inicio'] ?? null;
-    }
-
     // ==================== SCOPES ====================
 
-    /**
-     * Scope para empeños activos
-     */
     public function scopeActivos($query)
     {
         return $query->where('estado', 'activo');
     }
 
-    /**
-     * Scope para empeños vencidos
-     */
     public function scopeVencidos($query)
     {
         return $query->where(function($q) {
@@ -178,17 +163,11 @@ class Empeno extends Model
         });
     }
 
-    /**
-     * Scope para empeños por empresa
-     */
     public function scopePorEmpresa($query, $empresaId)
     {
         return $query->where('id_empresa', $empresaId);
     }
 
-    /**
-     * Scope para empeños que vencen en X días
-     */
     public function scopePorVencer($query, $dias = 3)
     {
         return $query->where('estado', 'activo')
@@ -200,16 +179,12 @@ class Empeno extends Model
 
     // ==================== MÉTODOS ====================
 
-    /**
-     * Marcar como recuperado
-     */
     public function marcarComoRecuperado()
     {
         $this->estado = 'recuperado';
         $this->fecha_recuperacion = now();
         $this->save();
         
-        // Actualizar estado de la prenda
         if ($this->prenda) {
             $this->prenda->estado = 'Disponible';
             $this->prenda->save();
@@ -218,9 +193,6 @@ class Empeno extends Model
         return $this;
     }
 
-    /**
-     * Marcar como vencido
-     */
     public function marcarComoVencido()
     {
         $this->estado = 'vencido';
@@ -228,22 +200,15 @@ class Empeno extends Model
         return $this;
     }
 
-    /**
-     * Renovar empeño (pagar solo intereses)
-     */
     public function renovar($dias = 30)
     {
         $nuevaFecha = Carbon::parse($this->fecha_vencimiento)->addDays($dias);
         $this->fecha_vencimiento = $nuevaFecha;
         $this->estado = 'activo';
         $this->save();
-        
         return $this;
     }
 
-    /**
-     * Verificar y actualizar estado automáticamente
-     */
     public function actualizarEstado()
     {
         if ($this->estado !== 'activo') return $this;
