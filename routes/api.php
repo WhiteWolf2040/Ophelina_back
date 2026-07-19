@@ -200,6 +200,18 @@ Route::middleware('auth:sanctum')->group(function () {
         });
     }); 
 
+   /*      ==========================
+    INVENTARIO (PRENDAS) - NUEVO
+    ==========================
+    */ 
+    Route::prefix('prendas')->group(function () {
+        Route::get('/', [PrendaController::class, 'index']);          // Listar todas
+        Route::get('/{id}', [PrendaController::class, 'show']);       // Ver una
+        Route::put('/{id}', [PrendaController::class, 'update']);     // Editar
+        Route::delete('/{id}', [PrendaController::class, 'destroy']); // Eliminar
+    });
+
+
  
   /*   ==========================
     ROLES (Solo plan Premium - id_plan=4)

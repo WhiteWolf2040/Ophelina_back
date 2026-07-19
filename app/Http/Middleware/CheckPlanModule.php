@@ -15,10 +15,10 @@ class CheckPlanModule
             'home', 'clientes', 'empenos'
         ],
         2=> [  // Profesional
-            'home', 'clientes', 'pagos', 'empenos', 'configuracion'
+            'home', 'clientes', 'pagos', 'empenos', 'configuracion','reportes','inventario','roles', 'permisos'
         ],
         3=> [  // Empresarial (Premium)
-            'home', 'clientes', 'pagos', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion'
+            'home', 'clientes', 'pagos', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion', 'inventario'
         ]
     ];
 
