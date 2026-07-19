@@ -16,46 +16,65 @@ class PagoController extends Controller
     /**
      * Obtener todos los pagos (FILTRADOS POR EMPRESA)
      */
-    public function index(Request $request)
-    {
-        try {
-            $user = $request->user();
-            
-            $pagos = Pago::whereHas('empeno', function($query) use ($user) {
-                    $query->where('id_empresa', $user->id_empresa);
-                })
-                ->with('empeno.cliente', 'empeno.prenda', 'amortizacion')
-                ->orderBy('fecha_pago', 'desc')
-                ->get()
-                ->map(function ($pago) {
-                    return [
-                        'id' => $pago->id_pago,
-                        'cliente' => $pago->empeno->cliente->nombre . ' ' . $pago->empeno->cliente->apellido,
-                        'articulo' => $pago->empeno->prenda->descripcion ?? 'Sin artículo',
-                        'monto' => number_format($pago->monto_total ?? 0, 2),
-                        'tipo' => ucfirst($pago->tipo_pago ?? 'Pago'),
-                        'fecha' => date('d/m/Y', strtotime($pago->fecha_pago)),
-                        'metodo' => $pago->metodo_pago ?? 'Efectivo',
-                        'id_empeno' => $pago->id_empeno,
-                        'capital' => $pago->capital_pagado,
-                        'interes' => $pago->interes_pagado,
-                        'iva' => $pago->iva_pagado,
-                        'numero_pago' => $pago->amortizacion->numero_pago ?? null
-                    ];
-                });
+  public function index(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        $pagos = Pago::whereHas('empeno', function($query) use ($user) {
+                $query->where('id_empresa', $user->id_empresa);
+            })
+            ->with(['empeno.cliente', 'empeno.prenda', 'amortizacion'])
+            ->orderBy('fecha_pago', 'desc')
+            ->get()
+            ->map(function ($pago) {
+                // 🔥 MANEJAR RELACIONES NULAS
+                $clienteNombre = 'Cliente no disponible';
+                if ($pago->empeno && $pago->empeno->cliente) {
+                    $clienteNombre = $pago->empeno->cliente->nombre . ' ' . $pago->empeno->cliente->apellido;
+                }
+                
+                $articulo = 'Sin artículo';
+                if ($pago->empeno && $pago->empeno->prenda) {
+                    $articulo = $pago->empeno->prenda->descripcion ?? 'Sin artículo';
+                }
+                
+                $numeroPago = null;
+                if ($pago->amortizacion) {
+                    $numeroPago = $pago->amortizacion->numero_pago ?? null;
+                }
+                
+                return [
+                    'id' => $pago->id_pago,
+                    'cliente' => $clienteNombre,
+                    'articulo' => $articulo,
+                    'monto' => number_format($pago->monto_total ?? 0, 2),
+                    'tipo' => ucfirst($pago->tipo_pago ?? 'Pago'),
+                    'fecha' => $pago->fecha_pago ? date('d/m/Y', strtotime($pago->fecha_pago)) : null,
+                    'metodo' => $pago->metodo_pago ?? 'Efectivo',
+                    'id_empeno' => $pago->id_empeno,
+                    'capital' => $pago->capital_pagado,
+                    'interes' => $pago->interes_pagado,
+                    'iva' => $pago->iva_pagado,
+                    'numero_pago' => $numeroPago
+                ];
+            });
 
-            return response()->json([
-                'success' => true,
-                'data' => $pagos
-            ]);
+        return response()->json([
+            'success' => true,
+            'data' => $pagos
+        ]);
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al obtener pagos: ' . $e->getMessage()
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        \Log::error('Error en PagoController@index: ' . $e->getMessage());
+        \Log::error('Stack trace: ' . $e->getTraceAsString());
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al obtener pagos: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Obtener un pago específico

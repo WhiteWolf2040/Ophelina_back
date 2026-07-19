@@ -23,7 +23,8 @@ class Pago extends Model
         'metodo_pago',
         'referencia',
         'comprobante',
-        'fecha_registro'
+        'fecha_registro',
+          'deleted_at'
     ];
 
     protected $casts = [
