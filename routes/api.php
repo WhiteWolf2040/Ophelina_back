@@ -100,6 +100,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [EmpenoController::class, 'index'])->middleware('check.permission:ver_empenos');
         Route::post('/', [EmpenoController::class, 'store'])->middleware('check.permission:crear_empenos');
         Route::get('/activos-con-saldo', [EmpenoController::class, 'activosConSaldo']);
+        Route::get('/empenos/todos', [EmpenoController::class, 'todos']);
+          Route::post('/empenos/actualizar-estados', [EmpenoController::class, 'actualizarEstados']);
         Route::get('/{id}', [EmpenoController::class, 'show'])->middleware('check.permission:ver_empenos');
     });
 

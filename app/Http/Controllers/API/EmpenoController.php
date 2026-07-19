@@ -384,6 +384,91 @@ public function getTasasInteres(Request $request)
     }
 }
 
+/**
+ * Obtener todos los empeños (incluyendo vencidos)
+ * GET /api/empenos/todos
+ */
+public function todos(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        $empenos = Empeno::where('id_empresa', $user->id_empresa)
+            ->with(['cliente', 'prenda'])
+            ->orderBy('fecha_empeno', 'desc')
+            ->get();
+        
+        $resultados = [];
+        
+        foreach ($empenos as $empeno) {
+            $totalPagado = DB::table('pagos')
+                ->where('id_empeno', $empeno->id_empeno)
+                ->sum('monto_total') ?? 0;
+            
+            $saldoTotalPendiente = max(0, ($empeno->monto_prestado ?? 0) - $totalPagado);
+            
+            // 🔥 USAR ACCESSORS del modelo
+            $estadoReal = $empeno->estado_real;      // Usa el accessor
+            $diasVencidos = $empeno->dias_vencidos;  // Usa el accessor
+            
+            $resultados[] = [
+                'id_empeno' => $empeno->id_empeno,
+                'cliente' => $empeno->cliente ? $empeno->cliente->nombre . ' ' . $empeno->cliente->apellido : 'Cliente no disponible',
+                'articulo' => $empeno->prenda ? $empeno->prenda->descripcion : 'Sin artículo',
+                'monto_prestado' => floatval($empeno->monto_prestado ?? 0),
+                'total_pagado' => floatval($totalPagado),
+                'saldo_total_pendiente' => floatval($saldoTotalPendiente),
+                'fecha_empeno' => $empeno->fecha_empeno,
+                'fecha_vencimiento' => $empeno->fecha_vencimiento,
+                'estado' => $estadoReal,        //  Estado real calculado
+                'dias_vencidos' => $diasVencidos, //  Días vencidos calculados
+                'intereses' => floatval($empeno->intereses ?? 0),
+                'estado_texto' => $empeno->estado_texto,  //  Texto formateado
+                'estado_color' => $empeno->estado_color   //  Color para el frontend
+            ];
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => $resultados
+        ]);
+        
+    } catch (\Exception $e) {
+        Log::error('Error en todos empeños: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Actualizar empeños vencidos en la base de datos
+ * POST /api/empenos/actualizar-estados
+ */
+public function actualizarEstados(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        $actualizados = Empeno::where('id_empresa', $user->id_empresa)
+            ->where('estado', 'activo')
+            ->where('fecha_vencimiento', '<', now())
+            ->update(['estado' => 'vencido']);
+        
+        return response()->json([
+            'success' => true,
+            'message' => "Se actualizaron {$actualizados} empeños a vencidos",
+            'data' => ['actualizados' => $actualizados]
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
 /* public function enviarRecordatoriosVencimiento(Request $request)
 {
     $whatsapp = new WhatsAppService();
