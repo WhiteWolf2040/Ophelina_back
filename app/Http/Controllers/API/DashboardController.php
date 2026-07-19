@@ -40,23 +40,24 @@ class DashboardController extends Controller
                 ->whereMonth('pagos.fecha_pago', now()->month)
                 ->sum('pagos.monto_total');
 
-            // Empeños activos
-            $empenosActivos = DB::table('empeno')
-                ->where('estado', 'activo')
-                ->where('id_empresa', $idEmpresa)
-                ->where('fecha_vencimiento', '>=', now())
-                ->count();
-           // Empeños vencidos (reales: estado vencido O activos que ya pasaron su fecha)
-            $empenosVencidos = DB::table('empeno')
-                ->where('id_empresa', $idEmpresa)
-                ->where(function($query) {
-                    $query->where('estado', 'vencido')
-                        ->orWhere(function($sub) {
-                            $sub->where('estado', 'activo')
-                                ->where('fecha_vencimiento', '<', now());
-                        });
-                })
-                ->count();
+       $hoy = now()->toDateString(); // "2026-07-19"
+
+                $empenosActivos = DB::table('empeno')
+                    ->where('estado', 'activo')
+                    ->where('id_empresa', $idEmpresa)
+                    ->whereDate('fecha_vencimiento', '>=', $hoy)
+                    ->count();
+
+                $empenosVencidos = DB::table('empeno')
+                    ->where('id_empresa', $idEmpresa)
+                    ->where(function($query) use ($hoy) {
+                        $query->where('estado', 'vencido')
+                            ->orWhere(function($sub) use ($hoy) {
+                                $sub->where('estado', 'activo')
+                                    ->whereDate('fecha_vencimiento', '<', $hoy);
+                            });
+                    })
+                    ->count();
 
             // Próximos a vencer
             $proximosVencer = DB::table('empeno')

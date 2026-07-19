@@ -16,6 +16,7 @@ use App\Http\Controllers\API\ContactController;
 use App\Http\Controllers\API\TiendaController;
 use App\Http\Controllers\API\ReportesController;
 use App\Http\Controllers\API\ConfiguracionController;
+use App\Http\Controllers\Api\PrendaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,6 +34,11 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::prefix('stripe')->group(function () {
     Route::post('/create-checkout-session', [StripeController::class, 'createCheckoutSession']);
     Route::post('/activate-free-plan', [StripeController::class, 'activateFreePlan']);
+});
+
+Route::prefix('public')->group(function () {
+    Route::get('/productos', [TiendaController::class, 'catalogoPublico']);
+    Route::get('/productos/{id}', [TiendaController::class, 'detallePublico']);
 });
 
 /*
@@ -103,7 +109,15 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('/todos', [EmpenoController::class, 'todos']);              // ✅ corregido
                 Route::post('/actualizar-estados', [EmpenoController::class, 'actualizarEstados']); // ✅ corregido
                 Route::get('/{id}', [EmpenoController::class, 'show'])->middleware('check.permission:ver_empenos');
+
+                                //  Agregadas (métodos que ya tienes en el controller)
+                Route::get('/clientes', [EmpenoController::class, 'getClientes']);
+                Route::get('/prendas-disponibles', [EmpenoController::class, 'getPrendasDisponibles']);
+                Route::get('/tasas', [EmpenoController::class, 'getTasasInteres']);
+                /* Route::post('/enviar-recordatorios', [EmpenoController::class, 'enviarRecordatoriosVencimiento']); */ //  ojo con el nombre
             });
+
+            
 
     /*
     ==========================
@@ -167,30 +181,30 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/inventario', [ReportesController::class, 'inventario']);
     });
 
-    /*
-    ==========================
+  
+   /*  ==========================
     TIENDA EN LÍNEA (Solo plan Premium - id_plan=4)
-    ==========================
-    */
-    /* Route::middleware(['check.plan:tienda'])->group(function () {
-        Route::prefix('tienda')->group(function () {
-            Route::get('/', [TiendaController::class, 'index']);
-            Route::get('/productos', [TiendaController::class, 'getProductos']);
-            Route::get('/productos/{id}', [TiendaController::class, 'show']);
+    ========================== */
+  
+      Route::middleware(['check.plan:tienda'])->group(function () {
+            Route::prefix('tienda')->group(function () {
+            Route::get('/productos', [TiendaController::class, 'index']);
+            Route::get('/productos/estadisticas', [TiendaController::class, 'estadisticas']);
             Route::post('/productos', [TiendaController::class, 'store']);
             Route::put('/productos/{id}', [TiendaController::class, 'update']);
             Route::delete('/productos/{id}', [TiendaController::class, 'destroy']);
-            Route::post('/apartados', [TiendaController::class, 'apartar']);
-            Route::get('/apartados', [TiendaController::class, 'getApartados']);
-            Route::get('/ventas', [TiendaController::class, 'getVentas']);
+            Route::patch('/productos/{id}/visibilidad', [TiendaController::class, 'toggleVisibilidad']);
+            Route::patch('/productos/{id}/destacado', [TiendaController::class, 'toggleDestacado']);
+            Route::post('/publicacion-automatica', [TiendaController::class, 'publicacionAutomatica']);
+            Route::post('/configurar-dias-gracia', [TiendaController::class, 'configurarDiasGracia']);
         });
-    }); */
+    }); 
 
-    /*
-    ==========================
+ 
+  /*   ==========================
     ROLES (Solo plan Premium - id_plan=4)
-    ==========================
-    */
+    ========================== */
+
     Route::middleware(['check.plan:roles'])->group(function () {
         Route::prefix('roles')->group(function () {
             Route::get('/', [RolController::class, 'index']);

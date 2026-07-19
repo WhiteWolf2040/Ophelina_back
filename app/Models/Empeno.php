@@ -3,10 +3,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Carbon\Carbon;
 
 class Empeno extends Model
 {
+    use HasFactory, SoftDeletes;
+
     protected $table = 'empeno';
     protected $primaryKey = 'id_empeno';
     public $timestamps = false;
@@ -22,64 +27,78 @@ class Empeno extends Model
         'intereses',
         'iva_porcentaje',
         'fecha_vencimiento',
+        'fecha_recuperacion',
+        'dias_gracia',
+        'notas',
         'estado',
-        'folio'
+        'folio',
+        'deleted_at'
     ];
 
     protected $casts = [
         'monto_prestado' => 'decimal:2',
         'intereses' => 'decimal:2',
+        'iva_porcentaje' => 'decimal:2',
+        'dias_gracia' => 'integer',
         'fecha_empeno' => 'date',
-        'fecha_vencimiento' => 'date'
+        'fecha_vencimiento' => 'date',
+        'fecha_recuperacion' => 'date',
+        'deleted_at' => 'datetime'
     ];
 
     // ============================================
-    //  NUEVO: Atributos virtuales (Accessors)
+    // ACCESSORS
     // ============================================
-    
+
     /**
      * Obtener el estado real del empeño (calculado en tiempo real)
+     * Compara solo por día (Y-m-d) para evitar problemas de timezone/hora
      */
-    // En el modelo Empeno.php
-        public function getEstadoRealAttribute()
-        {
-            // Si ya está en tienda, pagado o cancelado, mantener ese estado
-            if (in_array($this->estado, ['en_tienda', 'pagado', 'cancelado'])) {
-                return $this->estado;
-            }
-            
-            // Si está activo y pasó la fecha de vencimiento
-            if ($this->estado === 'activo' && $this->fecha_vencimiento < now()) {
-                // Podría ser 'vencido' pero la prenda aún está en la casa
-                return 'vencido';
-            }
-            
+    public function getEstadoRealAttribute()
+    {
+        if (in_array($this->estado, ['en_tienda', 'pagado', 'cancelado'])) {
             return $this->estado;
         }
-    
+
+        if ($this->estado === 'activo' && $this->fecha_vencimiento->format('Y-m-d') < now()->format('Y-m-d')) {
+            return 'vencido';
+        }
+
+        return $this->estado;
+    }
+
     /**
-     * Obtener los días vencidos
+     * Obtener los días vencidos (comparación por día)
      */
     public function getDiasVencidosAttribute()
     {
         if (!$this->fecha_vencimiento) {
             return 0;
         }
-        
-        if ($this->fecha_vencimiento < now()) {
-            return max(0, now()->diffInDays($this->fecha_vencimiento, false));
+
+        if ($this->fecha_vencimiento->format('Y-m-d') < now()->format('Y-m-d')) {
+            return max(0, now()->startOfDay()->diffInDays($this->fecha_vencimiento->startOfDay(), false) * -1);
         }
-        
+
         return 0;
     }
-    
+
+    /**
+     * Obtener los días de retraso (alias más simple, usado por tu compañera)
+     */
+    public function getDiasRetrasoAttribute()
+    {
+        if (!$this->esta_vencido) return 0;
+        return now()->startOfDay()->diffInDays($this->fecha_vencimiento->startOfDay());
+    }
+
     /**
      * Obtener el estado para mostrar (formateado)
      */
     public function getEstadoTextoAttribute()
     {
         $estadoReal = $this->estado_real;
-        
+
         return match($estadoReal) {
             'activo' => 'Activo',
             'vencido' => 'Vencido',
@@ -89,14 +108,14 @@ class Empeno extends Model
             default => ucfirst($estadoReal)
         };
     }
-    
+
     /**
      * Obtener el color del estado para el frontend
      */
     public function getEstadoColorAttribute()
     {
         $estadoReal = $this->estado_real;
-        
+
         return match($estadoReal) {
             'activo' => 'success',
             'vencido' => 'danger',
@@ -107,45 +126,92 @@ class Empeno extends Model
         };
     }
 
-    // ============================================
-    // 🔥 NUEVO: Scopes para consultas
-    // ============================================
-    
     /**
-     * Scope para empeños vencidos (reales)
+     * Calcula el saldo pendiente del empeño
      */
-    public function scopeVencidos($query)
+    public function getSaldoPendienteAttribute()
     {
-        return $query->where(function($q) {
-            $q->where('estado', 'vencido')
-              ->orWhere(function($sub) {
-                  $sub->where('estado', 'activo')
-                      ->where('fecha_vencimiento', '<', now());
-              });
-        });
+        $totalPagado = $this->pagos()->sum('monto_total') ?? 0;
+        return max(0, ($this->monto_prestado ?? 0) - $totalPagado);
     }
-    
+
     /**
-     * Scope para empeños activos reales (no vencidos)
+     * Verifica si el empeño está activo
      */
-    public function scopeActivosReales($query)
+    public function getEstaActivoAttribute()
     {
-        return $query->where('estado', 'activo')
-            ->where('fecha_vencimiento', '>=', now());
+        return $this->estado === 'activo';
     }
-    
+
     /**
-     * Scope para empeños activos (incluyendo los que están vencidos pero no actualizados)
+     * Verifica si el empeño está vencido (comparación por día)
      */
+    public function getEstaVencidoAttribute()
+    {
+        return $this->estado === 'vencido' ||
+               ($this->estado === 'activo' && $this->fecha_vencimiento->format('Y-m-d') < now()->format('Y-m-d'));
+    }
+
+    /**
+     * Obtiene el monto total con intereses (de tu compañera)
+     */
+    public function getMontoTotalAttribute()
+    {
+        if (isset($this->attributes['monto_total']) && $this->attributes['monto_total']) {
+            return $this->attributes['monto_total'];
+        }
+
+        $interes = $this->monto_prestado * ($this->intereses / 100);
+        $iva = $interes * ($this->iva_porcentaje / 100);
+        return $this->monto_prestado + $interes + $iva;
+    }
+
+    // ============================================
+    // SCOPES (comparación por día, consistente con el resto)
+    // ============================================
+
     public function scopeActivos($query)
     {
         return $query->where('estado', 'activo');
     }
 
+    public function scopeVencidos($query)
+    {
+        $hoy = now()->toDateString();
+
+        return $query->where(function($q) use ($hoy) {
+            $q->where('estado', 'vencido')
+              ->orWhere(function($sub) use ($hoy) {
+                  $sub->where('estado', 'activo')
+                      ->whereDate('fecha_vencimiento', '<', $hoy);
+              });
+        });
+    }
+
+    public function scopeActivosReales($query)
+    {
+        return $query->where('estado', 'activo')
+            ->whereDate('fecha_vencimiento', '>=', now()->toDateString());
+    }
+
+    public function scopePorEmpresa($query, $empresaId)
+    {
+        return $query->where('id_empresa', $empresaId);
+    }
+
+    public function scopePorVencer($query, $dias = 3)
+    {
+        return $query->where('estado', 'activo')
+                     ->whereBetween('fecha_vencimiento', [
+                         now()->toDateString(),
+                         now()->addDays($dias)->toDateString()
+                     ]);
+    }
+
     // ============================================
-    // RELACIONES (YA LAS TIENES)
+    // RELACIONES
     // ============================================
-    
+
     public function cliente()
     {
         return $this->belongsTo(Cliente::class, 'id_cliente');
@@ -182,28 +248,57 @@ class Empeno extends Model
     }
 
     /**
-     * Calcula el saldo pendiente del empeño.
+     * Producto de tienda asociado (para publicación automática) - de tu compañera
      */
-    public function getSaldoPendienteAttribute()
+    public function producto()
     {
-        $totalPagado = $this->pagos()->sum('monto_total') ?? 0;
-        return $this->monto_prestado - $totalPagado;
+        return $this->hasOne(ProductoTienda::class, 'id_prenda', 'id_prenda')
+                    ->where('id_empresa', $this->id_empresa);
     }
 
-    /**
-     * Verifica si el empeño está activo.
-     */
-    public function getEstaActivoAttribute()
+    // ============================================
+    // MÉTODOS (de tu compañera)
+    // ============================================
+
+    public function marcarComoRecuperado()
     {
-        return $this->estado === 'activo';
+        $this->estado = 'recuperado';
+        $this->fecha_recuperacion = now();
+        $this->save();
+
+        if ($this->prenda) {
+            $this->prenda->estado = 'Disponible';
+            $this->prenda->save();
+        }
+
+        return $this;
     }
 
-    /**
-     * Verifica si el empeño está vencido.
-     */
-    public function getEstaVencidoAttribute()
+    public function marcarComoVencido()
     {
-        return $this->estado === 'vencido' || 
-               ($this->estado === 'activo' && $this->fecha_vencimiento < now());
+        $this->estado = 'vencido';
+        $this->save();
+        return $this;
+    }
+
+    public function renovar($dias = 30)
+    {
+        $nuevaFecha = Carbon::parse($this->fecha_vencimiento)->addDays($dias);
+        $this->fecha_vencimiento = $nuevaFecha;
+        $this->estado = 'activo';
+        $this->save();
+        return $this;
+    }
+
+    public function actualizarEstado()
+    {
+        if ($this->estado !== 'activo') return $this;
+
+        if ($this->fecha_vencimiento->format('Y-m-d') < now()->format('Y-m-d')) {
+            $this->estado = 'vencido';
+            $this->save();
+        }
+
+        return $this;
     }
 }
