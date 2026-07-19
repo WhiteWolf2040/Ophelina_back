@@ -1,19 +1,19 @@
 <?php
+// app/Models/Prenda.php
 
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes; // ← Si usas soft delete
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Prenda extends Model
 {
-    use SoftDeletes; // ← Opcional
+    use SoftDeletes;
 
     protected $table = 'prendas';
     protected $primaryKey = 'id_prenda';
     public $timestamps = false;
 
-    // ✅ TODOS los campos de la tabla
     protected $fillable = [
         'id_empresa',
         'descripcion',
@@ -26,7 +26,13 @@ class Prenda extends Model
         'fecha_registro',
         'codigo_barras',
         'imagen_url',
-        'deleted_at' // ← Si usas soft delete
+        'deleted_at'
+    ];
+
+    protected $casts = [
+        'peso_gramos' => 'decimal:2',
+        'valor_estimado' => 'decimal:2',
+        'fecha_registro' => 'datetime'
     ];
 
     // Relaciones

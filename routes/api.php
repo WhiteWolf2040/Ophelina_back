@@ -185,8 +185,7 @@ Route::middleware('auth:sanctum')->group(function () {
    /*  ==========================
     TIENDA EN LÍNEA (Solo plan Premium - id_plan=4)
     ========================== */
-  
-      Route::middleware(['check.plan:tienda'])->group(function () {
+
             Route::prefix('tienda')->group(function () {
             Route::get('/productos', [TiendaController::class, 'index']);
             Route::get('/productos/estadisticas', [TiendaController::class, 'estadisticas']);
@@ -197,7 +196,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::patch('/productos/{id}/destacado', [TiendaController::class, 'toggleDestacado']);
             Route::post('/publicacion-automatica', [TiendaController::class, 'publicacionAutomatica']);
             Route::post('/configurar-dias-gracia', [TiendaController::class, 'configurarDiasGracia']);
-        });
+        
     }); 
 
    /*      ==========================

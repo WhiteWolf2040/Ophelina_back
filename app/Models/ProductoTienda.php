@@ -4,11 +4,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes; // ← IMPORTAR AQUÍ
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ProductoTienda extends Model
 {
-    use SoftDeletes; // ← AGREGAR ESTO
+    use SoftDeletes;
 
     protected $table = 'producto_tienda';
     protected $primaryKey = 'id_producto';
@@ -18,6 +18,7 @@ class ProductoTienda extends Model
         'id_empresa',
         'id_prenda',
         'nombre',
+        'categoria',           // ← NUEVO
         'descripcion',
         'precio',
         'descuento',
@@ -27,7 +28,10 @@ class ProductoTienda extends Model
         'destacado',
         'imagen_url',
         'fecha_publicacion',
-        'deleted_at' // ← Debe estar en fillable
+        'deleted_at',
+        'publicacion_automatica',      // ← NUEVO
+        'fecha_vencimiento_contrato',  // ← NUEVO
+        'id_empeno_original'           // ← NUEVO
     ];
 
     protected $casts = [
@@ -36,7 +40,8 @@ class ProductoTienda extends Model
         'stock' => 'integer',
         'visible' => 'boolean',
         'destacado' => 'boolean',
-        'fecha_publicacion' => 'date'
+        'fecha_publicacion' => 'date',
+        'publicacion_automatica' => 'boolean'
     ];
 
     public function empresa()
@@ -47,6 +52,11 @@ class ProductoTienda extends Model
     public function prenda()
     {
         return $this->belongsTo(Prenda::class, 'id_prenda');
+    }
+
+    public function empeno()
+    {
+        return $this->belongsTo(Empeno::class, 'id_empeno_original');
     }
 
     public function scopeVisible($query)
