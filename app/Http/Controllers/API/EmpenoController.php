@@ -75,81 +75,81 @@ public function show(Request $request, $id)
         ], 500);
     }
 }
-    /**
-     * Obtener empeños activos con saldo pendiente para el formulario de pagos
-     * GET /api/empenos/activos-con-saldo
-     */
-    public function activosConSaldo(Request $request)
-    {
-        try {
-            $user = $request->user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
-            }
-            
-            // Obtener empeños activos de la empresa del usuario
-            $empenos = Empeno::where('estado', 'activo')
-                ->where('id_empresa', $user->id_empresa)
-                ->with(['cliente', 'prenda'])
-                ->get();
-            
-            $resultados = [];
-            
-            foreach ($empenos as $empeno) {
-                // Calcular total pagado
-                $totalPagado = DB::table('pagos')
-                    ->where('id_empeno', $empeno->id_empeno)
-                    ->sum('monto_total') ?? 0;
-                
-                // Obtener amortización pendiente
-                $amortizacionPendiente = DB::table('amortizacion')
-                    ->where('id_empeno', $empeno->id_empeno)
-                    ->where('estado', 'pendiente')
-                    ->orderBy('numero_pago', 'asc')
-                    ->first();
-                
-                // Calcular saldo pendiente de la cuota actual
-                $saldoPendienteCuota = 0;
-                if ($amortizacionPendiente) {
-                    $saldoPendienteCuota = ($amortizacionPendiente->monto_total ?? 0) - ($amortizacionPendiente->monto_pagado ?? 0);
-                }
-                
-                // Saldo total pendiente del empeño
-                $saldoTotalPendiente = max(0, ($empeno->monto_prestado ?? 0) - $totalPagado);
-                
-                $resultados[] = [
-                    'id_empeno' => $empeno->id_empeno,
-                    'cliente' => $empeno->cliente ? $empeno->cliente->nombre . ' ' . $empeno->cliente->apellido : 'Cliente no disponible',
-                    'articulo' => $empeno->prenda ? $empeno->prenda->descripcion : 'Sin artículo',
-                    'monto_prestado' => floatval($empeno->monto_prestado ?? 0),
-                    'total_pagado' => floatval($totalPagado),
-                    'saldo_total_pendiente' => floatval($saldoTotalPendiente),
-                    'saldo_pendiente_cuota' => floatval($saldoPendienteCuota),
-                    'fecha_empeno' => $empeno->fecha_empeno,
-                    'fecha_vencimiento' => $empeno->fecha_vencimiento
-                ];
-            }
-            
-            return response()->json([
-                'success' => true,
-                'data' => $resultados
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error('Error en activosConSaldo: ' . $e->getMessage());
-            Log::error('Stack trace: ' . $e->getTraceAsString());
-            
+   /**
+ * Obtener empeños activos con saldo pendiente para el formulario de pagos
+ * GET /api/empenos/activos-con-saldo
+ */
+public function activosConSaldo(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al obtener empeños: ' . $e->getMessage()
-            ], 500);
+                'message' => 'Usuario no autenticado'
+            ], 401);
         }
+        
+        // 🔥 Obtener todos los empeños (no solo activos) y usar accessors
+        $empenos = Empeno::where('id_empresa', $user->id_empresa)
+            ->with(['cliente', 'prenda', 'pagos'])
+            ->get();
+        
+        $resultados = [];
+        
+        foreach ($empenos as $empeno) {
+            // Calcular total pagado desde la relación cargada
+            $totalPagado = $empeno->pagos->sum('monto_total') ?? 0;
+            
+            // Obtener amortización pendiente
+            $amortizacionPendiente = DB::table('amortizacion')
+                ->where('id_empeno', $empeno->id_empeno)
+                ->where('estado', 'pendiente')
+                ->orderBy('numero_pago', 'asc')
+                ->first();
+            
+            $saldoPendienteCuota = 0;
+            if ($amortizacionPendiente) {
+                $saldoPendienteCuota = ($amortizacionPendiente->monto_total ?? 0) - ($amortizacionPendiente->monto_pagado ?? 0);
+            }
+            
+            $saldoTotalPendiente = max(0, ($empeno->monto_prestado ?? 0) - $totalPagado);
+            
+            //  Usar accessors del modelo
+            $estadoReal = $empeno->estado_real;
+            $diasVencidos = $empeno->dias_vencidos;
+            
+            $resultados[] = [
+                'id_empeno' => $empeno->id_empeno,
+                'cliente' => $empeno->cliente ? $empeno->cliente->nombre . ' ' . $empeno->cliente->apellido : 'Cliente no disponible',
+                'articulo' => $empeno->prenda ? $empeno->prenda->descripcion : 'Sin artículo',
+                'monto_prestado' => floatval($empeno->monto_prestado ?? 0),
+                'total_pagado' => floatval($totalPagado),
+                'saldo_total_pendiente' => floatval($saldoTotalPendiente),
+                'saldo_pendiente_cuota' => floatval($saldoPendienteCuota),
+                'fecha_empeno' => $empeno->fecha_empeno,
+                'fecha_vencimiento' => $empeno->fecha_vencimiento,
+                'estado' => $estadoReal,
+                'dias_vencidos' => $diasVencidos
+            ];
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => $resultados
+        ]);
+        
+    } catch (\Exception $e) {
+        \Log::error('Error en activosConSaldo: ' . $e->getMessage());
+        \Log::error('Stack trace: ' . $e->getTraceAsString());
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al obtener empeños: ' . $e->getMessage()
+        ], 500);
     }
-
+}
 
 /**
  * Crear una nueva prenda rápidamente
@@ -388,28 +388,37 @@ public function getTasasInteres(Request $request)
  * Obtener todos los empeños (incluyendo vencidos)
  * GET /api/empenos/todos
  */
+/**
+ * Obtener todos los empeños (incluyendo vencidos)
+ * GET /api/empenos/todos
+ */
+/**
+ * Obtener todos los empeños (incluyendo vencidos)
+ * GET /api/empenos/todos
+ */
 public function todos(Request $request)
 {
     try {
         $user = $request->user();
         
+        // 🔥 Usar withSum para cargar el total pagado en una sola consulta
         $empenos = Empeno::where('id_empresa', $user->id_empresa)
             ->with(['cliente', 'prenda'])
+            ->withSum('pagos as total_pagado', 'monto_total')
             ->orderBy('fecha_empeno', 'desc')
             ->get();
         
         $resultados = [];
         
         foreach ($empenos as $empeno) {
-            $totalPagado = DB::table('pagos')
-                ->where('id_empeno', $empeno->id_empeno)
-                ->sum('monto_total') ?? 0;
+            // 🔥 Usar el total_pagado de la relación
+            $totalPagado = $empeno->total_pagado ?? 0;
             
             $saldoTotalPendiente = max(0, ($empeno->monto_prestado ?? 0) - $totalPagado);
             
-            // 🔥 USAR ACCESSORS del modelo
-            $estadoReal = $empeno->estado_real;      // Usa el accessor
-            $diasVencidos = $empeno->dias_vencidos;  // Usa el accessor
+            // 🔥 Usar los accessors del modelo
+            $estadoReal = $empeno->estado_real;
+            $diasVencidos = $empeno->dias_vencidos;
             
             $resultados[] = [
                 'id_empeno' => $empeno->id_empeno,
@@ -420,11 +429,9 @@ public function todos(Request $request)
                 'saldo_total_pendiente' => floatval($saldoTotalPendiente),
                 'fecha_empeno' => $empeno->fecha_empeno,
                 'fecha_vencimiento' => $empeno->fecha_vencimiento,
-                'estado' => $estadoReal,        //  Estado real calculado
-                'dias_vencidos' => $diasVencidos, //  Días vencidos calculados
-                'intereses' => floatval($empeno->intereses ?? 0),
-                'estado_texto' => $empeno->estado_texto,  //  Texto formateado
-                'estado_color' => $empeno->estado_color   //  Color para el frontend
+                'estado' => $estadoReal,
+                'dias_vencidos' => $diasVencidos,
+                'intereses' => floatval($empeno->intereses ?? 0)
             ];
         }
         
@@ -434,13 +441,15 @@ public function todos(Request $request)
         ]);
         
     } catch (\Exception $e) {
-        Log::error('Error en todos empeños: ' . $e->getMessage());
+        \Log::error('Error en todos empeños: ' . $e->getMessage());
+        \Log::error('Stack trace: ' . $e->getTraceAsString());
+        
         return response()->json([
             'success' => false,
-            'message' => $e->getMessage()
+            'message' => 'Error al obtener empeños: ' . $e->getMessage()
         ], 500);
     }
-}
+}   
 
 /**
  * Actualizar empeños vencidos en la base de datos
@@ -469,6 +478,7 @@ public function actualizarEstados(Request $request)
         ], 500);
     }
 }
+
 /* public function enviarRecordatoriosVencimiento(Request $request)
 {
     $whatsapp = new WhatsAppService();
