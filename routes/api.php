@@ -96,14 +96,14 @@ Route::middleware('auth:sanctum')->group(function () {
     EMPEÑOS (Todos los planes pueden ver)
     ==========================
     */
-    Route::prefix('empenos')->group(function () {
-        Route::get('/', [EmpenoController::class, 'index'])->middleware('check.permission:ver_empenos');
-        Route::post('/', [EmpenoController::class, 'store'])->middleware('check.permission:crear_empenos');
-        Route::get('/activos-con-saldo', [EmpenoController::class, 'activosConSaldo']);
-        Route::get('/empenos/todos', [EmpenoController::class, 'todos']);
-          Route::post('/empenos/actualizar-estados', [EmpenoController::class, 'actualizarEstados']);
-        Route::get('/{id}', [EmpenoController::class, 'show'])->middleware('check.permission:ver_empenos');
-    });
+            Route::prefix('empenos')->group(function () {
+                Route::get('/', [EmpenoController::class, 'index'])->middleware('check.permission:ver_empenos');
+                Route::post('/', [EmpenoController::class, 'store'])->middleware('check.permission:crear_empenos');
+                Route::get('/activos-con-saldo', [EmpenoController::class, 'activosConSaldo']);
+                Route::get('/todos', [EmpenoController::class, 'todos']);              // ✅ corregido
+                Route::post('/actualizar-estados', [EmpenoController::class, 'actualizarEstados']); // ✅ corregido
+                Route::get('/{id}', [EmpenoController::class, 'show'])->middleware('check.permission:ver_empenos');
+            });
 
     /*
     ==========================
