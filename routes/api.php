@@ -30,6 +30,7 @@ use App\Http\Controllers\API\OpheliaTiendaController;
 |--------------------------------------------------------------------------
 */
 Route::get('/tienda/productos', [OpheliaTiendaController::class, 'getProductos']);
+
 Route::post('/apartados/crear-sesion', [ApartadoController::class, 'crearSesion']);
 
 // Contacto
@@ -96,6 +97,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/cliente/empenos/resumen', [MisEmpenosController::class, 'getResumenMisEmpenos']);
     Route::get('/cliente/empenos/{id}', [MisEmpenosController::class, 'getMisEmpenosDetalle']);
     Route::get('/cliente/empenos', [MisEmpenosController::class, 'getMisEmpenos']);
+
+    /*
+    ==========================
+    TIENDA (cliente) - requieren saber quién es el usuario
+    ==========================
+    */
+    Route::post('/tienda/productos/{id}/apartar', [OpheliaTiendaController::class, 'apartar']);
+    Route::get('/tienda/apartados', [OpheliaTiendaController::class, 'misApartados']);
 
     /*
     ==========================

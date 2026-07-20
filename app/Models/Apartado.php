@@ -1,4 +1,5 @@
 <?php
+// app/Models/Apartado.php
 
 namespace App\Models;
 
@@ -19,16 +20,22 @@ class Apartado extends Model
         'notas',
         'monto_anticipo',
         'stripe_session_id',
-        'stripe_payment_status',
+        'stripe_payment_status'
     ];
 
-    public function producto()
-    {
-        return $this->belongsTo(ProductoTienda::class, 'id_producto', 'id_producto');
-    }
+    protected $casts = [
+        'fecha_apartado' => 'datetime',
+        'fecha_expiracion' => 'date',
+        'monto_anticipo' => 'decimal:2',
+    ];
 
     public function cliente()
     {
-        return $this->belongsTo(Cliente::class, 'id_cliente', 'id_cliente');
+        return $this->belongsTo(Cliente::class, 'id_cliente');
+    }
+
+    public function producto()
+    {
+        return $this->belongsTo(ProductoTienda::class, 'id_producto');
     }
 }

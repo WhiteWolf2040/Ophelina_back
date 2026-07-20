@@ -47,8 +47,8 @@ class MisEmpenosController extends Controller
                     'vencimiento' => $empeno->fecha_vencimiento
                         ? date('d/m/Y', strtotime($empeno->fecha_vencimiento))
                         : 'Sin fecha',
-                    'imagen' => $empeno->prenda && $empeno->prenda->imagen
-                        ? asset('storage/' . $empeno->prenda->imagen)
+                        'imagen' => $empeno->prenda && $empeno->prenda->imagen_url
+                        ? asset('storage/' . $empeno->prenda->imagen_url)
                         : 'https://via.placeholder.com/150',
                     'gramos' => $empeno->prenda && $empeno->prenda->peso_gramos
                         ? $empeno->prenda->peso_gramos . ' gramos'
