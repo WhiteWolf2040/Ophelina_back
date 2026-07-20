@@ -39,4 +39,10 @@ return [
         ],
     ],
 
+    'stripe' => [
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'anticipo_porcentaje' => env('APARTADO_ANTICIPO_PORCENTAJE', 50), // 50 = valor por default si falta en .env
+    ],
 ];

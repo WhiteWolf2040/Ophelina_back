@@ -32,14 +32,30 @@ class Usuario extends Authenticatable
         'contrasena'
     ];
 
+    // 🔥 AGREGAR: para que $user->id_cliente funcione en los controladores
+    protected $appends = [
+        'id_cliente'
+    ];
+
     public function rol()
     {
         return $this->belongsTo(Rol::class, 'id_rol');
     }
 
-    // <--- AGREGAR ESTA RELACIÓN
     public function empresa()
     {
         return $this->belongsTo(Empresa::class, 'id_empresa');
+    }
+
+    // 🔥 AGREGAR: relación hacia el registro de cliente correspondiente
+    public function cliente()
+    {
+        return $this->hasOne(Cliente::class, 'id_usuario', 'id_usuario');
+    }
+
+    // 🔥 AGREGAR: accessor para que $user->id_cliente devuelva el id_cliente real
+    public function getIdClienteAttribute()
+    {
+        return $this->cliente()->value('id_cliente');
     }
 }

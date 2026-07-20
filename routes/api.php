@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\API\MisEmpenosController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
@@ -18,6 +17,11 @@ use App\Http\Controllers\API\TiendaController;
 use App\Http\Controllers\API\ReportesController;
 use App\Http\Controllers\API\ConfiguracionController;
 use App\Http\Controllers\API\OpheliaHomeController;
+use App\Http\Controllers\API\NotificacionController;
+use App\Http\Controllers\API\MisEmpenosController;
+use App\Http\Controllers\API\ApartadoController;
+use App\Http\Controllers\API\StripeWebhookController;
+use App\Http\Controllers\API\OpheliaTiendaController;
 
 
 /*
@@ -25,9 +29,14 @@ use App\Http\Controllers\API\OpheliaHomeController;
 | RUTAS PÚBLICAS (No requieren autenticación)
 |--------------------------------------------------------------------------
 */
+Route::get('/tienda/productos', [OpheliaTiendaController::class, 'getProductos']);
+Route::post('/apartados/crear-sesion', [ApartadoController::class, 'crearSesion']);
 
 // Contacto
 Route::post('/send-email', [ContactController::class, 'SendEmail']);
+
+// Stripe jeni
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
 
 // Autenticación
 Route::post('/login', [AuthController::class, 'login']);
@@ -58,11 +67,35 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
-    USUARIO ACTUAL & LOGOUT
+    USUARIO ACTUAL, PERFIL & LOGOUT
     ==========================
     */
     Route::get('/user', [AuthController::class, 'user']);
+    Route::put('/user', [AuthController::class, 'updateProfile']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    /*
+    ==========================
+    NOTIFICACIONES
+    ==========================
+    */
+    Route::get('/notificaciones', [NotificacionController::class, 'index']);
+
+    /*
+    ==========================
+    HOME DEL CLIENTE
+    ==========================
+    */
+    Route::get('/homecliente', [OpheliaHomeController::class, 'index']);
+
+    /*
+    ==========================
+    MIS EMPEÑOS (cliente)
+    ==========================
+    */
+    Route::get('/cliente/empenos/resumen', [MisEmpenosController::class, 'getResumenMisEmpenos']);
+    Route::get('/cliente/empenos/{id}', [MisEmpenosController::class, 'getMisEmpenosDetalle']);
+    Route::get('/cliente/empenos', [MisEmpenosController::class, 'getMisEmpenos']);
 
     /*
     ==========================
@@ -222,12 +255,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::delete('/{id}', [PermisoController::class, 'destroy']);
             Route::delete('/masivo', [PermisoController::class, 'destroyMasivo']);
         });
-    });
-
-
-    Route::middleware('auth:sanctum')->group(function () {
-        // Dashboard del cliente
-        Route::get('/homecliente', [OpheliaHomeController::class, 'index']);
+        
     });
 
     /*

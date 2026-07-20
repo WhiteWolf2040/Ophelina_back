@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Usuario;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class AuthController extends Controller
 {
@@ -81,73 +82,111 @@ class AuthController extends Controller
     USUARIO ACTUAL
     ===============================
     */
-public function user(Request $request)
-{
-    $usuario = $request->user()->load(['rol', 'rol.permisos', 'empresa.plan']);
-    
-    // ✅ OBTENER PERMISOS DEL ROL
-    $permisos = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
-    
-    // ✅ OBTENER MÓDULOS ÚNICOS DE LOS PERMISOS (NO SOBREESCRIBIR)
-    $modulos = $usuario->rol ? $usuario->rol->permisos->pluck('modulo')->unique()->toArray() : [];
-    
-    // Si no hay módulos, asignar un conjunto mínimo
-    if (empty($modulos)) {
-        $modulos = ['home'];
-    }
-    
-    // Obtener información del plan
-    $planId = $usuario->empresa->id_plan ?? 1;
+    public function user(Request $request)
+    {
+        $usuario = $request->user()->load(['rol', 'rol.permisos', 'empresa.plan']);
+        
+        // ✅ OBTENER PERMISOS DEL ROL
+        $permisos = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
+        
+        // ✅ OBTENER MÓDULOS ÚNICOS DE LOS PERMISOS (NO SOBREESCRIBIR)
+        $modulos = $usuario->rol ? $usuario->rol->permisos->pluck('modulo')->unique()->toArray() : [];
+        
+        // Si no hay módulos, asignar un conjunto mínimo
+        if (empty($modulos)) {
+            $modulos = ['home'];
+        }
+        
+        // Obtener información del plan
+        $planId = $usuario->empresa->id_plan ?? 1;
 
-
-    
-    // Módulos permitidos por plan
-    $modulosPorPlan = [
-        1 => ['home', 'clientes', 'empenos'],
-        2 => ['home', 'clientes', 'pagos', 'empenos', 'configuracion'],
-        3 => ['home', 'clientes', 'pagos', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion']
-    ];
-    
-    $modulos = $modulosPorPlan[$planId] ?? $modulosPorPlan[1];
-    
-    // Obtener permisos del rol
-    $permisosDelRol = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
-    
-    // Obtener nombre del plan
-
-    $planNombre = 'Free';
-    if ($usuario->empresa && $usuario->empresa->plan) {
-        $planNombre = $usuario->empresa->plan->nombre;
-    } elseif ($planId == 2) {
-        $planNombre = 'Profesional';
-    } elseif ($planId == 3) {
-        $planNombre = 'Premium';
-    }
-    
-    return response()->json([
-        "success" => true,
-        "data" => [
-            "usuario" => [
-                "id" => $usuario->id_usuario,
-                "nombre" => $usuario->nombre,
-                "correo" => $usuario->correo,
-                "telefono" => $usuario->telefono,
-                "rol" => $usuario->rol->nombre ?? null,
-                "rol_id" => $usuario->id_rol,
-                "id_empresa" => $usuario->id_empresa,
-                "plan_id" => $planId,
-                "plan_nombre" => $planNombre,
-                "modulos" => $modulos,        //  AHORA USA LOS MÓDULOS REALES
-                "permisos" => $permisos,      //  AHORA USA LOS PERMISOS REALES
-                "empresa" => $usuario->empresa ? [
-                    "id" => $usuario->empresa->id_empresa,
-                    "nombre" => $usuario->empresa->nombre,
-                    "plan" => $planNombre
-                ] : null
+        // Módulos permitidos por plan
+        $modulosPorPlan = [
+            1 => ['home', 'clientes', 'empenos'],
+            2 => ['home', 'clientes', 'pagos', 'empenos', 'configuracion'],
+            3 => ['home', 'clientes', 'pagos', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion']
+        ];
+        
+        $modulos = $modulosPorPlan[$planId] ?? $modulosPorPlan[1];
+        
+        // Obtener permisos del rol
+        $permisosDelRol = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
+        
+        // Obtener nombre del plan
+        $planNombre = 'Free';
+        if ($usuario->empresa && $usuario->empresa->plan) {
+            $planNombre = $usuario->empresa->plan->nombre;
+        } elseif ($planId == 2) {
+            $planNombre = 'Profesional';
+        } elseif ($planId == 3) {
+            $planNombre = 'Premium';
+        }
+        
+        return response()->json([
+            "success" => true,
+            "data" => [
+                "usuario" => [
+                    "id" => $usuario->id_usuario,
+                    "nombre" => $usuario->nombre,
+                    "correo" => $usuario->correo,
+                    "telefono" => $usuario->telefono,
+                    "rol" => $usuario->rol->nombre ?? null,
+                    "rol_id" => $usuario->id_rol,
+                    "id_empresa" => $usuario->id_empresa,
+                    "plan_id" => $planId,
+                    "plan_nombre" => $planNombre,
+                    "modulos" => $modulos,        //  AHORA USA LOS MÓDULOS REALES
+                    "permisos" => $permisos,      //  AHORA USA LOS PERMISOS REALES
+                    "empresa" => $usuario->empresa ? [
+                        "id" => $usuario->empresa->id_empresa,
+                        "nombre" => $usuario->empresa->nombre,
+                        "plan" => $planNombre
+                    ] : null
+                ]
             ]
-        ]
-    ]);
-}
+        ]);
+    }
+
+    /*
+    ===============================
+    ACTUALIZAR PERFIL (solo correo y teléfono)
+    ===============================
+    */
+    public function updateProfile(Request $request)
+    {
+        $usuario = $request->user();
+
+        $request->validate([
+            'correo' => 'required|email|unique:usuario,correo,' . $usuario->id_usuario . ',id_usuario',
+            'telefono' => 'nullable|string|max:20',
+        ]);
+
+        // Actualizar tabla usuario (la que usa el login)
+        $usuario->correo = $request->correo;
+        $usuario->telefono = $request->telefono;
+        $usuario->save();
+
+        // Sincronizar con el registro de cliente vinculado, si existe
+        DB::table('clientes')
+            ->where('id_usuario', $usuario->id_usuario)
+            ->update([
+                'correo' => $request->correo,
+                'telefono' => $request->telefono,
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Perfil actualizado correctamente',
+            'data' => [
+                'usuario' => [
+                    'id' => $usuario->id_usuario,
+                    'nombre' => $usuario->nombre,
+                    'correo' => $usuario->correo,
+                    'telefono' => $usuario->telefono,
+                ]
+            ]
+        ]);
+    }
 
     /*
     ===============================
