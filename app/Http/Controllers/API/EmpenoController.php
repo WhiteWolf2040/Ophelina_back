@@ -8,6 +8,7 @@ use App\Models\Empeno;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Models\Prenda; 
 /* use App\Services\WhatsAppService;  */// ✅ Agregado de tu compañera
 use App\Models\Cliente;
 use Carbon\Carbon;
@@ -151,49 +152,50 @@ class EmpenoController extends Controller
      * Crear una nueva prenda rápidamente
      * POST /api/prendas
      */
-    public function storePrenda(Request $request)
-    {
-        try {
-            $user = $request->user();
+  /**
+ * Crear una nueva prenda rápidamente
+ * POST /api/prendas
+ */
+public function storePrenda(Request $request)
+{
+    try {
+        $user = $request->user();
 
-            $validated = $request->validate([
-                'descripcion' => 'required|string|max:255',
-                'tipo' => 'required|string',
-                'material' => 'nullable|string',
-                'peso_gramos' => 'nullable|numeric',
-                'valor_estimado' => 'required|numeric|min:1',
-            ]);
+        $validated = $request->validate([
+            'descripcion' => 'required|string|max:255',
+            'tipo' => 'required|string',
+            'material' => 'nullable|string',
+            'peso_gramos' => 'nullable|numeric',
+            'valor_estimado' => 'required|numeric|min:1',
+        ]);
 
-            $idPrenda = DB::table('prendas')->insertGetId([
-                'id_empresa' => $user->id_empresa,
-                'descripcion' => $validated['descripcion'],
-                'tipo' => $validated['tipo'],
-                'material' => $validated['material'] ?? null,
-                'peso_gramos' => $validated['peso_gramos'] ?? null,
-                'valor_estimado' => $validated['valor_estimado'],
-                'estado' => 'Disponible',
-                'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
-                'fecha_registro' => now()
-            ]);
+        // ✅ Usar el modelo Prenda (no DB::table)
+        $prenda = Prenda::create([
+            'id_empresa' => $user->id_empresa,
+            'descripcion' => $validated['descripcion'],
+            'tipo' => $validated['tipo'],
+            'material' => $validated['material'] ?? null,
+            'peso_gramos' => $validated['peso_gramos'] ?? null,
+            'valor_estimado' => $validated['valor_estimado'],
+            'estado' => 'Disponible',
+            'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
+            'fecha_registro' => now()
+        ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Prenda creada correctamente',
-                'data' => [
-                    'id_prenda' => $idPrenda,
-                    'descripcion' => $validated['descripcion'],
-                    'tipo' => $validated['tipo'],
-                    'valor_estimado' => $validated['valor_estimado']
-                ]
-            ]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Prenda creada correctamente',
+            'data' => $prenda
+        ]);
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al crear prenda: ' . $e->getMessage()
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        \Log::error('Error al crear prenda: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear prenda: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Registrar un nuevo empeño
