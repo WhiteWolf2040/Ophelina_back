@@ -8,7 +8,7 @@ use App\Models\Empeno;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use App\Models\Prenda; 
+use App\Models\Prenda;
 /* use App\Services\WhatsAppService;  */// ✅ Agregado de tu compañera
 use App\Models\Cliente;
 use Carbon\Carbon;
@@ -201,93 +201,100 @@ public function storePrenda(Request $request)
      * Registrar un nuevo empeño
      * POST /api/empenos
      */
-    public function store(Request $request)
-    {
-        try {
-            $user = $request->user();
+  /**
+ * Registrar un nuevo empeño
+ * POST /api/empenos
+ */
+public function store(Request $request)
+{
+    try {
+        $user = $request->user();
 
-            $validated = $request->validate([
-                'cliente_id' => 'required|exists:clientes,id_cliente',
-                'prenda_id' => 'required|exists:prendas,id_prenda',
-                'monto_prestado' => 'required|numeric|min:100',
-                'tasa_id' => 'required|exists:tasas_interes,id_tasa',
-                'fecha_vencimiento' => 'required|date',
-                'aval_id' => 'nullable|exists:aval,id_aval'
-            ]);
+        $validated = $request->validate([
+            'cliente_id' => 'required|exists:clientes,id_cliente',
+            'prenda_id' => 'required|exists:prendas,id_prenda',
+            'monto_prestado' => 'required|numeric|min:100',
+            'tasa_id' => 'required|exists:tasas_interes,id_tasa',
+            'fecha_vencimiento' => 'required|date',
+            'aval_id' => 'nullable|exists:aval,id_aval'
+        ]);
 
-            $tasa = DB::table('tasas_interes')->where('id_tasa', $validated['tasa_id'])->first();
+        $tasa = DB::table('tasas_interes')->where('id_tasa', $validated['tasa_id'])->first();
 
-            $interesMonto = $validated['monto_prestado'] * ($tasa->porcentaje / 100);
-            $ivaInteres = $interesMonto * 0.16;
-            $montoTotal = $validated['monto_prestado'] + $interesMonto + $ivaInteres;
+        $interesMonto = $validated['monto_prestado'] * ($tasa->porcentaje / 100);
+        $ivaInteres = $interesMonto * 0.16;
+        $montoTotal = $validated['monto_prestado'] + $interesMonto + $ivaInteres;
 
-            $folio = 'EMP-' . strtoupper(uniqid());
+        $folio = 'EMP-' . strtoupper(uniqid());
 
-            DB::beginTransaction();
+        DB::beginTransaction();
 
-            $idEmpeno = DB::table('empeno')->insertGetId([
-                'id_empresa' => $user->id_empresa,
-                'id_cliente' => $validated['cliente_id'],
-                'id_prenda' => $validated['prenda_id'],
-                'id_aval' => $validated['aval_id'] ?? null,
-                'id_tasa' => $validated['tasa_id'],
-                'fecha_empeno' => now(),
-                'monto_prestado' => $validated['monto_prestado'],
-                'intereses' => $tasa->porcentaje,
-                'iva_porcentaje' => 16.00,
-                'fecha_vencimiento' => $validated['fecha_vencimiento'],
-                'estado' => 'activo',
-                'folio' => $folio
-            ]);
+        // ✅ CORREGIDO: Especificar 'id_empeno' como llave primaria
+        $idEmpeno = DB::table('empeno')->insertGetId([
+            'id_empresa' => $user->id_empresa,
+            'id_cliente' => $validated['cliente_id'],
+            'id_prenda' => $validated['prenda_id'],
+            'id_aval' => $validated['aval_id'] ?? null,
+            'id_tasa' => $validated['tasa_id'],
+            'fecha_empeno' => now(),
+            'monto_prestado' => $validated['monto_prestado'],
+            'intereses' => $tasa->porcentaje,
+            'iva_porcentaje' => 16.00,
+            'fecha_vencimiento' => $validated['fecha_vencimiento'],
+            'estado' => 'activo',
+            'folio' => $folio
+        ], 'id_empeno');  // ← ESPECIFICAR LLAVE PRIMARIA
 
-            DB::table('prendas')
-                ->where('id_prenda', $validated['prenda_id'])
-                ->update(['estado' => 'En Empeño']);
+        DB::table('prendas')
+            ->where('id_prenda', $validated['prenda_id'])
+            ->update(['estado' => 'En Empeño']);
 
-            $idAmortizacion = DB::table('amortizacion')->insertGetId([
+        // ✅ CORREGIDO: Especificar 'id_amortizacion' como llave primaria
+        $idAmortizacion = DB::table('amortizacion')->insertGetId([
+            'id_empeno' => $idEmpeno,
+            'saldo_inicial' => $montoTotal,
+            'saldo_final' => $montoTotal,
+            'numero_pago' => 1,
+            'fecha_pago_programado' => $validated['fecha_vencimiento'],
+            'capital' => $validated['monto_prestado'],
+            'interes' => $interesMonto,
+            'iva_interes' => $ivaInteres,
+            'monto_total' => $montoTotal,
+            'monto_pagado' => 0,
+            'estado' => 'pendiente'
+        ], 'id_amortizacion');  // ← ESPECIFICAR LLAVE PRIMARIA
+
+        DB::table('movimientos_caja')->insert([
+            'tipo' => 'prestamo',
+            'monto' => $validated['monto_prestado'],
+            'descripcion' => 'Préstamo por empeño - Folio: ' . $folio,
+            'id_usuario' => $user->id_usuario,
+            'fecha' => now()
+        ]);
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Empeño registrado correctamente',
+            'data' => [
                 'id_empeno' => $idEmpeno,
-                'saldo_inicial' => $montoTotal,
-                'saldo_final' => $montoTotal,
-                'numero_pago' => 1,
-                'fecha_pago_programado' => $validated['fecha_vencimiento'],
-                'capital' => $validated['monto_prestado'],
-                'interes' => $interesMonto,
-                'iva_interes' => $ivaInteres,
-                'monto_total' => $montoTotal,
-                'monto_pagado' => 0,
-                'estado' => 'pendiente'
-            ]);
+                'folio' => $folio,
+                'monto_total' => $montoTotal
+            ]
+        ]);
 
-            DB::table('movimientos_caja')->insert([
-                'tipo' => 'prestamo',
-                'monto' => $validated['monto_prestado'],
-                'descripcion' => 'Préstamo por empeño - Folio: ' . $folio,
-                'id_usuario' => $user->id_usuario,
-                'fecha' => now()
-            ]);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error al registrar empeño: ' . $e->getMessage());
+        Log::error('Stack trace: ' . $e->getTraceAsString());
 
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Empeño registrado correctamente',
-                'data' => [
-                    'id_empeno' => $idEmpeno,
-                    'folio' => $folio,
-                    'monto_total' => $montoTotal
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error al registrar empeño: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al registrar empeño: ' . $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al registrar empeño: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Obtener clientes de la empresa
