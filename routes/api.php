@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\MisEmpenosController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
@@ -16,6 +17,8 @@ use App\Http\Controllers\API\ContactController;
 use App\Http\Controllers\API\TiendaController;
 use App\Http\Controllers\API\ReportesController;
 use App\Http\Controllers\API\ConfiguracionController;
+use App\Http\Controllers\API\OpheliaHomeController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -219,6 +222,12 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::delete('/{id}', [PermisoController::class, 'destroy']);
             Route::delete('/masivo', [PermisoController::class, 'destroyMasivo']);
         });
+    });
+
+
+    Route::middleware('auth:sanctum')->group(function () {
+        // Dashboard del cliente
+        Route::get('/homecliente', [OpheliaHomeController::class, 'index']);
     });
 
     /*
