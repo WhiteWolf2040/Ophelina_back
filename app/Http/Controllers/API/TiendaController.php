@@ -169,7 +169,7 @@ public function store(Request $request)
         // ========================================
         // 🔥 CREAR EN INVENTARIO (prendas) usando DB
         // ========================================
-        $idPrenda = DB::table('prendas')->insertGetId([
+       $idPrenda = DB::table('prendas')->insertGetId([
             'id_empresa' => $user->id_empresa,
             'descripcion' => $validated['nombre'],
             'tipo' => $validated['categoria'] ?? 'Otros',
@@ -177,10 +177,11 @@ public function store(Request $request)
             'peso_gramos' => null,
             'valor_estimado' => $validated['precio'],
             'estado' => 'Disponible',
+            'origen' => 'compra_directa',  // ← nuevo
             'fecha_registro' => now(),
             'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
             'imagen_url' => $request->imagen ?? null
-        ]);
+]);
 
         // Obtener la prenda creada
         $prenda = Prenda::find($idPrenda);

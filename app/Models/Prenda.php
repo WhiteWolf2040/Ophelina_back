@@ -26,6 +26,7 @@ class Prenda extends Model
         'fecha_registro',
         'codigo_barras',
         'imagen_url',
+        'origen' ,
         'deleted_at'
     ];
 

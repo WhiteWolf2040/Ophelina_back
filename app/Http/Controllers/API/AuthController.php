@@ -104,7 +104,7 @@ public function user(Request $request)
     // Módulos permitidos por plan
     $modulosPorPlan = [
         1 => ['home', 'clientes', 'empenos'],
-        2 => ['home', 'clientes', 'pagos', 'empenos', 'configuracion'],
+        2 => ['home', 'clientes', 'pagos', 'empenos', 'configuracion', 'roles', 'permisos', 'inventario'],
         3 => ['home', 'clientes', 'pagos','inventario', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion']
     ];
     

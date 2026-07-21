@@ -334,9 +334,10 @@ public function store(Request $request)
         try {
             $user = $request->user();
 
-            $prendas = DB::table('prendas')
+           $prendas = DB::table('prendas')
                 ->where('id_empresa', $user->id_empresa)
                 ->where('estado', 'Disponible')
+                ->where('origen', 'empeno')  // ← nuevo
                 ->select('id_prenda', 'descripcion', 'tipo', 'valor_estimado')
                 ->orderBy('descripcion')
                 ->get();
