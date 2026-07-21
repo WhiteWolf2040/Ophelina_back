@@ -16,7 +16,7 @@ use App\Http\Controllers\API\ContactController;
 use App\Http\Controllers\API\TiendaController;
 use App\Http\Controllers\API\ReportesController;
 use App\Http\Controllers\API\ConfiguracionController;
-use App\Http\Controllers\Api\PrendaController;
+use App\Http\Controllers\API\PrendaController;
 
 /*
 |--------------------------------------------------------------------------
