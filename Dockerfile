@@ -102,19 +102,18 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE CORREGIDO
+# SCRIPT DE ARRANQUE CORREGIDO - USANDO ENV VARS
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
     echo 'echo "=== 🚀 INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === VARIABLES DE ENTORNO ===' >> /usr/local/bin/start.sh && \
-    echo 'export DB_HOST="dpg-d9g5o8r7uimc73eeeo4g-a.oregon-postgres.render.com"' >> /usr/local/bin/start.sh && \
-    echo 'export DB_PORT="5432"' >> /usr/local/bin/start.sh && \
-    echo 'export DB_DATABASE="ophelia_v1_despliege_b8j9_x4a5"' >> /usr/local/bin/start.sh && \
-    echo 'export DB_USERNAME="root"' >> /usr/local/bin/start.sh && \
-    echo 'export DB_PASSWORD="cxOcrEwtsdDiKF0c26FJ7dg9fpGBeg83"' >> /usr/local/bin/start.sh && \
-    echo 'export APP_URL="https://ophelina-back-v1.onrender.com"' >> /usr/local/bin/start.sh && \
+    echo '# === VERIFICAR VARIABLES DE ENTORNO ===' >> /usr/local/bin/start.sh && \
+    echo 'if [ -z "$DB_PASSWORD" ]; then' >> /usr/local/bin/start.sh && \
+    echo '    echo "❌ ERROR: DB_PASSWORD no está definida en variables de entorno"' >> /usr/local/bin/start.sh && \
+    echo '    exit 1' >> /usr/local/bin/start.sh && \
+    echo 'fi' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Variables de entorno verificadas"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === VERIFICAR CONEXIÓN A POSTGRESQL ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== ESPERANDO BASE DE DATOS ==="' >> /usr/local/bin/start.sh && \
@@ -131,7 +130,6 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo '    exit 1' >> /usr/local/bin/start.sh && \
     echo 'fi' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === ESPERA ADICIONAL PARA ESTABILIDAD ===' >> /usr/local/bin/start.sh && \
     echo 'sleep 5' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ PostgreSQL está listo"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
@@ -160,54 +158,48 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === GENERAR APP_KEY ===' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
-    echo 'if php artisan key:generate --force; then' >> /usr/local/bin/start.sh && \
-    echo '    echo "🔑 App Key generada"' >> /usr/local/bin/start.sh && \
+    echo 'if [ -z "$APP_KEY" ]; then' >> /usr/local/bin/start.sh && \
+    echo '    php artisan key:generate --force && echo "🔑 App Key generada"' >> /usr/local/bin/start.sh && \
     echo 'else' >> /usr/local/bin/start.sh && \
-    echo '    echo "⚠️  App Key ya existe o no se pudo generar"' >> /usr/local/bin/start.sh && \
+    echo '    echo "✅ App Key ya existe"' >> /usr/local/bin/start.sh && \
     echo 'fi' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === PRUEBA DE CONEXIÓN A LA BASE DE DATOS ===' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== DEBUG: Verificando PGPASSWORD ==="' >> /usr/local/bin/start.sh && \
+echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
+echo 'echo "PGPASSWORD length: ${#PGPASSWORD}"' >> /usr/local/bin/start.sh && \
+    echo '# === PRUEBA DE CONEXIÓN ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== PRUEBA DE CONEXIÓN A LA BD ==="' >> /usr/local/bin/start.sh && \
-    echo 'export PGPASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
-    echo 'if psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_DATABASE} -c "SELECT 1" > /dev/null 2>&1; then' >> /usr/local/bin/start.sh && \
+    echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
+    echo 'if psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "SELECT 1" > /dev/null 2>&1; then' >> /usr/local/bin/start.sh && \
     echo '    echo "✅ Conexión a la base de datos exitosa"' >> /usr/local/bin/start.sh && \
     echo 'else' >> /usr/local/bin/start.sh && \
     echo '    echo "❌ ERROR: No se puede conectar a la base de datos"' >> /usr/local/bin/start.sh && \
+    echo '    echo "=== DETALLES ==="' >> /usr/local/bin/start.sh && \
+    echo '    echo "Host: ${DB_HOST}"' >> /usr/local/bin/start.sh && \
+    echo '    echo "User: ${DB_USERNAME}"' >> /usr/local/bin/start.sh && \
+    echo '    echo "Database: ${DB_DATABASE}"' >> /usr/local/bin/start.sh && \
+    echo '    psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "SELECT 1" 2>&1' >> /usr/local/bin/start.sh && \
     echo '    unset PGPASSWORD' >> /usr/local/bin/start.sh && \
     echo '    exit 1' >> /usr/local/bin/start.sh && \
     echo 'fi' >> /usr/local/bin/start.sh && \
     echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === CREAR SCHEMA PUBLIC ===' >> /usr/local/bin/start.sh && \
-    echo 'export PGPASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
+    echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
     echo 'echo "📁 Verificando/Creando schema public..."' >> /usr/local/bin/start.sh && \
-    echo 'psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_DATABASE} -c "CREATE SCHEMA IF NOT EXISTS public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
-    echo 'psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_DATABASE} -c "ALTER DATABASE ${DB_DATABASE} SET search_path TO public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
+    echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "CREATE SCHEMA IF NOT EXISTS public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
+    echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "ALTER DATABASE ${DB_DATABASE} SET search_path TO public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
     echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ Schema public listo"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === ELIMINAR ÍNDICE DUPLICADO DE AVAL ===' >> /usr/local/bin/start.sh && \
-    echo 'export PGPASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
-    echo 'echo "🗑️ Eliminando índice duplicado si existe..."' >> /usr/local/bin/start.sh && \
-    echo 'psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_DATABASE} -c "DROP INDEX IF EXISTS id_cliente;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
-    echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Índice eliminado (si existía)"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# === EJECUTAR MIGRACIONES CON LOGS DETALLADOS ===' >> /usr/local/bin/start.sh && \
+    echo '# === MIGRACIONES ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== EJECUTANDO MIGRACIONES ==="' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# Verificar estado de las migraciones' >> /usr/local/bin/start.sh && \
-    echo 'echo "📊 Verificando estado de migraciones..."' >> /usr/local/bin/start.sh && \
-    echo 'php artisan migrate:status || echo "⚠️ No se pudo verificar estado"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# Ejecutar migraciones con verbose' >> /usr/local/bin/start.sh && \
-    echo 'if php artisan migrate --force --verbose; then' >> /usr/local/bin/start.sh && \
+    echo 'if php artisan migrate --force; then' >> /usr/local/bin/start.sh && \
     echo '    echo "✅ Migraciones ejecutadas correctamente"' >> /usr/local/bin/start.sh && \
     echo 'else' >> /usr/local/bin/start.sh && \
     echo '    echo "❌ ERROR: Fallaron las migraciones"' >> /usr/local/bin/start.sh && \
-    echo '    echo "=== DETALLES DEL ERROR ==="' >> /usr/local/bin/start.sh && \
-    echo '    php artisan migrate --force --verbose 2>&1' >> /usr/local/bin/start.sh && \
+    echo '    php artisan migrate --force 2>&1' >> /usr/local/bin/start.sh && \
     echo '    exit 1' >> /usr/local/bin/start.sh && \
     echo 'fi' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
@@ -218,15 +210,11 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
     echo 'echo "⚙️ Configuración optimizada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === EJECUTAR SEEDER ===' >> /usr/local/bin/start.sh && \
+    echo '# === SEEDER ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== INSERTANDO DATOS INICIALES ==="' >> /usr/local/bin/start.sh && \
-    echo 'if php artisan db:seed --class=ImportarDatosSeeder --force; then' >> /usr/local/bin/start.sh && \
-    echo '    echo "✅ Seeder ejecutado correctamente"' >> /usr/local/bin/start.sh && \
-    echo 'else' >> /usr/local/bin/start.sh && \
-    echo '    echo "⚠️ Error al ejecutar el seeder (continuando...)"' >> /usr/local/bin/start.sh && \
-    echo 'fi' >> /usr/local/bin/start.sh && \
+    echo 'php artisan db:seed --class=ImportarDatosSeeder --force || echo "⚠️ Error en seeder (continuando...)"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === MOSTRAR CREDENCIALES ===' >> /usr/local/bin/start.sh && \
+    echo '# === CREDENCIALES ===' >> /usr/local/bin/start.sh && \
     echo 'echo "======================================"' >> /usr/local/bin/start.sh && \
     echo 'echo "🔐 CREDENCIALES DE ACCESO"' >> /usr/local/bin/start.sh && \
     echo 'echo "======================================"' >> /usr/local/bin/start.sh && \
