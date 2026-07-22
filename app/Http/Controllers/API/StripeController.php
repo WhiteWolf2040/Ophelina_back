@@ -86,11 +86,9 @@ class StripeController extends Controller
 public function verifyPayment(Request $request)
 {
     try {
-        // ✅ LOG 1: Verificar que el request llega
         Log::info('=== verifyPayment INICIO ===');
         Log::info('📥 Datos recibidos:', $request->all());
         
-        // ✅ LOG 2: Verificar session_id
         $sessionId = $request->session_id;
         if (empty($sessionId)) {
             return response()->json([
@@ -98,36 +96,86 @@ public function verifyPayment(Request $request)
                 'message' => 'session_id es requerido'
             ], 400);
         }
-        Log::info('📌 session_id: ' . $sessionId);
         
-        // ✅ LOG 3: Verificar usuario autenticado
-       $user = auth()->user(); 
+        // ✅ USAR EL GUARD 'api' CON SANCTUM
+        $user = auth()->guard('api')->user();
+        
+        // Si no funciona con 'api', intentar con 'sanctum' directamente
+        if (!$user) {
+            $user = auth()->guard('sanctum')->user();
+        }
+        
+        // Si aún no funciona, intentar manualmente con el token
+        if (!$user) {
+            $token = $request->bearerToken();
+            Log::info('🔑 Token recibido: ' . ($token ? 'SÍ' : 'NO'));
+            
+            if ($token) {
+                try {
+                    $tokenModel = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
+                    if ($tokenModel) {
+                        $user = $tokenModel->tokenable;
+                        Log::info('👤 Usuario por token Sanctum: ' . ($user ? $user->correo : 'NULL'));
+                    }
+                } catch (\Exception $e) {
+                    Log::error('❌ Error al validar token: ' . $e->getMessage());
+                }
+            }
+        }
+        
         if (!$user) {
             Log::error('❌ Usuario no autenticado');
             return response()->json([
                 'success' => false,
-                'message' => 'Usuario no autenticado'
+                'message' => 'Usuario no autenticado. Por favor, inicia sesión nuevamente.',
+                'debug' => [
+                    'has_token' => $request->bearerToken() ? 'SÍ' : 'NO',
+                    'guard_used' => 'api, sanctum, manual'
+                ]
             ], 401);
         }
-        Log::info('👤 Usuario autenticado:', ['id' => $user->id, 'email' => $user->email]);
         
-        // ✅ LOG 4: Verificar empresa
-        $empresa = $user->empresa;
+        Log::info('✅ Usuario autenticado:', [
+            'id' => $user->id_usuario,
+            'email' => $user->correo,
+            'id_empresa' => $user->id_empresa
+        ]);
+        
+        // ✅ Verificar empresa
+        $empresa = null;
+        
+        // Método 1: Relación directa
+        if (method_exists($user, 'empresa')) {
+            $empresa = $user->empresa;
+            Log::info('🏢 Empresa por relación: ' . ($empresa ? 'Encontrada' : 'NULL'));
+        }
+        
+        // Método 2: Por id_empresa del usuario
+        if (!$empresa && $user->id_empresa) {
+            $empresa = \App\Models\Empresa::where('id_empresa', $user->id_empresa)->first();
+            Log::info('🏢 Empresa por id_empresa: ' . ($empresa ? 'Encontrada' : 'NULL'));
+        }
+        
         if (!$empresa) {
             Log::error('❌ Empresa no encontrada');
             return response()->json([
                 'success' => false,
                 'message' => 'Empresa no encontrada',
-                'debug' => 'El usuario no tiene empresa asociada'
+                'debug' => [
+                    'user_id' => $user->id_usuario,
+                    'user_email' => $user->correo,
+                    'user_id_empresa' => $user->id_empresa ?? 'N/A'
+                ]
             ], 404);
         }
-        Log::info('🏢 Empresa encontrada:', [
+        
+        Log::info('✅ Empresa encontrada:', [
             'id' => $empresa->id_empresa,
             'nombre' => $empresa->nombre,
             'plan_actual' => $empresa->id_plan
         ]);
         
-        // ✅ LOG 5: Verificar STRIPE_SECRET
+        // ✅ Configurar Stripe
         $stripeSecret = env('STRIPE_SECRET');
         if (empty($stripeSecret)) {
             Log::error('❌ STRIPE_SECRET no configurada');
@@ -137,16 +185,15 @@ public function verifyPayment(Request $request)
             ], 500);
         }
         
-        // ✅ LOG 6: Recuperar sesión de Stripe
+        // ✅ Recuperar sesión de Stripe
         $stripe = new \Stripe\StripeClient($stripeSecret);
         $session = $stripe->checkout->sessions->retrieve($sessionId);
+        
         Log::info('📊 Sesión de Stripe:', [
-            'id' => $session->id,
             'payment_status' => $session->payment_status,
-            'metadata' => $session->metadata
+            'metadata' => $session->metadata->toArray() ?? []
         ]);
         
-        // ✅ LOG 7: Verificar estado del pago
         if ($session->payment_status !== 'paid') {
             return response()->json([
                 'success' => false,
@@ -155,51 +202,51 @@ public function verifyPayment(Request $request)
             ], 400);
         }
         
-        // ✅ LOG 8: Obtener plan de metadata
+        // ✅ Obtener plan
         $planId = $session->metadata->plan_id ?? 3;
         $planName = $session->metadata->plan_name ?? 'Premium';
-        Log::info('📝 Plan a actualizar:', ['plan_id' => $planId, 'plan_name' => $planName]);
         
-        // ✅ LOG 9: Actualizar empresa con TRY-CATCH específico
+        Log::info('📝 Plan a actualizar:', [
+            'plan_id' => $planId,
+            'plan_name' => $planName
+        ]);
+        
+        // ✅ Actualizar empresa
         try {
-            Log::info('🔄 Intentando actualizar empresa...');
-            
             $empresa->id_plan = $planId;
             $empresa->plan_activo = 1;
             $empresa->fecha_inicio_plan = now();
             $empresa->fecha_fin_plan = now()->addMonth();
-            
-            Log::info('📝 Datos a guardar:', [
-                'id_plan' => $empresa->id_plan,
-                'plan_activo' => $empresa->plan_activo,
-                'fecha_inicio_plan' => $empresa->fecha_inicio_plan,
-                'fecha_fin_plan' => $empresa->fecha_fin_plan
-            ]);
-            
             $empresa->save();
+            
             Log::info('✅ Empresa actualizada correctamente');
+            
+            // Verificar que se guardó
+            $verificar = \App\Models\Empresa::find($empresa->id_empresa);
+            Log::info('🔍 Verificación post-guardado:', [
+                'id_plan' => $verificar->id_plan,
+                'plan_activo' => $verificar->plan_activo,
+                'fecha_fin_plan' => $verificar->fecha_fin_plan
+            ]);
             
         } catch (\Exception $e) {
             Log::error('❌ Error al guardar empresa: ' . $e->getMessage());
-            Log::error('Trace: ' . $e->getTraceAsString());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar el plan: ' . $e->getMessage(),
-                'debug' => [
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine()
-                ]
+                'message' => 'Error al actualizar el plan: ' . $e->getMessage()
             ], 500);
         }
         
         return response()->json([
             'success' => true,
-            'message' => 'Pago verificado y plan actualizado',
+            'message' => '✅ Pago verificado y plan actualizado',
             'data' => [
                 'plan_id' => $planId,
                 'plan_nombre' => $planName,
                 'fecha_inicio' => $empresa->fecha_inicio_plan,
-                'fecha_fin' => $empresa->fecha_fin_plan
+                'fecha_fin' => $empresa->fecha_fin_plan,
+                'empresa_id' => $empresa->id_empresa,
+                'plan_activo' => $empresa->plan_activo
             ]
         ]);
         
@@ -209,14 +256,12 @@ public function verifyPayment(Request $request)
         
         return response()->json([
             'success' => false,
-            'message' => 'Error al verificar el pago: ' . $e->getMessage(),
-            'debug' => [
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]
+            'message' => 'Error al verificar el pago: ' . $e->getMessage()
         ], 500);
     }
 }
+
+
     // 3. Activar plan free
     public function activateFreePlan(Request $request)
     {

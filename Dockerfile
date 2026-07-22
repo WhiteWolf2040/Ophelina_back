@@ -102,7 +102,7 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE CORREGIDO - USANDO ENV VARS
+# SCRIPT DE ARRANQUE - SIN MIGRACIONES NI SEEDERS
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
@@ -165,8 +165,8 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'fi' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo 'echo "=== DEBUG: Verificando PGPASSWORD ==="' >> /usr/local/bin/start.sh && \
-echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
-echo 'echo "PGPASSWORD length: ${#PGPASSWORD}"' >> /usr/local/bin/start.sh && \
+    echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
+    echo 'echo "PGPASSWORD length: ${#PGPASSWORD}"' >> /usr/local/bin/start.sh && \
     echo '# === PRUEBA DE CONEXIÓN ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== PRUEBA DE CONEXIÓN A LA BD ==="' >> /usr/local/bin/start.sh && \
     echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
@@ -190,36 +190,12 @@ echo 'echo "PGPASSWORD length: ${#PGPASSWORD}"' >> /usr/local/bin/start.sh && \
     echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "CREATE SCHEMA IF NOT EXISTS public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
     echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "ALTER DATABASE ${DB_DATABASE} SET search_path TO public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
     echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
-  echo 'echo "✅ Schema public listo"' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Schema public listo"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-echo '# === ELIMINAR TODOS LOS ÍNDICES ===' >> /usr/local/bin/start.sh && \
-echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
-echo 'echo "🗑️ Eliminando todos los índices de la base de datos..."' >> /usr/local/bin/start.sh && \
-echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -t -c "' >> /usr/local/bin/start.sh && \
-echo '  SELECT indexname' >> /usr/local/bin/start.sh && \
-echo '  FROM pg_indexes' >> /usr/local/bin/start.sh && \
-echo '  WHERE schemaname = '\''public'\''' >> /usr/local/bin/start.sh && \
-echo '  AND indexname NOT LIKE '\''%pkey%'\''' >> /usr/local/bin/start.sh && \
-echo '  AND indexname NOT LIKE '\''%unique%'\''' >> /usr/local/bin/start.sh && \
-echo '" | while read idx; do' >> /usr/local/bin/start.sh && \
-echo '    if [ -n "$idx" ]; then' >> /usr/local/bin/start.sh && \
-echo '        echo "  Eliminando índice: $idx"' >> /usr/local/bin/start.sh && \
-echo '        psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "DROP INDEX IF EXISTS $idx;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
-echo '    fi' >> /usr/local/bin/start.sh && \
-echo 'done' >> /usr/local/bin/start.sh && \
-echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
-echo 'echo "✅ Todos los índices eliminados"' >> /usr/local/bin/start.sh && \
-echo '' >> /usr/local/bin/start.sh && \
-    echo '# === MIGRACIONES ===' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== EJECUTANDO MIGRACIONES ==="' >> /usr/local/bin/start.sh && \
-    echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
-    echo 'if php artisan migrate --force; then' >> /usr/local/bin/start.sh && \
-    echo '    echo "✅ Migraciones ejecutadas correctamente"' >> /usr/local/bin/start.sh && \
-    echo 'else' >> /usr/local/bin/start.sh && \
-    echo '    echo "❌ ERROR: Fallaron las migraciones"' >> /usr/local/bin/start.sh && \
-    echo '    php artisan migrate --force 2>&1' >> /usr/local/bin/start.sh && \
-    echo '    exit 1' >> /usr/local/bin/start.sh && \
-    echo 'fi' >> /usr/local/bin/start.sh && \
+    echo '# ════════════════════════════════════════════════════' >> /usr/local/bin/start.sh && \
+    echo '# ⚠️  MIGRACIONES Y SEEDERS DESHABILITADOS' >> /usr/local/bin/start.sh && \
+    echo '# ════════════════════════════════════════════════════' >> /usr/local/bin/start.sh && \
+    echo 'echo "⏭️  Migraciones y seeders deshabilitados (ya ejecutados)"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === LIMPIAR CONFIGURACIÓN ===' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
@@ -227,20 +203,6 @@ echo '' >> /usr/local/bin/start.sh && \
     echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
     echo 'echo "⚙️ Configuración optimizada"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# === SEEDER ===' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== INSERTANDO DATOS INICIALES ==="' >> /usr/local/bin/start.sh && \
-    echo 'php artisan db:seed --class=ImportarDatosSeeder --force || echo "⚠️ Error en seeder (continuando...)"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# === CREDENCIALES ===' >> /usr/local/bin/start.sh && \
-    echo 'echo "======================================"' >> /usr/local/bin/start.sh && \
-    echo 'echo "🔐 CREDENCIALES DE ACCESO"' >> /usr/local/bin/start.sh && \
-    echo 'echo "======================================"' >> /usr/local/bin/start.sh && \
-    echo 'echo "📧 juanprendas@admin.com"' >> /usr/local/bin/start.sh && \
-    echo 'echo "📧 tulaempeños@admin.com"' >> /usr/local/bin/start.sh && \
-    echo 'echo "📧 expressempeños@admin.com"' >> /usr/local/bin/start.sh && \
-    echo 'echo "🔑 password"' >> /usr/local/bin/start.sh && \
-    echo 'echo "======================================"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === INICIAR SUPERVISOR ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== 🟢 SERVIDOR LISTO ==="' >> /usr/local/bin/start.sh && \
