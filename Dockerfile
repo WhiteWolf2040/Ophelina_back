@@ -111,7 +111,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo '# === VARIABLES DE ENTORNO ===' >> /usr/local/bin/start.sh && \
     echo 'export DB_HOST="dpg-d9g5o8r7uimc73eeeo4g-a.oregon-postgres.render.com"' >> /usr/local/bin/start.sh && \
     echo 'export DB_PORT="5432"' >> /usr/local/bin/start.sh && \
-    echo 'export DB_DATABASE="ophelina_v1_despliegue_b8j9_x4a5"' >> /usr/local/bin/start.sh && \
+    echo 'export DB_DATABASE="ophelia_v1_despliege_b8j9_x4a5"' >> /usr/local/bin/start.sh && \
     echo 'export DB_USERNAME="root"' >> /usr/local/bin/start.sh && \
     echo 'export DB_PASSWORD="cxOcrEwtsdDiKF0c26FJ7dg9fpGBeg83"' >> /usr/local/bin/start.sh && \
     echo 'export APP_URL="https://ophelina-back-v1.onrender.com"' >> /usr/local/bin/start.sh && \
@@ -152,7 +152,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_DATABASE=${DB_DATABASE}' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=${DB_USERNAME}' >> /usr/local/bin/start.sh && \
     echo 'DB_PASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
-    echo 'DB_SCHEMA=public' >> /var/www/html/.env
+    echo 'DB_SCHEMA=public' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
@@ -177,6 +177,14 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo '    exit 1' >> /usr/local/bin/start.sh && \
     echo 'fi' >> /usr/local/bin/start.sh && \
     echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# === CREAR SCHEMA PUBLIC ===' >> /usr/local/bin/start.sh && \
+    echo 'export PGPASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
+    echo 'echo "📁 Verificando/Creando schema public..."' >> /usr/local/bin/start.sh && \
+    echo 'psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_DATABASE} -c "CREATE SCHEMA IF NOT EXISTS public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
+    echo 'psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_DATABASE} -c "ALTER DATABASE ${DB_DATABASE} SET search_path TO public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
+    echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Schema public listo"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === ELIMINAR ÍNDICE DUPLICADO DE AVAL ===' >> /usr/local/bin/start.sh && \
     echo 'export PGPASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
