@@ -13,62 +13,63 @@ class StripeController extends Controller
 {
     // 1. Crear sesión de checkout
     public function createCheckoutSession(Request $request)
-    {
-        try {
-            Log::info('=== createCheckoutSession INICIO ===');
-            Log::info('📥 Datos recibidos:', $request->all());
-            
-            // ✅ CONSTRUIR URL CON PARÁMETROS
-            $baseSuccessUrl = env('STRIPE_SUCCESS_URL', 'https://ophelina-front.vercel.app/home');
-            $successUrl = $baseSuccessUrl . '?session_id={CHECKOUT_SESSION_ID}&payment=success';
-            
-            $baseCancelUrl = env('STRIPE_CANCEL_URL', 'https://ophelina-front.vercel.app/planes');
-            $cancelUrl = $baseCancelUrl . '?payment=canceled';
-            
-            Log::info('📌 Success URL final: ' . $successUrl);
-            Log::info('📌 Cancel URL final: ' . $cancelUrl);
-            
-            // ✅ CONFIGURAR STRIPE
-            Stripe::setApiKey(env('STRIPE_SECRET'));
-            
-            // ✅ CREAR SESIÓN
-            $session = Session::create([
-                'payment_method_types' => ['card'],
-                'line_items' => [[
-                    'price_data' => [
-                        'currency' => 'mxn',
-                        'product_data' => [
-                            'name' => 'Ophelina - Plan ' . $request->plan_name,
-                        ],
-                        'unit_amount' => $request->price,
-                        'recurring' => ['interval' => 'month'],
+{
+    try {
+        Log::info('=== createCheckoutSession INICIO ===');
+        Log::info('📥 Datos recibidos:', $request->all());
+        
+        // ✅ CONSTRUIR URL CORRECTAMENTE
+        $baseSuccessUrl = env('STRIPE_SUCCESS_URL', 'https://ophelina-front.vercel.app/home');
+        // Stripe reemplaza {CHECKOUT_SESSION_ID} automáticamente
+        $successUrl = $baseSuccessUrl . '?session_id={CHECKOUT_SESSION_ID}&payment=success';
+        
+        $baseCancelUrl = env('STRIPE_CANCEL_URL', 'https://ophelina-front.vercel.app/planes');
+        $cancelUrl = $baseCancelUrl . '?payment=canceled';
+        
+        Log::info('📌 Success URL final: ' . $successUrl);
+        Log::info('📌 Cancel URL final: ' . $cancelUrl);
+        
+        // ✅ CONFIGURAR STRIPE
+        Stripe::setApiKey(env('STRIPE_SECRET'));
+        
+        // ✅ CREAR SESIÓN
+        $session = Session::create([
+            'payment_method_types' => ['card'],
+            'line_items' => [[
+                'price_data' => [
+                    'currency' => 'mxn',
+                    'product_data' => [
+                        'name' => 'Ophelina - Plan ' . $request->plan_name,
                     ],
-                    'quantity' => 1,
-                ]],
-                'mode' => 'subscription',
-                'success_url' => $successUrl,
-                'cancel_url' => $cancelUrl,
-                'metadata' => [
-                    'plan_id' => $request->plan_id,
-                    'plan_name' => $request->plan_name,
-                    'empresa_id' => $request->empresa_id ?? 'nueva',
+                    'unit_amount' => $request->price,
+                    'recurring' => ['interval' => 'month'],
                 ],
-                'customer_email' => $request->customer_email,
-            ]);
-            
-            Log::info('✅ Sesión creada - session_id: ' . $session->id);
-            
-            return response()->json([
-                'sessionId' => $session->id,
-                'url' => $session->url
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error('❌ Error en createCheckoutSession: ' . $e->getMessage());
-            Log::error('Trace: ' . $e->getTraceAsString());
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
+                'quantity' => 1,
+            ]],
+            'mode' => 'subscription',
+            'success_url' => $successUrl,
+            'cancel_url' => $cancelUrl,
+            'metadata' => [
+                'plan_id' => $request->plan_id,
+                'plan_name' => $request->plan_name,
+                'empresa_id' => $request->empresa_id ?? 'nueva',
+            ],
+            'customer_email' => $request->customer_email,
+        ]);
+        
+        Log::info('✅ Sesión creada - session_id: ' . $session->id);
+        
+        return response()->json([
+            'sessionId' => $session->id,
+            'url' => $session->url
+        ]);
+        
+    } catch (\Exception $e) {
+        Log::error('❌ Error en createCheckoutSession: ' . $e->getMessage());
+        Log::error('Trace: ' . $e->getTraceAsString());
+        return response()->json(['error' => $e->getMessage()], 500);
     }
+}
 
     // 2. Verificar pago
     public function verifyPayment(Request $request)
