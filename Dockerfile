@@ -152,6 +152,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_DATABASE=${DB_DATABASE}' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=${DB_USERNAME}' >> /usr/local/bin/start.sh && \
     echo 'DB_PASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
+    echo 'DB_SCHEMA=public' >> /var/www/html/.env
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
