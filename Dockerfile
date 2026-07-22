@@ -134,7 +134,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_PORT=5432' >> /usr/local/bin/start.sh && \
     echo 'DB_DATABASE=ophelina_v1_despliegue_b8j9_x4a5' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
-    echo 'DB_PASSWORD=cxOcrEwtsdDiKF0c26FJ7dg9fpGBeg83' >> /usr/local/bin/start.sh && \
+    echo 'DB_PASSWORD=cx0crEwtsdDikF0c26FJ7dg9fpGBe8g83' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
@@ -146,9 +146,11 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'echo " App Key generada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === ELIMINAR ÍNDICE DUPLICADO DE AVAL (ANTES DE LAS MIGRACIONES) ===' >> /usr/local/bin/start.sh && \
+    echo 'export PGPASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
     echo 'DB_NAME=${DB_DATABASE}' >> /usr/local/bin/start.sh && \
     echo 'echo " Eliminando índice duplicado..."' >> /usr/local/bin/start.sh && \
     echo 'psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_NAME} -c "DROP INDEX IF EXISTS id_cliente;"' >> /usr/local/bin/start.sh && \
+    echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
     echo 'echo " Índice eliminado"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === EJECUTAR MIGRACIONES ===' >> /usr/local/bin/start.sh && \
