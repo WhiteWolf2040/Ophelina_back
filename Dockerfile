@@ -109,11 +109,11 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'echo "=== 🚀 INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === VARIABLES DE ENTORNO ===' >> /usr/local/bin/start.sh && \
-    echo 'export DB_HOST="dpg-d9g50b7uimc73eeeo4g-a.oregon-postgres.render.com"' >> /usr/local/bin/start.sh && \
+    echo 'export DB_HOST="dpg-d9g5o8r7uimc73eeeo4g-a.oregon-postgres.render.com"' >> /usr/local/bin/start.sh && \
     echo 'export DB_PORT="5432"' >> /usr/local/bin/start.sh && \
-    echo 'export DB_DATABASE="ophelia_v1_despliegue_b8j9_x4a5"' >> /usr/local/bin/start.sh && \
+    echo 'export DB_DATABASE="ophelina_v1_despliegue_b8j9_x4a5"' >> /usr/local/bin/start.sh && \
     echo 'export DB_USERNAME="root"' >> /usr/local/bin/start.sh && \
-    echo 'export DB_PASSWORD="cx0crEwtsdDikF0c26FJ7dg9fpGBe8g83"' >> /usr/local/bin/start.sh && \
+    echo 'export DB_PASSWORD="cxOcrEwtsdDiKF0c26FJ7dg9fpGBeg83"' >> /usr/local/bin/start.sh && \
     echo 'export APP_URL="https://ophelina-back-v1.onrender.com"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === VERIFICAR CONEXIÓN A POSTGRESQL ===' >> /usr/local/bin/start.sh && \
