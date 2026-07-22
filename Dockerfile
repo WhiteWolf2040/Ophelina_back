@@ -102,25 +102,42 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (CON MIGRACIONES Y SEEDER)
+# SCRIPT DE ARRANQUE CORREGIDO
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
-    echo 'echo "===  INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== 🚀 INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# === VARIABLES DE ENTORNO ===' >> /usr/local/bin/start.sh && \
+    echo 'export DB_HOST="dpg-d9g50b7uimc73eeeo4g-a.oregon-postgres.render.com"' >> /usr/local/bin/start.sh && \
+    echo 'export DB_PORT="5432"' >> /usr/local/bin/start.sh && \
+    echo 'export DB_DATABASE="ophelia_v1_despliegue_b8j9_x4a5"' >> /usr/local/bin/start.sh && \
+    echo 'export DB_USERNAME="root"' >> /usr/local/bin/start.sh && \
+    echo 'export DB_PASSWORD="cx0crEwtsdDikF0c26FJ7dg9fpGBe8g83"' >> /usr/local/bin/start.sh && \
+    echo 'export APP_URL="https://ophelina-back-v1.onrender.com"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === VERIFICAR CONEXIÓN A POSTGRESQL ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== ESPERANDO BASE DE DATOS ==="' >> /usr/local/bin/start.sh && \
-    echo 'MAX_RETRIES=30' >> /usr/local/bin/start.sh && \
+    echo 'MAX_RETRIES=60' >> /usr/local/bin/start.sh && \
     echo 'RETRY_COUNT=0' >> /usr/local/bin/start.sh && \
-    echo 'until pg_isready -h dpg-d9g5o8r7uimc73eeeo4g-a.oregon-postgres.render.com -p 5432 -U root || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do' >> /usr/local/bin/start.sh && \
+    echo 'until pg_isready -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USERNAME} || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do' >> /usr/local/bin/start.sh && \
     echo '    RETRY_COUNT=$((RETRY_COUNT+1))' >> /usr/local/bin/start.sh && \
-    echo '    echo " Esperando PostgreSQL... $RETRY_COUNT/$MAX_RETRIES"' >> /usr/local/bin/start.sh && \
-    echo '    sleep 2' >> /usr/local/bin/start.sh && \
+    echo '    echo "⏳ Esperando PostgreSQL... $RETRY_COUNT/$MAX_RETRIES"' >> /usr/local/bin/start.sh && \
+    echo '    sleep 3' >> /usr/local/bin/start.sh && \
     echo 'done' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo 'if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then' >> /usr/local/bin/start.sh && \
+    echo '    echo "❌ ERROR: PostgreSQL no está listo después de $MAX_RETRIES intentos"' >> /usr/local/bin/start.sh && \
+    echo '    exit 1' >> /usr/local/bin/start.sh && \
+    echo 'fi' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# === ESPERA ADICIONAL PARA ESTABILIDAD ===' >> /usr/local/bin/start.sh && \
+    echo 'sleep 5' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ PostgreSQL está listo"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === LIMPIAR CACHÉ ===' >> /usr/local/bin/start.sh && \
     echo 'rm -rf /var/www/html/bootstrap/cache/*.php' >> /usr/local/bin/start.sh && \
-    echo 'echo " Caché limpiada"' >> /usr/local/bin/start.sh && \
+    echo 'echo "🧹 Caché limpiada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === GENERAR .env ===' >> /usr/local/bin/start.sh && \
     echo 'cat > /var/www/html/.env << "ENVEOF"' >> /usr/local/bin/start.sh && \
@@ -128,58 +145,85 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'APP_ENV=production' >> /usr/local/bin/start.sh && \
     echo 'APP_KEY=${APP_KEY}' >> /usr/local/bin/start.sh && \
     echo 'APP_DEBUG=false' >> /usr/local/bin/start.sh && \
-    echo 'APP_URL=https://ophelina-back-v1.onrender.com' >> /usr/local/bin/start.sh && \
+    echo 'APP_URL=${APP_URL}' >> /usr/local/bin/start.sh && \
     echo 'DB_CONNECTION=pgsql' >> /usr/local/bin/start.sh && \
-    echo 'DB_HOST=dpg-d9g5o8r7uimc73eeeo4g-a.oregon-postgres.render.com' >> /usr/local/bin/start.sh && \
-    echo 'DB_PORT=5432' >> /usr/local/bin/start.sh && \
-    echo 'DB_DATABASE=ophelina_v1_despliegue_b8j9_x4a5' >> /usr/local/bin/start.sh && \
-    echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
-    echo 'DB_PASSWORD=cx0crEwtsdDikF0c26FJ7dg9fpGBe8g83' >> /usr/local/bin/start.sh && \
+    echo 'DB_HOST=${DB_HOST}' >> /usr/local/bin/start.sh && \
+    echo 'DB_PORT=${DB_PORT}' >> /usr/local/bin/start.sh && \
+    echo 'DB_DATABASE=${DB_DATABASE}' >> /usr/local/bin/start.sh && \
+    echo 'DB_USERNAME=${DB_USERNAME}' >> /usr/local/bin/start.sh && \
+    echo 'DB_PASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
-    echo 'echo " .env generado"' >> /usr/local/bin/start.sh && \
+    echo 'echo "📄 .env generado"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === GENERAR APP_KEY ===' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
-    echo 'php artisan key:generate --force' >> /usr/local/bin/start.sh && \
-    echo 'echo " App Key generada"' >> /usr/local/bin/start.sh && \
+    echo 'if php artisan key:generate --force; then' >> /usr/local/bin/start.sh && \
+    echo '    echo "🔑 App Key generada"' >> /usr/local/bin/start.sh && \
+    echo 'else' >> /usr/local/bin/start.sh && \
+    echo '    echo "⚠️  App Key ya existe o no se pudo generar"' >> /usr/local/bin/start.sh && \
+    echo 'fi' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === ELIMINAR ÍNDICE DUPLICADO DE AVAL (ANTES DE LAS MIGRACIONES) ===' >> /usr/local/bin/start.sh && \
+    echo '# === PRUEBA DE CONEXIÓN A LA BASE DE DATOS ===' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== PRUEBA DE CONEXIÓN A LA BD ==="' >> /usr/local/bin/start.sh && \
     echo 'export PGPASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
-    echo 'DB_NAME=${DB_DATABASE}' >> /usr/local/bin/start.sh && \
-    echo 'echo " Eliminando índice duplicado..."' >> /usr/local/bin/start.sh && \
-    echo 'psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_NAME} -c "DROP INDEX IF EXISTS id_cliente;"' >> /usr/local/bin/start.sh && \
+    echo 'if psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_DATABASE} -c "SELECT 1" > /dev/null 2>&1; then' >> /usr/local/bin/start.sh && \
+    echo '    echo "✅ Conexión a la base de datos exitosa"' >> /usr/local/bin/start.sh && \
+    echo 'else' >> /usr/local/bin/start.sh && \
+    echo '    echo "❌ ERROR: No se puede conectar a la base de datos"' >> /usr/local/bin/start.sh && \
+    echo '    unset PGPASSWORD' >> /usr/local/bin/start.sh && \
+    echo '    exit 1' >> /usr/local/bin/start.sh && \
+    echo 'fi' >> /usr/local/bin/start.sh && \
     echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
-    echo 'echo " Índice eliminado"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === EJECUTAR MIGRACIONES ===' >> /usr/local/bin/start.sh && \
+    echo '# === ELIMINAR ÍNDICE DUPLICADO DE AVAL ===' >> /usr/local/bin/start.sh && \
+    echo 'export PGPASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
+    echo 'echo "🗑️ Eliminando índice duplicado si existe..."' >> /usr/local/bin/start.sh && \
+    echo 'psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_DATABASE} -c "DROP INDEX IF EXISTS id_cliente;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
+    echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
+    echo 'echo "✅ Índice eliminado (si existía)"' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# === EJECUTAR MIGRACIONES CON LOGS DETALLADOS ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== EJECUTANDO MIGRACIONES ==="' >> /usr/local/bin/start.sh && \
-    echo 'php artisan migrate --force' >> /usr/local/bin/start.sh && \
-    echo 'echo " Migraciones ejecutadas"' >> /usr/local/bin/start.sh && \
+    echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# Verificar estado de las migraciones' >> /usr/local/bin/start.sh && \
+    echo 'echo "📊 Verificando estado de migraciones..."' >> /usr/local/bin/start.sh && \
+    echo 'php artisan migrate:status || echo "⚠️ No se pudo verificar estado"' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# Ejecutar migraciones con verbose' >> /usr/local/bin/start.sh && \
+    echo 'if php artisan migrate --force --verbose; then' >> /usr/local/bin/start.sh && \
+    echo '    echo "✅ Migraciones ejecutadas correctamente"' >> /usr/local/bin/start.sh && \
+    echo 'else' >> /usr/local/bin/start.sh && \
+    echo '    echo "❌ ERROR: Fallaron las migraciones"' >> /usr/local/bin/start.sh && \
+    echo '    echo "=== DETALLES DEL ERROR ==="' >> /usr/local/bin/start.sh && \
+    echo '    php artisan migrate --force --verbose 2>&1' >> /usr/local/bin/start.sh && \
+    echo '    exit 1' >> /usr/local/bin/start.sh && \
+    echo 'fi' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === LIMPIAR CONFIGURACIÓN ===' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
-    echo 'echo " Configuración optimizada"' >> /usr/local/bin/start.sh && \
+    echo 'echo "⚙️ Configuración optimizada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === EJECUTAR SEEDER ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== INSERTANDO DATOS INICIALES ==="' >> /usr/local/bin/start.sh && \
-    echo 'echo " Las tablas deben existir en la base de datos"' >> /usr/local/bin/start.sh && \
     echo 'if php artisan db:seed --class=ImportarDatosSeeder --force; then' >> /usr/local/bin/start.sh && \
-    echo '    echo "Seeder ejecutado correctamente"' >> /usr/local/bin/start.sh && \
+    echo '    echo "✅ Seeder ejecutado correctamente"' >> /usr/local/bin/start.sh && \
     echo 'else' >> /usr/local/bin/start.sh && \
-    echo '    echo " Error al ejecutar el seeder"' >> /usr/local/bin/start.sh && \
-    echo '    echo " Verifica que las tablas existan"' >> /usr/local/bin/start.sh && \
+    echo '    echo "⚠️ Error al ejecutar el seeder (continuando...)"' >> /usr/local/bin/start.sh && \
     echo 'fi' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === MOSTRAR CREDENCIALES ===' >> /usr/local/bin/start.sh && \
-    echo 'echo " ===== CREDENCIALES DE ACCESO ====="' >> /usr/local/bin/start.sh && \
-    echo 'echo " juanprendas@admin.com"' >> /usr/local/bin/start.sh && \
-    echo 'echo " tulaempeños@admin.com"' >> /usr/local/bin/start.sh && \
-    echo 'echo " expressempeños@admin.com"' >> /usr/local/bin/start.sh && \
+    echo 'echo "======================================"' >> /usr/local/bin/start.sh && \
+    echo 'echo "🔐 CREDENCIALES DE ACCESO"' >> /usr/local/bin/start.sh && \
+    echo 'echo "======================================"' >> /usr/local/bin/start.sh && \
+    echo 'echo "📧 juanprendas@admin.com"' >> /usr/local/bin/start.sh && \
+    echo 'echo "📧 tulaempeños@admin.com"' >> /usr/local/bin/start.sh && \
+    echo 'echo "📧 expressempeños@admin.com"' >> /usr/local/bin/start.sh && \
     echo 'echo "🔑 password"' >> /usr/local/bin/start.sh && \
     echo 'echo "======================================"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
