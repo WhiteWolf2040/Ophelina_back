@@ -113,7 +113,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'export DB_PORT="5432"' >> /usr/local/bin/start.sh && \
     echo 'export DB_DATABASE="ophelia_v1_despliege_b8j9_x4a5"' >> /usr/local/bin/start.sh && \
     echo 'export DB_USERNAME="root"' >> /usr/local/bin/start.sh && \
-    echo 'export DB_PASSWORD="cxOcrEwtsdDiKF0c26FJ7dg9fpGBeg83"' >> /usr/local/bin/start.sh
+    echo 'export DB_PASSWORD="cxOcrEwtsdDiKF0c26FJ7dg9fpGBeg83"' >> /usr/local/bin/start.sh && \
     echo 'export APP_URL="https://ophelina-back-v1.onrender.com"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === VERIFICAR CONEXIÓN A POSTGRESQL ===' >> /usr/local/bin/start.sh && \
