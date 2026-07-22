@@ -145,10 +145,15 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'php artisan key:generate --force' >> /usr/local/bin/start.sh && \
     echo 'echo " App Key generada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === EJECUTAR MIGRACIONES ===' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== EJECUTANDO MIGRACIONES ==="' >> /usr/local/bin/start.sh && \
-    echo 'php artisan migrate --force' >> /usr/local/bin/start.sh && \
+    echo '# === RESETEAR Y EJECUTAR MIGRACIONES ===' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== RESETEANDO Y EJECUTANDO MIGRACIONES ==="' >> /usr/local/bin/start.sh && \
+    echo 'php artisan migrate:fresh --force' >> /usr/local/bin/start.sh && \
     echo 'echo " Migraciones ejecutadas"' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
+    echo '# === ELIMINAR ÍNDICE DUPLICADO DE AVAL ===' >> /usr/local/bin/start.sh && \
+    echo 'DB_NAME=${DB_DATABASE}' >> /usr/local/bin/start.sh && \
+    echo 'psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_NAME} -c "DROP INDEX IF EXISTS id_cliente;"' >> /usr/local/bin/start.sh && \
+    echo 'echo " Índice eliminado"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === LIMPIAR CONFIGURACIÓN ===' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
