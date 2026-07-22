@@ -102,7 +102,7 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE (CON SEEDER COMENTADO)
+# SCRIPT DE ARRANQUE (CON MIGRACIONES Y SEEDER)
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
@@ -112,7 +112,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'echo "=== ESPERANDO BASE DE DATOS ==="' >> /usr/local/bin/start.sh && \
     echo 'MAX_RETRIES=30' >> /usr/local/bin/start.sh && \
     echo 'RETRY_COUNT=0' >> /usr/local/bin/start.sh && \
-    echo 'until pg_isready -h dpg-d90rptf7f7vs73ct7nig-a.oregon-postgres.render.com -p 5432 -U root || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do' >> /usr/local/bin/start.sh && \
+    echo 'until pg_isready -h dpg-d9g5b6nlk1mc73a011m0-a.oregon-postgres.render.com -p 5432 -U root || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do' >> /usr/local/bin/start.sh && \
     echo '    RETRY_COUNT=$((RETRY_COUNT+1))' >> /usr/local/bin/start.sh && \
     echo '    echo " Esperando PostgreSQL... $RETRY_COUNT/$MAX_RETRIES"' >> /usr/local/bin/start.sh && \
     echo '    sleep 2' >> /usr/local/bin/start.sh && \
@@ -130,11 +130,11 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'APP_DEBUG=false' >> /usr/local/bin/start.sh && \
     echo 'APP_URL=https://ophelina-back-v1.onrender.com' >> /usr/local/bin/start.sh && \
     echo 'DB_CONNECTION=pgsql' >> /usr/local/bin/start.sh && \
-    echo 'DB_HOST=dpg-d90rptf7f7vs73ct7nig-a.oregon-postgres.render.com' >> /usr/local/bin/start.sh && \
+    echo 'DB_HOST=dpg-d9g5b6nlk1mc73a011m0-a.oregon-postgres.render.com' >> /usr/local/bin/start.sh && \
     echo 'DB_PORT=5432' >> /usr/local/bin/start.sh && \
-    echo 'DB_DATABASE=ophelina_v1_despliegue' >> /usr/local/bin/start.sh && \
+    echo 'DB_DATABASE=ophelina_v1_despliegue_b8j9' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
-    echo 'DB_PASSWORD=v1lzeZoEmBpuvEgGq9D1aD71bvu0BLB5' >> /usr/local/bin/start.sh && \
+    echo 'DB_PASSWORD=ErvaP2T1KUglfBjdcMfjB6qhZyty4bgg' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
@@ -145,6 +145,11 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'php artisan key:generate --force' >> /usr/local/bin/start.sh && \
     echo 'echo " App Key generada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
+    echo '# === EJECUTAR MIGRACIONES ===' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== EJECUTANDO MIGRACIONES ==="' >> /usr/local/bin/start.sh && \
+    echo 'php artisan migrate --force' >> /usr/local/bin/start.sh && \
+    echo 'echo " Migraciones ejecutadas"' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
     echo '# === LIMPIAR CONFIGURACIÓN ===' >> /usr/local/bin/start.sh && \
     echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
     echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
@@ -152,20 +157,15 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
     echo 'echo " Configuración optimizada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# ===  OPCIONAL: LIMPIAR TABLAS ANTES DE INSERTAR ===' >> /usr/local/bin/start.sh && \
-    echo '# Si quieres LIMPIAR los datos viejos, descomenta esta línea:' >> /usr/local/bin/start.sh && \
-    echo '# php artisan db:wipe --force' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# ===  EJECUTAR SOLO SEEDER (LAS TABLAS YA EXISTEN) ===' >> /usr/local/bin/start.sh && \
-    echo '#  SEEDER COMENTADO - Los datos ya existen en la base de datos' >> /usr/local/bin/start.sh && \
-    echo '# echo "=== INSERTANDO DATOS INICIALES ==="' >> /usr/local/bin/start.sh && \
-    echo '# echo " Las tablas deben existir en la base de datos"' >> /usr/local/bin/start.sh && \
-    echo '# if php artisan db:seed --class=ImportarDatosSeeder --force; then' >> /usr/local/bin/start.sh && \
-    echo '#     echo "Seeder ejecutado correctamente"' >> /usr/local/bin/start.sh && \
-    echo '# else' >> /usr/local/bin/start.sh && \
-    echo '#     echo " Error al ejecutar el seeder"' >> /usr/local/bin/start.sh && \
-    echo '#     echo " Verifica que las tablas existan"' >> /usr/local/bin/start.sh && \
-    echo '# fi' >> /usr/local/bin/start.sh && \
+    echo '# === EJECUTAR SEEDER ===' >> /usr/local/bin/start.sh && \
+    echo 'echo "=== INSERTANDO DATOS INICIALES ==="' >> /usr/local/bin/start.sh && \
+    echo 'echo " Las tablas deben existir en la base de datos"' >> /usr/local/bin/start.sh && \
+    echo 'if php artisan db:seed --class=ImportarDatosSeeder --force; then' >> /usr/local/bin/start.sh && \
+    echo '    echo "Seeder ejecutado correctamente"' >> /usr/local/bin/start.sh && \
+    echo 'else' >> /usr/local/bin/start.sh && \
+    echo '    echo " Error al ejecutar el seeder"' >> /usr/local/bin/start.sh && \
+    echo '    echo " Verifica que las tablas existan"' >> /usr/local/bin/start.sh && \
+    echo 'fi' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === MOSTRAR CREDENCIALES ===' >> /usr/local/bin/start.sh && \
     echo 'echo " ===== CREDENCIALES DE ACCESO ====="' >> /usr/local/bin/start.sh && \
