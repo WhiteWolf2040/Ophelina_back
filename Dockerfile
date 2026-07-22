@@ -192,15 +192,15 @@ echo 'echo "PGPASSWORD length: ${#PGPASSWORD}"' >> /usr/local/bin/start.sh && \
     echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ Schema public listo"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-echo '# === ELIMINAR ÍNDICES DUPLICADOS AUTOMÁTICAMENTE ===' >> /usr/local/bin/start.sh && \
+echo '# === ELIMINAR TODOS LOS ÍNDICES ===' >> /usr/local/bin/start.sh && \
 echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
-echo 'echo "🗑️ Eliminando índices duplicados automáticamente..."' >> /usr/local/bin/start.sh && \
-echo '# Obtener lista de índices duplicados (que terminan en _index o son nombres simples)' >> /usr/local/bin/start.sh && \
+echo 'echo "🗑️ Eliminando todos los índices de la base de datos..."' >> /usr/local/bin/start.sh && \
 echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -t -c "' >> /usr/local/bin/start.sh && \
 echo '  SELECT indexname' >> /usr/local/bin/start.sh && \
 echo '  FROM pg_indexes' >> /usr/local/bin/start.sh && \
-echo '  WHERE tablename IN (SELECT tablename FROM pg_tables WHERE schemaname = '\''public'\'')' >> /usr/local/bin/start.sh && \
-echo '  AND indexname ~ '\''^(id_|.*_index)$'\''' >> /usr/local/bin/start.sh && \
+echo '  WHERE schemaname = '\''public'\''' >> /usr/local/bin/start.sh && \
+echo '  AND indexname NOT LIKE '\''%pkey%'\''' >> /usr/local/bin/start.sh && \
+echo '  AND indexname NOT LIKE '\''%unique%'\''' >> /usr/local/bin/start.sh && \
 echo '" | while read idx; do' >> /usr/local/bin/start.sh && \
 echo '    if [ -n "$idx" ]; then' >> /usr/local/bin/start.sh && \
 echo '        echo "  Eliminando índice: $idx"' >> /usr/local/bin/start.sh && \
@@ -208,7 +208,7 @@ echo '        psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "D
 echo '    fi' >> /usr/local/bin/start.sh && \
 echo 'done' >> /usr/local/bin/start.sh && \
 echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
-echo 'echo "✅ Índices duplicados eliminados"' >> /usr/local/bin/start.sh && \
+echo '✅ Todos los índices eliminados' >> /usr/local/bin/start.sh && \
 echo '' >> /usr/local/bin/start.sh && \
     echo '# === MIGRACIONES ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== EJECUTANDO MIGRACIONES ==="' >> /usr/local/bin/start.sh && \
