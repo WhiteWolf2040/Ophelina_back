@@ -134,7 +134,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_PORT=5432' >> /usr/local/bin/start.sh && \
     echo 'DB_DATABASE=ophelina_v1_despliegue_b8j9_x4a5' >> /usr/local/bin/start.sh && \
     echo 'DB_USERNAME=root' >> /usr/local/bin/start.sh && \
-    echo 'DB_PASSWORD=XXXXX' >> /usr/local/bin/start.sh && \
+    echo 'DB_PASSWORD=cxOcrEwtsdDiKF0c26FJ7dg9fpGBeg83' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
