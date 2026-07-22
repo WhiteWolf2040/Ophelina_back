@@ -190,7 +190,7 @@ echo 'echo "PGPASSWORD length: ${#PGPASSWORD}"' >> /usr/local/bin/start.sh && \
     echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "CREATE SCHEMA IF NOT EXISTS public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
     echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "ALTER DATABASE ${DB_DATABASE} SET search_path TO public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
     echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Schema public listo"' >> /usr/local/bin/start.sh && \
+    echo 'echo "Todos los índices eliminados"'  >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
 echo '# === ELIMINAR TODOS LOS ÍNDICES ===' >> /usr/local/bin/start.sh && \
 echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
