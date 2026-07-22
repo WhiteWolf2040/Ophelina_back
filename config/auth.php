@@ -43,6 +43,12 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+        // ✅ AGREGAR ESTE GUARD PARA API CON SANCTUM
+        'api' => [
+            'driver' => 'sanctum',
+            'provider' => 'users',
+        ],
+        
     ],
 
     /*
