@@ -213,28 +213,29 @@ public function verifyPayment(Request $request)
         
         // ✅ Actualizar empresa
         try {
-            $empresa->id_plan = $planId;
-            $empresa->plan_activo = 1;
-            $empresa->fecha_inicio_plan = now();
-            $empresa->fecha_fin_plan = now()->addMonth();
-            $empresa->save();
-            
-            Log::info('✅ Empresa actualizada correctamente');
-            
-            // Verificar que se guardó
-            $verificar = \App\Models\Empresa::find($empresa->id_empresa);
-            Log::info('🔍 Verificación post-guardado:', [
-                'id_plan' => $verificar->id_plan,
-                'plan_activo' => $verificar->plan_activo,
-                'fecha_fin_plan' => $verificar->fecha_fin_plan
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error('❌ Error al guardar empresa: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al actualizar el plan: ' . $e->getMessage()
-            ], 500);
+    $empresa->id_plan = $planId;
+    $empresa->plan_activo = 1;
+    $empresa->fecha_inicio_plan = now();
+    $empresa->fecha_fin_plan = now()->addMonth(); // ← SIEMPRE ESTABLECER
+    $empresa->save();
+    
+    Log::info('✅ Empresa actualizada correctamente');
+    
+    // Verificar que se guardó
+    $verificar = \App\Models\Empresa::find($empresa->id_empresa);
+    Log::info('🔍 Verificación post-guardado:', [
+        'id_plan' => $verificar->id_plan,
+        'plan_activo' => $verificar->plan_activo,
+        'fecha_inicio_plan' => $verificar->fecha_inicio_plan,
+        'fecha_fin_plan' => $verificar->fecha_fin_plan
+    ]);
+    
+} catch (\Exception $e) {
+    Log::error('❌ Error al guardar empresa: ' . $e->getMessage());
+    return response()->json([
+        'success' => false,
+        'message' => 'Error al actualizar el plan: ' . $e->getMessage()
+    ], 500);
         }
         
         return response()->json([
@@ -327,50 +328,65 @@ public function verifyPayment(Request $request)
     }
     
     // 4. Verificar estado de suscripción
-    public function checkSubscription($empresaId)
-    {
-        try {
-            Log::info('checkSubscription - empresa_id: ' . $empresaId);
+   public function checkSubscription($empresaId)
+{
+    try {
+        Log::info('checkSubscription - empresa_id: ' . $empresaId);
+        
+        $empresa = DB::table('empresa')
+            ->leftJoin('planes_saas', 'empresa.id_plan', '=', 'planes_saas.id_plan')
+            ->where('empresa.id_empresa', $empresaId)
+            ->select('empresa.*', 'planes_saas.nombre as plan_nombre')
+            ->first();
             
-            $empresa = DB::table('empresa')
-                ->leftJoin('planes_saas', 'empresa.id_plan', '=', 'planes_saas.id_plan')
-                ->where('empresa.id_empresa', $empresaId)
-                ->select('empresa.*', 'planes_saas.nombre as plan_nombre')
-                ->first();
-                
-            if (!$empresa) {
-                Log::warning('⚠️ Empresa no encontrada: ' . $empresaId);
-                return response()->json([
-                    'activo' => false,
-                    'mensaje' => 'Empresa no encontrada'
-                ], 404);
-            }
-            
-            $hoy = now();
-            $fechaFin = $empresa->fecha_fin_plan ? \Carbon\Carbon::parse($empresa->fecha_fin_plan) : null;
-            $activo = $empresa->plan_activo == 1 && ($fechaFin && $fechaFin >= $hoy);
-            $diasRestantes = $fechaFin ? max(0, $hoy->diffInDays($fechaFin, false)) : 0;
-            
-            Log::info('✅ Estado suscripción:', [
-                'activo' => $activo ? 'SÍ' : 'NO',
-                'días_restantes' => $diasRestantes
-            ]);
-            
-            return response()->json([
-                'activo' => $activo,
-                'fecha_fin_plan' => $empresa->fecha_fin_plan,
-                'plan_id' => $empresa->id_plan,
-                'plan_nombre' => $empresa->plan_nombre ?? 'Sin plan',
-                'dias_restantes' => $diasRestantes,
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error('❌ Error en checkSubscription: ' . $e->getMessage());
-            Log::error('Trace: ' . $e->getTraceAsString());
+        if (!$empresa) {
+            Log::warning('⚠️ Empresa no encontrada: ' . $empresaId);
             return response()->json([
                 'activo' => false,
-                'mensaje' => 'Error al verificar suscripción'
-            ], 500);
+                'mensaje' => 'Empresa no encontrada'
+            ], 404);
         }
+        
+        // ✅ MANEJAR FECHA NULL CORRECTAMENTE
+        $hoy = now();
+        $fechaFin = $empresa->fecha_fin_plan ? \Carbon\Carbon::parse($empresa->fecha_fin_plan) : null;
+        
+        // ✅ Si no hay fecha_fin, considerar activo si plan_activo = 1
+        if ($fechaFin === null) {
+            $activo = $empresa->plan_activo == 1;
+            $diasRestantes = null;
+            $mensaje = $activo ? 'Suscripción activa (sin fecha de vencimiento)' : 'Suscripción inactiva';
+        } else {
+            $activo = $empresa->plan_activo == 1 && $fechaFin >= $hoy;
+            $diasRestantes = $activo ? max(0, $hoy->diffInDays($fechaFin, false)) : 0;
+            $mensaje = $activo ? 'Suscripción activa' : 'Suscripción vencida';
+        }
+        
+        Log::info('✅ Estado suscripción:', [
+            'activo' => $activo ? 'SÍ' : 'NO',
+            'días_restantes' => $diasRestantes ?? 'indefinido',
+            'plan_activo' => $empresa->plan_activo,
+            'fecha_fin_plan' => $empresa->fecha_fin_plan
+        ]);
+        
+        return response()->json([
+            'activo' => $activo,
+            'fecha_fin_plan' => $empresa->fecha_fin_plan,
+            'plan_id' => $empresa->id_plan,
+            'plan_nombre' => $empresa->plan_nombre ?? 'Sin plan',
+            'dias_restantes' => $diasRestantes,
+            'plan_activo' => $empresa->plan_activo,
+            'mensaje' => $mensaje,
+            'suscripcion_indefinida' => $fechaFin === null  // ← Para que el frontend sepa
+        ]);
+        
+    } catch (\Exception $e) {
+        Log::error('❌ Error en checkSubscription: ' . $e->getMessage());
+        Log::error('Trace: ' . $e->getTraceAsString());
+        return response()->json([
+            'activo' => false,
+            'mensaje' => 'Error al verificar suscripción'
+        ], 500);
     }
+}
 }
