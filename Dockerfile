@@ -192,6 +192,14 @@ echo 'echo "PGPASSWORD length: ${#PGPASSWORD}"' >> /usr/local/bin/start.sh && \
     echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
     echo 'echo "✅ Schema public listo"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
+    echo '# === ELIMINAR ÍNDICES DUPLICADOS ===' >> /usr/local/bin/start.sh && \
+echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
+echo 'echo "🗑️ Eliminando índices duplicados..."' >> /usr/local/bin/start.sh && \
+echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "DROP INDEX IF EXISTS id_cliente;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
+echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "DROP INDEX IF EXISTS aval_id_cliente_index;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
+echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
+echo 'echo "✅ Índices eliminados"' >> /usr/local/bin/start.sh && \
+echo '' >> /usr/local/bin/start.sh && \
     echo '# === MIGRACIONES ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== EJECUTANDO MIGRACIONES ==="' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
