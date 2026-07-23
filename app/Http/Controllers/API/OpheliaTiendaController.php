@@ -75,7 +75,7 @@ class OpheliaTiendaController extends Controller
                 'descuento' => $descuento,
                 'anticipo' => '$' . number_format($precioConDescuento * 0.5, 2),
                 'anticipoNumerico' => round($precioConDescuento * 0.5, 2),
-                'imagen' => $p->imagen_url ? asset('storage/' . $p->imagen_url) : null,
+                'imagen' => $this->resolverImagenUrl($p->imagen_url),
                 'categoria' => $this->obtenerCategoria($p->prenda),
                 'material' => $p->prenda->material ?? null,
                 'exclusivo' => (bool) $p->destacado,
@@ -85,6 +85,28 @@ class OpheliaTiendaController extends Controller
         });
 
         return response()->json(['success' => true, 'data' => $data]);
+    }
+
+    /**
+     * Devuelve la URL correcta de la imagen sin duplicar el dominio/ruta.
+     * Soporta 3 casos guardados en imagen_url:
+     *  - URL completa (http:// o https://) -> se regresa tal cual
+     *  - Ruta relativa que YA incluye "productos/" -> se antepone storage/
+     *  - null/vacío -> null
+     */
+    private function resolverImagenUrl($imagenUrl)
+    {
+        if (empty($imagenUrl)) {
+            return null;
+        }
+
+        // Ya es una URL completa, no le agregamos nada más
+        if (filter_var($imagenUrl, FILTER_VALIDATE_URL)) {
+            return $imagenUrl;
+        }
+
+        // Es una ruta relativa (ej: "productos/arete_oro.jpg")
+        return asset('storage/' . $imagenUrl);
     }
 
     /**
@@ -237,9 +259,7 @@ class OpheliaTiendaController extends Controller
                     'precioOriginal' => '$' . number_format($precio, 2),
                     'descuento' => $descuento,
                     'anticipo' => '$' . number_format((float) $a->monto_anticipo, 2),
-                    'imagen' => $producto && $producto->imagen_url
-                        ? asset('storage/' . $producto->imagen_url)
-                        : null,
+                    'imagen' => $producto ? $this->resolverImagenUrl($producto->imagen_url) : null,
                     'categoria' => $this->obtenerCategoria($producto->prenda ?? null),
                     'material' => $producto->prenda->material ?? null,
                     'exclusivo' => $producto ? (bool) $producto->destacado : false,
