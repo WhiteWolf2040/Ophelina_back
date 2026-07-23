@@ -47,10 +47,12 @@ Route::prefix('stripe')->group(function () {
 // ✅ WEBHOOK DE STRIPE - DEBE SER PÚBLICO
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
 
+Route::get('/imagen-prenda/{id}', [App\Http\Controllers\API\TiendaController::class, 'verImagen']);
 // ✅ RUTAS PÚBLICAS PARA TIENDA (catálogo sin autenticación)
 Route::prefix('public')->group(function () {
     Route::get('/productos', [TiendaController::class, 'catalogoPublico']);
     Route::get('/productos/{id}', [TiendaController::class, 'detallePublico']);
+
 });
 
 // ✅ RUTAS PÚBLICAS PARA CLIENTE - TIENDA (catálogo visible sin login)

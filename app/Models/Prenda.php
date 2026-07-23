@@ -51,4 +51,19 @@ class Prenda extends Model
     {
         return $this->hasOne(ProductoTienda::class, 'id_prenda');
     }
+
+        //  NUEVO: todas las imágenes de esta prenda
+    public function imagenes()
+    {
+        return $this->hasMany(ImagenPrenda::class, 'id_prenda', 'id_prenda')
+            ->orderBy('orden');
+    }
+ 
+    //  NUEVO: acceso rápido a la imagen marcada como principal
+    public function imagenPrincipal()
+    {
+        return $this->hasOne(ImagenPrenda::class, 'id_prenda', 'id_prenda')
+            ->where('es_principal', true);
+    }
+
 }

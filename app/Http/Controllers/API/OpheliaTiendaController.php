@@ -75,7 +75,7 @@ class OpheliaTiendaController extends Controller
                 'descuento' => $descuento,
                 'anticipo' => '$' . number_format($precioConDescuento * 0.5, 2),
                 'anticipoNumerico' => round($precioConDescuento * 0.5, 2),
-                'imagen' => $this->resolverImagenUrl($p->imagen_url),
+                'imagen' => $this->resolverImagenUrl($p->id_prenda),
                 'categoria' => $this->obtenerCategoria($p->prenda),
                 'material' => $p->prenda->material ?? null,
                 'exclusivo' => (bool) $p->destacado,
@@ -88,25 +88,22 @@ class OpheliaTiendaController extends Controller
     }
 
     /**
-     * Devuelve la URL correcta de la imagen sin duplicar el dominio/ruta.
-     * Soporta 3 casos guardados en imagen_url:
-     *  - URL completa (http:// o https://) -> se regresa tal cual
-     *  - Ruta relativa que YA incluye "productos/" -> se antepone storage/
-     *  - null/vacío -> null
+     * Devuelve la URL pública de la imagen principal guardada en imagen_prenda
+     * para la prenda asociada a este producto. Regresa null si no tiene imagen.
      */
-    private function resolverImagenUrl($imagenUrl)
+    private function resolverImagenUrl($idPrenda)
     {
-        if (empty($imagenUrl)) {
+        if (empty($idPrenda)) {
             return null;
         }
 
-        // Ya es una URL completa, no le agregamos nada más
-        if (filter_var($imagenUrl, FILTER_VALIDATE_URL)) {
-            return $imagenUrl;
+        $tieneImagen = \App\Models\ImagenPrenda::where('id_prenda', $idPrenda)->exists();
+
+        if (!$tieneImagen) {
+            return null;
         }
 
-        // Es una ruta relativa (ej: "productos/arete_oro.jpg")
-        return asset('storage/' . $imagenUrl);
+        return url('/api/imagen-prenda/' . $idPrenda);
     }
 
     /**
@@ -259,7 +256,7 @@ class OpheliaTiendaController extends Controller
                     'precioOriginal' => '$' . number_format($precio, 2),
                     'descuento' => $descuento,
                     'anticipo' => '$' . number_format((float) $a->monto_anticipo, 2),
-                    'imagen' => $producto ? $this->resolverImagenUrl($producto->imagen_url) : null,
+                    'imagen' => $producto ? $this->resolverImagenUrl($producto->id_prenda) : null,
                     'categoria' => $this->obtenerCategoria($producto->prenda ?? null),
                     'material' => $producto->prenda->material ?? null,
                     'exclusivo' => $producto ? (bool) $producto->destacado : false,
