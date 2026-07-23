@@ -13,10 +13,11 @@ return [
     | a conventional file to locate the various service credentials.
     |
     */
+
     'callmebot' => [
-    'apikey' => env('CALLMEBOT_APIKEY'),
-    'phone' => env('CALLMEBOT_PHONE'),
-],
+        'apikey' => env('CALLMEBOT_APIKEY'),
+        'phone' => env('CALLMEBOT_PHONE'),
+    ],
 
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
@@ -37,6 +38,18 @@ return [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | STRIPE CONFIGURATION
+    |--------------------------------------------------------------------------
+    */
+    'stripe' => [
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'anticipo_porcentaje' => env('APARTADO_ANTICIPO_PORCENTAJE', 50),
     ],
 
 ];

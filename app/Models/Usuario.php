@@ -42,4 +42,23 @@ class Usuario extends Authenticatable
     {
         return $this->belongsTo(Empresa::class, 'id_empresa');
     }
+
+    //modelo usuario se agrego:
+    //  AGREGAR: para que $user->id_cliente funcione en los controladores
+    protected $appends = [
+        'id_cliente'
+    ];
+
+
+    //  AGREGAR: relación hacia el registro de cliente correspondiente
+    public function cliente()
+    {
+        return $this->hasOne(Cliente::class, 'id_usuario', 'id_usuario');
+    }
+
+    // AGREGAR: accessor para que $user->id_cliente devuelva el id_cliente real
+    public function getIdClienteAttribute()
+    {
+        return $this->cliente()->value('id_cliente');
+    }
 }

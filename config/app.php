@@ -123,4 +123,11 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | FRONTEND URL (para redirecciones)
+    |--------------------------------------------------------------------------
+    */
+    'frontend_url' => env('FRONTEND_URL', 'https://ophelina-front.vercel.app'),
+
 ];

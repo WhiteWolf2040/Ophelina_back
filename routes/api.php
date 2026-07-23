@@ -18,6 +18,14 @@ use App\Http\Controllers\API\ReportesController;
 use App\Http\Controllers\API\ConfiguracionController;
 use App\Http\Controllers\API\PrendaController;
 
+// ✅ NUEVOS IMPORTS PARA CLIENTE
+use App\Http\Controllers\API\OpheliaHomeController;
+use App\Http\Controllers\API\NotificacionController;
+use App\Http\Controllers\API\MisEmpenosController;
+use App\Http\Controllers\API\ApartadoController;
+use App\Http\Controllers\API\StripeWebhookController;
+use App\Http\Controllers\API\OpheliaTiendaController;
+
 /*
 |--------------------------------------------------------------------------
 | RUTAS PÚBLICAS (No requieren autenticación)
@@ -36,10 +44,20 @@ Route::prefix('stripe')->group(function () {
     Route::post('/activate-free-plan', [StripeController::class, 'activateFreePlan']);
 });
 
+// ✅ WEBHOOK DE STRIPE - DEBE SER PÚBLICO
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
+
+// ✅ RUTAS PÚBLICAS PARA TIENDA (catálogo sin autenticación)
 Route::prefix('public')->group(function () {
     Route::get('/productos', [TiendaController::class, 'catalogoPublico']);
     Route::get('/productos/{id}', [TiendaController::class, 'detallePublico']);
 });
+
+// ✅ RUTAS PÚBLICAS PARA CLIENTE - TIENDA (catálogo visible sin login)
+Route::get('/tienda/productos', [OpheliaTiendaController::class, 'getProductos']);
+
+// ✅ RUTAS PÚBLICAS PARA APARTADOS (crear sesión de pago)
+Route::post('/apartados/crear-sesion', [ApartadoController::class, 'crearSesion']);
 
 /*
 |--------------------------------------------------------------------------
@@ -61,15 +79,55 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
-    USUARIO ACTUAL & LOGOUT
+    USUARIO ACTUAL, PERFIL & LOGOUT
     ==========================
     */
     Route::get('/user', [AuthController::class, 'user']);
+    Route::put('/user', [AuthController::class, 'updateProfile']); // ✅ AGREGADO
     Route::post('/logout', [AuthController::class, 'logout']);
 
     /*
     ==========================
-    DASHBOARD (Todos los planes pueden ver)
+    NOTIFICACIONES (CLIENTE)
+    ==========================
+    */
+    Route::get('/notificaciones', [NotificacionController::class, 'index']); // ✅ AGREGADO
+
+    /*
+    ==========================
+    HOME DEL CLIENTE (DASHBOARD CLIENTE)
+    ==========================
+    */
+    Route::get('/homecliente', [OpheliaHomeController::class, 'index']); // ✅ AGREGADO
+
+    /*
+    ==========================
+    MIS EMPEÑOS (CLIENTE)
+    ==========================
+    */
+    Route::get('/cliente/empenos', [MisEmpenosController::class, 'getMisEmpenos']); // ✅ AGREGADO
+    Route::get('/cliente/empenos/resumen', [MisEmpenosController::class, 'getResumenMisEmpenos']); // ✅ AGREGADO
+    Route::get('/cliente/empenos/{id}', [MisEmpenosController::class, 'getMisEmpenosDetalle']); // ✅ AGREGADO
+
+    /*
+    ==========================
+    CLIENTE - TIENDA (apartados)
+    ==========================
+    */
+    // ✅ RUTA CORREGIDA: /cliente/tienda/productos (para que coincida con el frontend)
+    Route::prefix('cliente/tienda')->group(function () {
+        Route::get('/productos', [OpheliaTiendaController::class, 'getProductos']);
+    });
+
+    // ✅ RUTAS PARA APARTAR Y VER APARTADOS
+    Route::prefix('tienda')->group(function () {
+        Route::post('/productos/{id}/apartar', [OpheliaTiendaController::class, 'apartar']);
+        Route::get('/apartados', [OpheliaTiendaController::class, 'misApartados']);
+    });
+
+    /*
+    ==========================
+    DASHBOARD (ADMIN) - Todos los planes pueden ver
     ==========================
     */
     Route::prefix('home')->group(function () {
@@ -84,7 +142,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
-    CLIENTES (Todos los planes pueden ver)
+    CLIENTES (ADMIN) - Todos los planes pueden ver
     ==========================
     */
     Route::prefix('clientes')->group(function () {
@@ -99,29 +157,24 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
-    EMPEÑOS (Todos los planes pueden ver)
+    EMPEÑOS (ADMIN) - Todos los planes pueden ver
     ==========================
     */
-            Route::prefix('empenos')->group(function () {
-                Route::get('/', [EmpenoController::class, 'index'])->middleware('check.permission:ver_empenos');
-                Route::post('/', [EmpenoController::class, 'store'])->middleware('check.permission:crear_empenos');
-                Route::get('/activos-con-saldo', [EmpenoController::class, 'activosConSaldo']);
-                Route::get('/todos', [EmpenoController::class, 'todos']);              // ✅ corregido
-                Route::post('/actualizar-estados', [EmpenoController::class, 'actualizarEstados']); // ✅ corregido
-                Route::get('/{id}', [EmpenoController::class, 'show'])->middleware('check.permission:ver_empenos');
-
-                                //  Agregadas (métodos que ya tienes en el controller)
-                Route::get('/clientes', [EmpenoController::class, 'getClientes']);
-                Route::get('/prendas-disponibles', [EmpenoController::class, 'getPrendasDisponibles']);
-                Route::get('/tasas', [EmpenoController::class, 'getTasasInteres']);
-                /* Route::post('/enviar-recordatorios', [EmpenoController::class, 'enviarRecordatoriosVencimiento']); */ //  ojo con el nombre
-            });
-
-            
+    Route::prefix('empenos')->group(function () {
+        Route::get('/', [EmpenoController::class, 'index'])->middleware('check.permission:ver_empenos');
+        Route::post('/', [EmpenoController::class, 'store'])->middleware('check.permission:crear_empenos');
+        Route::get('/activos-con-saldo', [EmpenoController::class, 'activosConSaldo']);
+        Route::get('/todos', [EmpenoController::class, 'todos']);
+        Route::post('/actualizar-estados', [EmpenoController::class, 'actualizarEstados']);
+        Route::get('/{id}', [EmpenoController::class, 'show'])->middleware('check.permission:ver_empenos');
+        Route::get('/clientes', [EmpenoController::class, 'getClientes']);
+        Route::get('/prendas-disponibles', [EmpenoController::class, 'getPrendasDisponibles']);
+        Route::get('/tasas', [EmpenoController::class, 'getTasasInteres']);
+    });
 
     /*
     ==========================
-    PAGOS (Todos los planes pueden ver, pero verificamos permiso)
+    PAGOS (ADMIN) - Todos los planes pueden ver, pero verificamos permiso
     ==========================
     */
     Route::prefix('pagos')->group(function () {
@@ -135,7 +188,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
-    AMORTIZACIÓN
+    AMORTIZACIÓN (ADMIN)
     ==========================
     */
     Route::prefix('amortizacion')->group(function () {
@@ -145,7 +198,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
-    PRENDAS
+    PRENDAS (ADMIN)
     ==========================
     */
     Route::get('/prendas/disponibles', [EmpenoController::class, 'getPrendasDisponibles']);
@@ -153,14 +206,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
-    TASAS DE INTERÉS
+    TASAS DE INTERÉS (ADMIN)
     ==========================
     */
     Route::get('/tasas-interes', [EmpenoController::class, 'getTasasInteres']);
 
     /*
     ==========================
-    PRECIO DEL ORO (Todos los planes pueden ver)
+    PRECIO DEL ORO (ADMIN) - Todos los planes pueden ver
     ==========================
     */
     Route::get('/precio-oro', [PrecioOroController::class, 'getPrecioActual']);
@@ -170,7 +223,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
-    REPORTES - NUEVAS RUTAS
+    REPORTES (ADMIN) - NUEVAS RUTAS
     ==========================
     */
     Route::prefix('reportes')->group(function () {
@@ -181,41 +234,40 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/inventario', [ReportesController::class, 'inventario']);
     });
 
-  
-   /*  ==========================
-    TIENDA EN LÍNEA (Solo plan Premium - id_plan=4)
-    ========================== */
-
-            Route::prefix('tienda')->group(function () {
-            Route::get('/productos', [TiendaController::class, 'index']);
-            Route::get('/productos/estadisticas', [TiendaController::class, 'estadisticas']);
-            Route::post('/productos', [TiendaController::class, 'store']);
-            Route::put('/productos/{id}', [TiendaController::class, 'update']);
-            Route::delete('/productos/{id}', [TiendaController::class, 'destroy']);
-            Route::patch('/productos/{id}/visibilidad', [TiendaController::class, 'toggleVisibilidad']);
-            Route::patch('/productos/{id}/destacado', [TiendaController::class, 'toggleDestacado']);
-            Route::post('/publicacion-automatica', [TiendaController::class, 'publicacionAutomatica']);
-            Route::post('/configurar-dias-gracia', [TiendaController::class, 'configurarDiasGracia']);
-        
-    }); 
-
-   /*      ==========================
-    INVENTARIO (PRENDAS) - NUEVO
+    /*
     ==========================
-    */ 
-    Route::prefix('prendas')->group(function () {
-        Route::get('/', [PrendaController::class, 'index']);          // Listar todas
-        Route::get('/{id}', [PrendaController::class, 'show']);       // Ver una
-        Route::put('/{id}', [PrendaController::class, 'update']);     // Editar
-        Route::delete('/{id}', [PrendaController::class, 'destroy']); // Eliminar
+    TIENDA EN LÍNEA (ADMIN) - Solo plan Premium - id_plan=4
+    ==========================
+    */
+    Route::prefix('tienda')->group(function () {
+        Route::get('/productos', [TiendaController::class, 'index']);
+        Route::get('/productos/estadisticas', [TiendaController::class, 'estadisticas']);
+        Route::post('/productos', [TiendaController::class, 'store']);
+        Route::put('/productos/{id}', [TiendaController::class, 'update']);
+        Route::delete('/productos/{id}', [TiendaController::class, 'destroy']);
+        Route::patch('/productos/{id}/visibilidad', [TiendaController::class, 'toggleVisibilidad']);
+        Route::patch('/productos/{id}/destacado', [TiendaController::class, 'toggleDestacado']);
+        Route::post('/publicacion-automatica', [TiendaController::class, 'publicacionAutomatica']);
+        Route::post('/configurar-dias-gracia', [TiendaController::class, 'configurarDiasGracia']);
     });
 
+    /*
+    ==========================
+    INVENTARIO (PRENDAS) - ADMIN
+    ==========================
+    */
+    Route::prefix('prendas')->group(function () {
+        Route::get('/', [PrendaController::class, 'index']);
+        Route::get('/{id}', [PrendaController::class, 'show']);
+        Route::put('/{id}', [PrendaController::class, 'update']);
+        Route::delete('/{id}', [PrendaController::class, 'destroy']);
+    });
 
- 
-  /*   ==========================
-    ROLES (Solo plan Premium - id_plan=4)
-    ========================== */
-
+    /*
+    ==========================
+    ROLES (ADMIN) - Solo plan Premium - id_plan=4
+    ==========================
+    */
     Route::middleware(['check.plan:roles'])->group(function () {
         Route::prefix('roles')->group(function () {
             Route::get('/', [RolController::class, 'index']);
@@ -228,7 +280,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     ==========================
-    PERMISOS (Solo plan Premium - id_plan=4)
+    PERMISOS (ADMIN) - Solo plan Premium - id_plan=4
     ==========================
     */
     Route::middleware(['check.plan:permisos'])->group(function () {
@@ -245,22 +297,5 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::delete('/masivo', [PermisoController::class, 'destroyMasivo']);
         });
     });
-
-    /*
-    ==========================
-    CONFIGURACIÓN (Todos los planes pueden ver, pero algunos campos limitados)
-    ==========================
-    */
-    /* Route::middleware(['check.plan:configuracion'])->group(function () {
-        Route::prefix('configuracion')->group(function () {
-            Route::get('/', [ConfiguracionController::class, 'index']);
-            Route::get('/empresa', [ConfiguracionController::class, 'getEmpresa']);
-            Route::put('/empresa', [ConfiguracionController::class, 'updateEmpresa']);
-            Route::get('/usuarios', [ConfiguracionController::class, 'getUsuarios']);
-            Route::post('/usuarios', [ConfiguracionController::class, 'storeUsuario']);
-            Route::put('/usuarios/{id}', [ConfiguracionController::class, 'updateUsuario']);
-            Route::delete('/usuarios/{id}', [ConfiguracionController::class, 'deleteUsuario']);
-        });
-    }); */
 
 });

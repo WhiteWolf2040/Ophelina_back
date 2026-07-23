@@ -18,7 +18,7 @@ class ProductoTienda extends Model
         'id_empresa',
         'id_prenda',
         'nombre',
-        'categoria',           // ← NUEVO
+        'categoria',
         'descripcion',
         'precio',
         'descuento',
@@ -29,9 +29,9 @@ class ProductoTienda extends Model
         'imagen_url',
         'fecha_publicacion',
         'deleted_at',
-        'publicacion_automatica',      // ← NUEVO
-        'fecha_vencimiento_contrato',  // ← NUEVO
-        'id_empeno_original'           // ← NUEVO
+        'publicacion_automatica',
+        'fecha_vencimiento_contrato',
+        'id_empeno_original'
     ];
 
     protected $casts = [
@@ -51,12 +51,18 @@ class ProductoTienda extends Model
 
     public function prenda()
     {
-        return $this->belongsTo(Prenda::class, 'id_prenda');
+        return $this->belongsTo(Prenda::class, 'id_prenda', 'id_prenda');
     }
 
     public function empeno()
     {
         return $this->belongsTo(Empeno::class, 'id_empeno_original');
+    }
+
+    // ✅ Agregado de tu compañera
+    public function apartados()
+    {
+        return $this->hasMany(Apartado::class, 'id_producto', 'id_producto');
     }
 
     public function scopeVisible($query)
