@@ -63,20 +63,22 @@ class OpheliaTiendaController extends Controller
             $precio = (float) $p->precio;
 
             return [
-                'id' => $p->id_producto,
+              'id' => $p->id_producto,
                 'nombre' => $p->nombre,
                 'descripcion' => $p->descripcion,
-                'precio' => '$' . number_format($precio, 2),
-                'precioNumerico' => $precio,
-                'anticipo' => '$' . number_format($precio * 0.5, 2),
-                'anticipoNumerico' => round($precio * 0.5, 2),
+                'precio' => '$' . number_format($precioConDescuento, 2),           // 👈 ahora ya con descuento
+                'precioOriginal' => '$' . number_format($precio, 2),               // 👈 nuevo, precio de lista
+                'precioNumerico' => $precioConDescuento,
+                'descuento' => $descuento,                                        // 👈 nuevo
+                'anticipo' => '$' . number_format($precioConDescuento * 0.5, 2),
+                'anticipoNumerico' => round($precioConDescuento * 0.5, 2),
                 'imagen' => $p->imagen_url ? asset('storage/' . $p->imagen_url) : null,
                 'categoria' => $this->obtenerCategoria($p->prenda),
                 'material' => $p->prenda->material ?? null,
                 'exclusivo' => (bool) $p->destacado,
                 'estado_producto' => $p->estado_producto,
                 'stock' => $p->stock,
-            ];
+                    ];
         });
 
         return response()->json(['success' => true, 'data' => $data]);
