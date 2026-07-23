@@ -79,4 +79,28 @@ class ProductoTienda extends Model
     {
         return $this->estado_producto;
     }
+
+    public function getImagenUrlAttribute($value)
+{
+    // Si ya es una URL completa, devuélvela
+    if (filter_var($value, FILTER_VALIDATE_URL)) {
+        return $value;
+    }
+    
+    // Si es null o vacío, devuelve null
+    if (empty($value)) {
+        return null;
+    }
+    
+    // Si el enlace simbólico existe, usa /storage/
+    // Si no, intenta con la ruta directa
+    return asset('storage/' . $value);
+}
+
+// O también puedes agregar un accessor para la imagen
+public function getImagenPrincipalAttribute($value)
+{
+    return $this->getImagenUrlAttribute($value);
+
+}
 }
