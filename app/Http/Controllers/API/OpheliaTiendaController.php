@@ -49,7 +49,6 @@ class OpheliaTiendaController extends Controller
                     break;
                 case 'oro':
                 case 'plata':
-                    // ✅ La columna material sí existe en prendas, se filtra directo
                     $query->whereHas('prenda', function ($p) use ($request) {
                         $p->where('material', $request->categoria);
                     });
@@ -61,15 +60,19 @@ class OpheliaTiendaController extends Controller
 
         $data = $productos->map(function (ProductoTienda $p) {
             $precio = (float) $p->precio;
+            $descuento = (float) ($p->descuento ?? 0);
+            $precioConDescuento = $descuento > 0
+                ? $precio * (1 - $descuento / 100)
+                : $precio;
 
             return [
-              'id' => $p->id_producto,
+                'id' => $p->id_producto,
                 'nombre' => $p->nombre,
                 'descripcion' => $p->descripcion,
-                'precio' => '$' . number_format($precioConDescuento, 2),           // 👈 ahora ya con descuento
-                'precioOriginal' => '$' . number_format($precio, 2),               // 👈 nuevo, precio de lista
+                'precio' => '$' . number_format($precioConDescuento, 2),
+                'precioOriginal' => '$' . number_format($precio, 2),
                 'precioNumerico' => $precioConDescuento,
-                'descuento' => $descuento,                                        // 👈 nuevo
+                'descuento' => $descuento,
                 'anticipo' => '$' . number_format($precioConDescuento * 0.5, 2),
                 'anticipoNumerico' => round($precioConDescuento * 0.5, 2),
                 'imagen' => $p->imagen_url ? asset('storage/' . $p->imagen_url) : null,
@@ -78,7 +81,7 @@ class OpheliaTiendaController extends Controller
                 'exclusivo' => (bool) $p->destacado,
                 'estado_producto' => $p->estado_producto,
                 'stock' => $p->stock,
-                    ];
+            ];
         });
 
         return response()->json(['success' => true, 'data' => $data]);
@@ -94,8 +97,6 @@ class OpheliaTiendaController extends Controller
         try {
             $user = $request->user();
 
-            // El id_cliente no vive en la tabla usuario, hay que buscarlo
-            // en la tabla clientes a través de id_usuario.
             $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
 
             if (!$cliente) {
@@ -118,7 +119,6 @@ class OpheliaTiendaController extends Controller
                 ], 404);
             }
 
-            // Evitar que dos clientes aparten el mismo producto a la vez
             $yaApartado = Apartado::where('id_producto', $id)
                 ->where('estado', 'activo')
                 ->whereIn('stripe_payment_status', ['pendiente', 'pagado'])
@@ -131,7 +131,13 @@ class OpheliaTiendaController extends Controller
                 ], 409);
             }
 
-            $montoAnticipo = round($producto->precio * 0.5, 2);
+            // ✅ El anticipo se calcula sobre el precio YA con descuento aplicado
+            $descuento = (float) ($producto->descuento ?? 0);
+            $precioFinal = $descuento > 0
+                ? $producto->precio * (1 - $descuento / 100)
+                : (float) $producto->precio;
+
+            $montoAnticipo = round($precioFinal * 0.5, 2);
 
             $apartado = Apartado::create([
                 'id_cliente' => $clienteId,
@@ -154,7 +160,7 @@ class OpheliaTiendaController extends Controller
                         'product_data' => [
                             'name' => 'Anticipo (50%) - ' . $producto->nombre,
                         ],
-                        'unit_amount' => intval(round($montoAnticipo * 100)), // Stripe usa centavos
+                        'unit_amount' => intval(round($montoAnticipo * 100)),
                     ],
                     'quantity' => 1,
                 ]],
@@ -170,7 +176,6 @@ class OpheliaTiendaController extends Controller
             $apartado->stripe_session_id = $session->id;
             $apartado->save();
 
-            // El producto sale de la tienda general mientras se procesa el pago
             $producto->visible = 0;
             $producto->save();
 
@@ -201,7 +206,6 @@ class OpheliaTiendaController extends Controller
         try {
             $user = $request->user();
 
-            // Mismo fix: el id_cliente se busca vía id_usuario
             $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
 
             if (!$cliente) {
@@ -219,13 +223,19 @@ class OpheliaTiendaController extends Controller
             $data = $apartados->map(function (Apartado $a) {
                 $producto = $a->producto;
                 $precio = $producto ? (float) $producto->precio : 0;
+                $descuento = $producto ? (float) ($producto->descuento ?? 0) : 0;
+                $precioConDescuento = $descuento > 0
+                    ? $precio * (1 - $descuento / 100)
+                    : $precio;
 
                 return [
                     'id' => $producto->id_producto ?? null,
                     'id_apartado' => $a->id_apartado,
                     'nombre' => $producto->nombre ?? 'Producto no disponible',
                     'descripcion' => $producto->descripcion ?? '',
-                    'precio' => '$' . number_format($precio, 2),
+                    'precio' => '$' . number_format($precioConDescuento, 2),
+                    'precioOriginal' => '$' . number_format($precio, 2),
+                    'descuento' => $descuento,
                     'anticipo' => '$' . number_format((float) $a->monto_anticipo, 2),
                     'imagen' => $producto && $producto->imagen_url
                         ? asset('storage/' . $producto->imagen_url)
@@ -233,7 +243,7 @@ class OpheliaTiendaController extends Controller
                     'categoria' => $this->obtenerCategoria($producto->prenda ?? null),
                     'material' => $producto->prenda->material ?? null,
                     'exclusivo' => $producto ? (bool) $producto->destacado : false,
-                    'estadoPago' => $a->stripe_payment_status, // pendiente | pagado | fallido
+                    'estadoPago' => $a->stripe_payment_status,
                     'fechaApartado' => optional($a->fecha_apartado)->format('d/m/Y'),
                     'fechaExpiracion' => optional($a->fecha_expiracion)->format('d/m/Y'),
                 ];
