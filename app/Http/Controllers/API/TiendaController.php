@@ -182,27 +182,56 @@ public function store(Request $request)
         $imagenSubida = false;
 
         // 💾 GUARDAR IMAGEN LOCALMENTE (SIN CLOUDINARY)
-        if ($request->hasFile('imagen')) {
-            error_log('📸 Procesando imagen local...');
-            $file = $request->file('imagen');
-            
-            // Crear directorio si no existe
-            $storagePath = storage_path('app/public/productos');
-            if (!file_exists($storagePath)) {
-                mkdir($storagePath, 0777, true);
-            }
-            
-            // Generar nombre único
-            $nombreImagen = 'producto_' . $prenda->id_prenda . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $rutaRelativa = 'productos/' . $nombreImagen;
-            
-            // Mover la imagen
-            $file->storeAs('public/productos', $nombreImagen);
-            
-            $imagenUrl = asset('storage/' . $rutaRelativa);
-            $imagenSubida = true;
-            error_log('✅ Imagen guardada en: ' . $imagenUrl);
+if ($request->hasFile('imagen')) {
+    error_log('📸 Procesando imagen local...');
+    try {
+        $file = $request->file('imagen');
+        
+        // Verificar que el archivo sea válido
+        if (!$file->isValid()) {
+            throw new \Exception('El archivo de imagen no es válido');
         }
+        
+        // Crear directorio si no existe
+        $storagePath = storage_path('app/public/productos');
+        if (!file_exists($storagePath)) {
+            if (!mkdir($storagePath, 0777, true)) {
+                throw new \Exception('No se pudo crear el directorio de imágenes');
+            }
+        }
+        
+        // Generar nombre único
+        $nombreImagen = 'producto_' . $prenda->id_prenda . '_' . time() . '.' . $file->getClientOriginalExtension();
+        $rutaRelativa = 'productos/' . $nombreImagen;
+        
+        // Mover la imagen con verificación
+        $rutaCompleta = $file->storeAs('public/productos', $nombreImagen);
+        
+        if (!$rutaCompleta) {
+            throw new \Exception('Error al guardar la imagen');
+        }
+        
+        $imagenUrl = asset('storage/' . $rutaRelativa);
+        $imagenSubida = true;
+        error_log('✅ Imagen guardada en: ' . $imagenUrl);
+        
+        // Guardar en la tabla ImagenPrenda
+        ImagenPrenda::create([
+            'id_prenda' => $prenda->id_prenda,
+            'ruta_archivo' => $nombreImagen,
+            'cloudinary_url' => $imagenUrl,
+            'imagen_mime' => $file->getMimeType(),
+            'es_principal' => true,
+            'orden' => 0,
+        ]);
+        
+    } catch (\Exception $e) {
+        error_log('❌ Error al procesar imagen: ' . $e->getMessage());
+        // Continuar sin imagen para no interrumpir el proceso
+        $imagenUrl = null;
+        $imagenSubida = false;
+    }
+}
 
         $producto = ProductoTienda::create([
             'id_empresa' => $user->id_empresa,
