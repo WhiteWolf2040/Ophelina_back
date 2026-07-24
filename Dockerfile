@@ -153,6 +153,12 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'DB_SCHEMA=public' >> /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
+    echo 'CLOUDINARY_URL=${CLOUDINARY_URL}' >> /usr/local/bin/start.sh && \
+    echo 'STRIPE_SECRET=${STRIPE_SECRET}' >> /usr/local/bin/start.sh && \
+    echo 'STRIPE_SUCCESS_URL=${STRIPE_SUCCESS_URL}' >> /usr/local/bin/start.sh && \
+    echo 'STRIPE_CANCEL_URL=${STRIPE_CANCEL_URL}' >> /usr/local/bin/start.sh && \
+    echo 'STRIPE_TIENDA_SUCCESS_URL=${STRIPE_TIENDA_SUCCESS_URL}' >> /usr/local/bin/start.sh && \
+    echo 'STRIPE_TIENDA_CANCEL_URL=${STRIPE_TIENDA_CANCEL_URL}' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
     echo 'echo "📄 .env generado"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
