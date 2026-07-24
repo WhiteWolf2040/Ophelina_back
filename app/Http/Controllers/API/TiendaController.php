@@ -144,6 +144,9 @@ public function store(Request $request)
 {
     try {
         $user = $request->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'No autenticado'], 401);
+        }
 
         $validated = $request->validate([
             'nombre' => 'required|string|max:100',
@@ -158,6 +161,8 @@ public function store(Request $request)
             'imagen' => 'nullable|file|image|max:5120',
         ]);
 
+        error_log('✅ Validación pasada');
+
         $prenda = Prenda::create([
             'id_empresa' => $user->id_empresa,
             'descripcion' => $validated['nombre'],
@@ -171,46 +176,33 @@ public function store(Request $request)
             'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
         ]);
 
-        $imagenSubida = false;
+        error_log('✅ Prenda creada ID: ' . $prenda->id_prenda);
+
         $imagenUrl = null;
+        $imagenSubida = false;
 
+        // 💾 GUARDAR IMAGEN LOCALMENTE (SIN CLOUDINARY)
         if ($request->hasFile('imagen')) {
+            error_log('📸 Procesando imagen local...');
             $file = $request->file('imagen');
-
-            if (!$file->isValid()) {
-                throw new \Exception('El archivo de imagen no es válido: ' . $file->getErrorMessage());
+            
+            // Crear directorio si no existe
+            $storagePath = storage_path('app/public/productos');
+            if (!file_exists($storagePath)) {
+                mkdir($storagePath, 0777, true);
             }
-
-            if (!config('cloudinary.cloud_url')) {
-                Log::channel('daily')->error('❌ [STORE] CLOUDINARY_URL no está configurada');
-                throw new \Exception('Cloudinary no está configurado en el servidor');
-            }
-
-            // Subir a Cloudinary
-            $resultado = Cloudinary::upload($file->getRealPath(), [
-                'folder' => 'ophelia/prendas',
-                'public_id' => 'prenda_' . $prenda->id_prenda . '_' . time(),
-                'resource_type' => 'image',
-                'transformation' => [
-                    'quality' => 'auto',
-                    'fetch_format' => 'auto',
-                ]
-            ]);
-
-            // Crear registro de imagen
-            $imagenData = [
-                'id_prenda' => $prenda->id_prenda,
-                'ruta_archivo' => $file->getClientOriginalName(),
-                'cloudinary_url' => $resultado->getSecurePath(),
-                'imagen_mime' => $file->getMimeType(),
-                'es_principal' => true,
-                'orden' => 0,
-            ];
-
-            $imagen = ImagenPrenda::create($imagenData);
-            $imagenUrl = $resultado->getSecurePath();
+            
+            // Generar nombre único
+            $nombreImagen = 'producto_' . $prenda->id_prenda . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $rutaRelativa = 'productos/' . $nombreImagen;
+            
+            // Mover la imagen
+            $file->storeAs('public/productos', $nombreImagen);
+            
+            $imagenUrl = asset('storage/' . $rutaRelativa);
             $imagenSubida = true;
-        } // 👈 ¡AQUÍ FALTABA CERRAR EL IF!
+            error_log('✅ Imagen guardada en: ' . $imagenUrl);
+        }
 
         $producto = ProductoTienda::create([
             'id_empresa' => $user->id_empresa,
@@ -227,8 +219,7 @@ public function store(Request $request)
             'fecha_publicacion' => now()->format('Y-m-d'),
         ]);
 
-        $producto->load('prenda');
-        $producto->imagen_url = $imagenUrl ?? $this->urlImagenDePrenda($producto->prenda);
+        error_log('✅ Producto creado ID: ' . $producto->id_producto);
 
         return response()->json([
             'success' => true,
@@ -241,18 +232,12 @@ public function store(Request $request)
             ]
         ]);
 
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Error de validación',
-            'errors' => $e->errors()
-        ], 422);
-
     } catch (\Throwable $e) {
-        Log::error('❌ Error en TiendaController@store: ' . $e->getMessage());
+        error_log('❌ ERROR: ' . $e->getMessage());
+        error_log('📁 Archivo: ' . $e->getFile() . ':' . $e->getLine());
+        
         return response()->json([
             'success' => false,
-            'message' => 'Error interno del servidor',
             'error' => $e->getMessage(),
             'file' => $e->getFile(),
             'line' => $e->getLine()
