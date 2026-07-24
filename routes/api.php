@@ -22,6 +22,7 @@ use App\Http\Controllers\API\MisEmpenosController;
 use App\Http\Controllers\API\ApartadoController;
 use App\Http\Controllers\API\StripeWebhookController;
 use App\Http\Controllers\API\OpheliaTiendaController;
+use App\Http\Controllers\API\AbonoController;
 
 
 /*
@@ -95,6 +96,7 @@ Route::middleware('auth:sanctum')->group(function () {
     ==========================
     */
     Route::get('/cliente/empenos/resumen', [MisEmpenosController::class, 'getResumenMisEmpenos']);
+    Route::post('/cliente/empenos/{empeno}/abono', [AbonoController::class, 'crearSesionPago']);
     Route::get('/cliente/empenos/{id}', [MisEmpenosController::class, 'getMisEmpenosDetalle']);
     Route::get('/cliente/empenos', [MisEmpenosController::class, 'getMisEmpenos']);
 
