@@ -300,8 +300,13 @@ class TiendaController extends Controller
     }
 
     /**
-     * Helper: guarda el binario de una imagen en imagen_prenda.imagen_data
-     * usando decode()/base64 para evitar problemas de encoding con bytea en PostgreSQL.
+     * Helper: guarda una imagen codificada en base64 (texto) en imagen_prenda.imagen_data.
+     *
+     * IMPORTANTE: imagen_data debe ser columna `text` (NO `bytea`). En este entorno
+     * (PHP 8.4-fpm-alpine + pdo_pgsql), bindear binario crudo contra una columna bytea
+     * provoca un crash a nivel de proceso en PHP-FPM (nginx devuelve un 500 genérico,
+     * sin ninguna excepción capturable). Guardar como base64/texto evita ese binding
+     * binario por completo y es seguro para imágenes <1MB.
      */
     private function guardarImagenEnBD(int $idPrenda, $file, bool $esPrincipal = true, int $orden = 0): bool
     {
@@ -315,22 +320,14 @@ class TiendaController extends Controller
             $nombreOriginal = $file->getClientOriginalName();
             $base64 = base64_encode($binario);
 
-            // 1) Crear el registro sin el binario (evita bindear bytea vía Eloquent)
-            $imagen = ImagenPrenda::create([
+            ImagenPrenda::create([
                 'id_prenda' => $idPrenda,
                 'ruta_archivo' => $nombreOriginal,
+                'imagen_data' => $base64, // texto puro, no binario
                 'imagen_mime' => $mime,
                 'es_principal' => $esPrincipal,
                 'orden' => $orden,
             ]);
-
-            // 2) Insertar el binario real usando decode(base64) — esto es lo que
-            //    evita el error "invalid byte sequence for encoding UTF8" que
-            //    ocurre al pasar binario crudo como parámetro de texto normal.
-            DB::statement(
-                "UPDATE imagen_prenda SET imagen_data = decode(?, 'base64') WHERE id_imagen = ?",
-                [$base64, $imagen->id_imagen]
-            );
 
             return true;
         } catch (\Throwable $e) {
@@ -357,12 +354,9 @@ class TiendaController extends Controller
             abort(404, 'Imagen no encontrada');
         }
 
-        // El driver PDO de PostgreSQL puede devolver bytea como resource/stream
-        // en lugar de string. Hay que normalizarlo antes de responder.
-        $datos = $imagen->imagen_data;
-        if (is_resource($datos)) {
-            $datos = stream_get_contents($datos);
-        }
+        // imagen_data se guarda como texto base64 (ver guardarImagenEnBD) — hay que
+        // decodificarlo antes de servir los bytes reales de la imagen.
+        $datos = base64_decode($imagen->imagen_data);
 
         return response($datos)
             ->header('Content-Type', $imagen->imagen_mime ?? 'image/jpeg')
