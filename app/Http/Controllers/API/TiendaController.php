@@ -137,103 +137,167 @@ class TiendaController extends Controller
         }
     }
 
-    /**
-     * Crear producto (sincroniza Inventario + Tienda + Imagen en Cloudinary)
-     */
-    public function store(Request $request)
-    {
-        try {
-            $user = $request->user();
+   /**
+ * Crear producto (sincroniza Inventario + Tienda + Imagen en Cloudinary)
+ */
+public function store(Request $request)
+{
+    try {
+        $user = $request->user();
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
-            }
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Usuario no autenticado'
+            ], 401);
+        }
 
-            $validated = $request->validate([
-                'nombre' => 'required|string|max:100',
-                'categoria' => 'required|string|max:100',
-                'precio' => 'required|numeric|min:0',
-                'stock' => 'required|integer|min:0',
-                'descripcion' => 'nullable|string',
-                'estado' => 'required|string|in:Nuevo,Como nuevo,Buen estado,Aceptable',
-                'visible' => 'boolean',
-                'destacado' => 'boolean',
-                'descuento' => 'numeric|min:0|max:100',
-                'imagen' => 'nullable|file|image|max:5120',
-            ]);
+        // 🔍 LOG: Datos recibidos
+        Log::info('📥 Datos recibidos en store:', [
+            'user_id' => $user->id_usuario,
+            'empresa_id' => $user->id_empresa,
+            'has_file' => $request->hasFile('imagen'),
+            'all_data' => $request->all(),
+            'files' => $request->allFiles()
+        ]);
 
-            // CREAR EN INVENTARIO (prendas)
-            $prenda = Prenda::create([
-                'id_empresa' => $user->id_empresa,
-                'descripcion' => $validated['nombre'],
-                'tipo' => $validated['categoria'] ?? 'Otros',
-                'material' => null,
-                'peso_gramos' => null,
-                'valor_estimado' => $validated['precio'],
-                'estado' => 'Disponible',
-                'origen' => 'compra_directa',
-                'fecha_registro' => now(),
-                'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
-            ]);
+        $validated = $request->validate([
+            'nombre' => 'required|string|max:100',
+            'categoria' => 'required|string|max:100',
+            'precio' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'descripcion' => 'nullable|string',
+            'estado' => 'required|string|in:Nuevo,Como nuevo,Buen estado,Aceptable',
+            'visible' => 'boolean',
+            'destacado' => 'boolean',
+            'descuento' => 'numeric|min:0|max:100',
+            'imagen' => 'nullable|file|image|max:5120',
+        ]);
 
-            // ✅ SUBIR IMAGEN A CLOUDINARY
-            if ($request->hasFile('imagen')) {
+        // CREAR EN INVENTARIO (prendas)
+        $prenda = Prenda::create([
+            'id_empresa' => $user->id_empresa,
+            'descripcion' => $validated['nombre'],
+            'tipo' => $validated['categoria'] ?? 'Otros',
+            'material' => null,
+            'peso_gramos' => null,
+            'valor_estimado' => $validated['precio'],
+            'estado' => 'Disponible',
+            'origen' => 'compra_directa',
+            'fecha_registro' => now(),
+            'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
+        ]);
+
+        Log::info('✅ Prenda creada:', ['id_prenda' => $prenda->id_prenda]);
+
+        // ✅ SUBIR IMAGEN A CLOUDINARY
+        if ($request->hasFile('imagen')) {
+            try {
                 $file = $request->file('imagen');
-
-                $resultado = Cloudinary::upload($file->getRealPath(), [
-                    'folder' => 'ophelia/prendas',
+                
+                // 🔍 LOG: Información del archivo
+                Log::info('📸 Procesando imagen:', [
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                    'extension' => $file->getClientOriginalExtension()
                 ]);
 
-                ImagenPrenda::create([
+                // Verificar que el archivo sea válido
+                if (!$file->isValid()) {
+                    throw new \Exception('El archivo de imagen no es válido');
+                }
+
+                // Subir a Cloudinary con más configuración
+                $resultado = Cloudinary::upload($file->getRealPath(), [
+                    'folder' => 'ophelia/prendas',
+                    'public_id' => 'prenda_' . $prenda->id_prenda . '_' . time(),
+                    'resource_type' => 'image',
+                    'transformation' => [
+                        'quality' => 'auto',
+                        'fetch_format' => 'auto',
+                    ]
+                ]);
+
+                // 🔍 LOG: Resultado de Cloudinary
+                Log::info('☁️ Imagen subida a Cloudinary:', [
+                    'secure_url' => $resultado->getSecurePath(),
+                    'public_id' => $resultado->getPublicId()
+                ]);
+
+                // Crear registro de imagen
+                $imagenData = [
                     'id_prenda' => $prenda->id_prenda,
                     'ruta_archivo' => $file->getClientOriginalName(),
                     'cloudinary_url' => $resultado->getSecurePath(),
                     'imagen_mime' => $file->getMimeType(),
                     'es_principal' => true,
                     'orden' => 0,
-                ]);
+                ];
+                
+                // Verificar si el modelo ImagenPrenda tiene estos campos
+                Log::info('📝 Creando ImagenPrenda con:', $imagenData);
+                
+                $imagen = ImagenPrenda::create($imagenData);
+                
+                Log::info('✅ ImagenPrenda creada:', ['id' => $imagen->id_imagen ?? 'sin_id']);
+
+            } catch (\Exception $e) {
+                Log::error('❌ Error al subir imagen a Cloudinary: ' . $e->getMessage());
+                Log::error('Stack trace: ' . $e->getTraceAsString());
+                
+                // Si falla Cloudinary, no eliminamos la prenda pero guardamos sin imagen
+                // Así el producto se crea igual
+                Log::warning('⚠️ Producto creado sin imagen debido a error en Cloudinary');
             }
-
-            // CREAR EN TIENDA (producto_tienda)
-            $producto = ProductoTienda::create([
-                'id_empresa' => $user->id_empresa,
-                'id_prenda' => $prenda->id_prenda,
-                'nombre' => $prenda->descripcion,
-                'categoria' => $validated['categoria'] ?? 'Otros',
-                'precio' => $validated['precio'],
-                'stock' => $validated['stock'],
-                'descripcion' => $validated['descripcion'] ?? '',
-                'estado_producto' => $validated['estado'],
-                'visible' => $validated['visible'] ?? true,
-                'destacado' => $validated['destacado'] ?? false,
-                'descuento' => $validated['descuento'] ?? 0,
-                'fecha_publicacion' => now()->format('Y-m-d'),
-            ]);
-
-            $prenda->refresh();
-            $producto->imagen_url = $this->urlImagenDePrenda($prenda);
-
-            return response()->json([
-                'success' => true,
-                'message' => '✅ Producto creado en Inventario y Tienda',
-                'data' => [
-                    'inventario' => $prenda,
-                    'tienda' => $producto
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error en TiendaController@store: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al crear producto: ' . $e->getMessage()
-            ], 500);
         }
-    }
 
+        // CREAR EN TIENDA (producto_tienda)
+        $producto = ProductoTienda::create([
+            'id_empresa' => $user->id_empresa,
+            'id_prenda' => $prenda->id_prenda,
+            'nombre' => $prenda->descripcion,
+            'categoria' => $validated['categoria'] ?? 'Otros',
+            'precio' => $validated['precio'],
+            'stock' => $validated['stock'],
+            'descripcion' => $validated['descripcion'] ?? '',
+            'estado_producto' => $validated['estado'],
+            'visible' => $validated['visible'] ?? true,
+            'destacado' => $validated['destacado'] ?? false,
+            'descuento' => $validated['descuento'] ?? 0,
+            'fecha_publicacion' => now()->format('Y-m-d'),
+        ]);
+
+        Log::info('✅ ProductoTienda creado:', ['id_producto' => $producto->id_producto]);
+
+        $prenda->refresh();
+        $producto->imagen_url = $this->urlImagenDePrenda($prenda);
+
+        return response()->json([
+            'success' => true,
+            'message' => '✅ Producto creado en Inventario y Tienda',
+            'data' => [
+                'inventario' => $prenda,
+                'tienda' => $producto
+            ]
+        ]);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        Log::error('❌ Error de validación: ' . json_encode($e->errors()));
+        return response()->json([
+            'success' => false,
+            'message' => 'Error de validación',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Exception $e) {
+        Log::error('❌ Error en TiendaController@store: ' . $e->getMessage());
+        Log::error('Stack trace: ' . $e->getTraceAsString());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear producto: ' . $e->getMessage()
+        ], 500);
+    }
+}
     /**
      * Actualizar producto
      */
