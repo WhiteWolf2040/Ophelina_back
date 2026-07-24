@@ -460,12 +460,12 @@ public function store(Request $request)
                 'data' => $producto
             ]);
 
-        } catch (\Exception $e) {
-            Log::error('Error en TiendaController@update: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al actualizar producto: ' . $e->getMessage()
-            ], 500);
+        } catch (\Throwable $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'file'  => $e->getFile(),
+            'line'  => $e->getLine(),
+        ], 500);
         }
     }
 
