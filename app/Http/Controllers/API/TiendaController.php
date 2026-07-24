@@ -152,14 +152,14 @@ public function store(Request $request)
             ], 401);
         }
 
-        // 🔍 LOG: Datos recibidos
-        Log::info('📥 Datos recibidos en store:', [
-            'user_id' => $user->id_usuario,
-            'empresa_id' => $user->id_empresa,
-            'has_file' => $request->hasFile('imagen'),
-            'all_data' => $request->all(),
-            'files' => $request->allFiles()
-        ]);
+        // 🔍 VERIFICAR QUE CLOUDINARY ESTÉ CONFIGURADO
+        if (!config('cloudinary.cloud_url')) {
+            Log::error('❌ CLOUDINARY_URL no está configurada');
+            return response()->json([
+                'success' => false,
+                'message' => 'Cloudinary no está configurado en el servidor. Contacta al administrador.'
+            ], 500);
+        }
 
         $validated = $request->validate([
             'nombre' => 'required|string|max:100',
@@ -188,27 +188,18 @@ public function store(Request $request)
             'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
         ]);
 
-        Log::info('✅ Prenda creada:', ['id_prenda' => $prenda->id_prenda]);
-
         // ✅ SUBIR IMAGEN A CLOUDINARY
+        $imagenSubida = false;
         if ($request->hasFile('imagen')) {
             try {
                 $file = $request->file('imagen');
                 
-                // 🔍 LOG: Información del archivo
-                Log::info('📸 Procesando imagen:', [
-                    'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType(),
-                    'size' => $file->getSize(),
-                    'extension' => $file->getClientOriginalExtension()
-                ]);
-
                 // Verificar que el archivo sea válido
                 if (!$file->isValid()) {
                     throw new \Exception('El archivo de imagen no es válido');
                 }
 
-                // Subir a Cloudinary con más configuración
+                // Subir a Cloudinary
                 $resultado = Cloudinary::upload($file->getRealPath(), [
                     'folder' => 'ophelia/prendas',
                     'public_id' => 'prenda_' . $prenda->id_prenda . '_' . time(),
@@ -219,36 +210,22 @@ public function store(Request $request)
                     ]
                 ]);
 
-                // 🔍 LOG: Resultado de Cloudinary
-                Log::info('☁️ Imagen subida a Cloudinary:', [
-                    'secure_url' => $resultado->getSecurePath(),
-                    'public_id' => $resultado->getPublicId()
-                ]);
-
                 // Crear registro de imagen
-                $imagenData = [
+                ImagenPrenda::create([
                     'id_prenda' => $prenda->id_prenda,
                     'ruta_archivo' => $file->getClientOriginalName(),
                     'cloudinary_url' => $resultado->getSecurePath(),
                     'imagen_mime' => $file->getMimeType(),
                     'es_principal' => true,
                     'orden' => 0,
-                ];
+                ]);
                 
-                // Verificar si el modelo ImagenPrenda tiene estos campos
-                Log::info('📝 Creando ImagenPrenda con:', $imagenData);
-                
-                $imagen = ImagenPrenda::create($imagenData);
-                
-                Log::info('✅ ImagenPrenda creada:', ['id' => $imagen->id_imagen ?? 'sin_id']);
+                $imagenSubida = true;
+                Log::info('✅ Imagen subida a Cloudinary:', ['url' => $resultado->getSecurePath()]);
 
             } catch (\Exception $e) {
                 Log::error('❌ Error al subir imagen a Cloudinary: ' . $e->getMessage());
-                Log::error('Stack trace: ' . $e->getTraceAsString());
-                
-                // Si falla Cloudinary, no eliminamos la prenda pero guardamos sin imagen
-                // Así el producto se crea igual
-                Log::warning('⚠️ Producto creado sin imagen debido a error en Cloudinary');
+                // Continúa con el producto pero sin imagen
             }
         }
 
@@ -268,22 +245,17 @@ public function store(Request $request)
             'fecha_publicacion' => now()->format('Y-m-d'),
         ]);
 
-        Log::info('✅ ProductoTienda creado:', ['id_producto' => $producto->id_producto]);
-
-        $prenda->refresh();
-        $producto->imagen_url = $this->urlImagenDePrenda($prenda);
-
         return response()->json([
             'success' => true,
-            'message' => '✅ Producto creado en Inventario y Tienda',
+            'message' => '✅ Producto creado exitosamente' . ($imagenSubida ? ' con imagen' : ' (sin imagen)'),
             'data' => [
                 'inventario' => $prenda,
-                'tienda' => $producto
+                'tienda' => $producto,
+                'imagen_subida' => $imagenSubida
             ]
         ]);
 
     } catch (\Illuminate\Validation\ValidationException $e) {
-        Log::error('❌ Error de validación: ' . json_encode($e->errors()));
         return response()->json([
             'success' => false,
             'message' => 'Error de validación',

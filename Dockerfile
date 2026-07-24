@@ -154,6 +154,9 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'CLOUDINARY_URL=${CLOUDINARY_URL}' >> /usr/local/bin/start.sh && \
+    echo 'CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}' >> /var/www/html/.env
+    echo 'CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}' >> /var/www/html/.env
+    echo 'CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}' >> /var/www/html/.env
     echo 'STRIPE_SECRET=${STRIPE_SECRET}' >> /usr/local/bin/start.sh && \
     echo 'STRIPE_SUCCESS_URL=${STRIPE_SUCCESS_URL}' >> /usr/local/bin/start.sh && \
     echo 'STRIPE_CANCEL_URL=${STRIPE_CANCEL_URL}' >> /usr/local/bin/start.sh && \
