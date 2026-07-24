@@ -137,7 +137,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'rm -rf /var/www/html/bootstrap/cache/*.php' >> /usr/local/bin/start.sh && \
     echo 'echo "🧹 Caché limpiada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-  # === GENERAR .env ===
+    echo '# === GENERAR .env ===' >> /usr/local/bin/start.sh && \
     echo 'cat > /var/www/html/.env << "ENVEOF"' >> /usr/local/bin/start.sh && \
     echo 'APP_NAME=Laravel' >> /usr/local/bin/start.sh && \
     echo 'APP_ENV=production' >> /usr/local/bin/start.sh && \
@@ -163,7 +163,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'STRIPE_TIENDA_SUCCESS_URL=${STRIPE_TIENDA_SUCCESS_URL}' >> /usr/local/bin/start.sh && \
     echo 'STRIPE_TIENDA_CANCEL_URL=${STRIPE_TIENDA_CANCEL_URL}' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
-    echo 'echo "📄 .env generado"' >> /usr/local/bin/start.sh
+    echo 'echo "📄 .env generado"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === GENERAR APP_KEY ===' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \
