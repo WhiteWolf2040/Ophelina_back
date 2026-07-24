@@ -128,11 +128,11 @@ class TiendaController extends Controller
                 'publicaciones_automaticas' => 0
             ]);
 
-        } catch (\Exception $e) {
-            Log::error('Error en TiendaController@estadisticas: ' . $e->getMessage());
+        } catch (\Throwable $e) {
             return response()->json([
-                'success' => false,
-                'message' => 'Error al cargar estadísticas: ' . $e->getMessage()
+                'error' => $e->getMessage(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
             ], 500);
         }
     }

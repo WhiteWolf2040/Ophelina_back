@@ -22,7 +22,8 @@ RUN mkdir -p /etc/supervisor/conf.d \
     && mkdir -p /run/nginx \
     && mkdir -p /var/www/html/public \
     && mkdir -p /var/www/html/database \
-    && mkdir -p /var/www/html/storage/framework/{sessions,views,cache}
+    && mkdir -p /var/www/html/storage/framework/{sessions,views,cache} \
+    && mkdir -p /var/www/html/storage/logs
 
 # Instalar Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -202,43 +203,43 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'if psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "SELECT 1" > /dev/null 2>&1; then' >> /usr/local/bin/start.sh && \
     echo '    echo "✅ Conexión a la base de datos exitosa"' >> /usr/local/bin/start.sh && \
     echo 'else' >> /usr/local/bin/start.sh && \
-    echo '    echo "❌ ERROR: No se puede conectar a la base de datos"' >> /usr/local/bin/start.sh && \
-    echo '    echo "=== DETALLES ==="' >> /usr/local/bin/start.sh && \
-    echo '    echo "Host: ${DB_HOST}"' >> /usr/local/bin/start.sh && \
-    echo '    echo "User: ${DB_USERNAME}"' >> /usr/local/bin/start.sh && \
-    echo '    echo "Database: ${DB_DATABASE}"' >> /usr/local/bin/start.sh && \
-    echo '    psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "SELECT 1" 2>&1' >> /usr/local/bin/start.sh && \
-    echo '    unset PGPASSWORD' >> /usr/local/bin/start.sh && \
-    echo '    exit 1' >> /usr/local/bin/start.sh && \
-    echo 'fi' >> /usr/local/bin/start.sh && \
-    echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# === CREAR SCHEMA PUBLIC ===' >> /usr/local/bin/start.sh && \
-    echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
-    echo 'echo "📁 Verificando/Creando schema public..."' >> /usr/local/bin/start.sh && \
-    echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "CREATE SCHEMA IF NOT EXISTS public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
-    echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "ALTER DATABASE ${DB_DATABASE} SET search_path TO public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
-    echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
-    echo 'echo "✅ Schema public listo"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# ════════════════════════════════════════════════════' >> /usr/local/bin/start.sh && \
-    echo '# ⚠️  MIGRACIONES Y SEEDERS DESHABILITADOS' >> /usr/local/bin/start.sh && \
-    echo '# ════════════════════════════════════════════════════' >> /usr/local/bin/start.sh && \
-    echo 'echo "⏭️  Migraciones y seeders deshabilitados (ya ejecutados)"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# === LIMPIAR CONFIGURACIÓN ===' >> /usr/local/bin/start.sh && \
-    echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
-    echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
-    echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
-    echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
-    echo 'echo "⚙️ Configuración optimizada"' >> /usr/local/bin/start.sh && \
-    echo '' >> /usr/local/bin/start.sh && \
-    echo '# === INICIAR SUPERVISOR ===' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== 🟢 SERVIDOR LISTO ==="' >> /usr/local/bin/start.sh && \
-    echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
+        echo '    echo "❌ ERROR: No se puede conectar a la base de datos"' >> /usr/local/bin/start.sh && \
+        echo '    echo "=== DETALLES ==="' >> /usr/local/bin/start.sh && \
+        echo '    echo "Host: ${DB_HOST}"' >> /usr/local/bin/start.sh && \
+        echo '    echo "User: ${DB_USERNAME}"' >> /usr/local/bin/start.sh && \
+        echo '    echo "Database: ${DB_DATABASE}"' >> /usr/local/bin/start.sh && \
+        echo '    psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "SELECT 1" 2>&1' >> /usr/local/bin/start.sh && \
+        echo '    unset PGPASSWORD' >> /usr/local/bin/start.sh && \
+        echo '    exit 1' >> /usr/local/bin/start.sh && \
+        echo 'fi' >> /usr/local/bin/start.sh && \
+        echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
+        echo '' >> /usr/local/bin/start.sh && \
+        echo '# === CREAR SCHEMA PUBLIC ===' >> /usr/local/bin/start.sh && \
+        echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
+        echo 'echo "📁 Verificando/Creando schema public..."' >> /usr/local/bin/start.sh && \
+        echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "CREATE SCHEMA IF NOT EXISTS public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
+        echo 'psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "ALTER DATABASE ${DB_DATABASE} SET search_path TO public;" 2>/dev/null || true' >> /usr/local/bin/start.sh && \
+        echo 'unset PGPASSWORD' >> /usr/local/bin/start.sh && \
+        echo 'echo "✅ Schema public listo"' >> /usr/local/bin/start.sh && \
+        echo '' >> /usr/local/bin/start.sh && \
+        echo '# ════════════════════════════════════════════════════' >> /usr/local/bin/start.sh && \
+        echo '# ⚠️  MIGRACIONES Y SEEDERS DESHABILITADOS' >> /usr/local/bin/start.sh && \
+        echo '# ════════════════════════════════════════════════════' >> /usr/local/bin/start.sh && \
+        echo 'echo "⏭️  Migraciones y seeders deshabilitados (ya ejecutados)"' >> /usr/local/bin/start.sh && \
+        echo '' >> /usr/local/bin/start.sh && \
+        echo '# === LIMPIAR CONFIGURACIÓN ===' >> /usr/local/bin/start.sh && \
+        echo 'php artisan config:clear' >> /usr/local/bin/start.sh && \
+        echo 'php artisan view:clear' >> /usr/local/bin/start.sh && \
+        echo 'php artisan route:clear' >> /usr/local/bin/start.sh && \
+        echo 'php artisan config:cache' >> /usr/local/bin/start.sh && \
+        echo 'echo "⚙️ Configuración optimizada"' >> /usr/local/bin/start.sh && \
+        echo '' >> /usr/local/bin/start.sh && \
+        echo '# === INICIAR SUPERVISOR ===' >> /usr/local/bin/start.sh && \
+        echo 'echo "=== 🟢 SERVIDOR LISTO ==="' >> /usr/local/bin/start.sh && \
+        echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
 
-RUN chmod +x /usr/local/bin/start.sh
+    RUN chmod +x /usr/local/bin/start.sh
 
-EXPOSE 8080
+    EXPOSE 8080
 
 CMD ["/usr/local/bin/start.sh"]
