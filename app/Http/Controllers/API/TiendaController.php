@@ -179,28 +179,9 @@ class TiendaController extends Controller
 
             // ✅ GUARDAR IMAGEN EN BASE DE DATOS (PERSISTE ENTRE DEPLOYS)
             if ($request->hasFile('imagen')) {
-                try {
-                    $file = $request->file('imagen');
-                    
-                    // Leer el contenido binario de la imagen
-                    $imagenData = file_get_contents($file->getRealPath());
-                    
-                    // Guardar en la tabla imagen_prenda
-                    ImagenPrenda::create([
-                        'id_prenda' => $prenda->id_prenda,
-                        'ruta_archivo' => $file->getClientOriginalName(),
-                        'imagen_data' => $imagenData, // ✅ Se guarda en la BD
-                        'imagen_mime' => $file->getMimeType(),
-                        'es_principal' => true,
-                        'orden' => 0,
-                    ]);
-                    
+                $imagenSubida = $this->guardarImagenEnBD($prenda->id_prenda, $request->file('imagen'));
+                if ($imagenSubida) {
                     $imagenUrl = url('/api/imagen-prenda/' . $prenda->id_prenda);
-                    $imagenSubida = true;
-                    
-                } catch (\Exception $e) {
-                    error_log('❌ Error guardando imagen en BD: ' . $e->getMessage());
-                    $imagenSubida = false;
                 }
             }
 
@@ -237,9 +218,9 @@ class TiendaController extends Controller
                 'errors' => $e->errors()
             ], 422);
         } catch (\Throwable $e) {
-            error_log('❌ ERROR EN STORE: ' . $e->getMessage());
-            error_log('📁 Archivo: ' . $e->getFile() . ':' . $e->getLine());
-            
+            Log::error('❌ ERROR EN STORE: ' . $e->getMessage());
+            Log::error('📁 Archivo: ' . $e->getFile() . ':' . $e->getLine());
+
             return response()->json([
                 'success' => false,
                 'error' => $e->getMessage(),
@@ -293,22 +274,11 @@ class TiendaController extends Controller
 
             // ✅ Si viene una imagen nueva, se guarda en BD
             if ($request->hasFile('imagen')) {
-                $file = $request->file('imagen');
-
                 // Eliminar imagen anterior
                 ImagenPrenda::where('id_prenda', $producto->id_prenda)->delete();
 
-                // Guardar nueva imagen en BD
-                $imagenData = file_get_contents($file->getRealPath());
-                
-                ImagenPrenda::create([
-                    'id_prenda' => $producto->id_prenda,
-                    'ruta_archivo' => $file->getClientOriginalName(),
-                    'imagen_data' => $imagenData,
-                    'imagen_mime' => $file->getMimeType(),
-                    'es_principal' => true,
-                    'orden' => 0,
-                ]);
+                // Guardar nueva imagen en BD (binario vía decode() de Postgres)
+                $this->guardarImagenEnBD($producto->id_prenda, $request->file('imagen'));
             }
 
             $producto->load('prenda');
@@ -321,11 +291,51 @@ class TiendaController extends Controller
             ]);
 
         } catch (\Throwable $e) {
-        return response()->json([
-            'error' => $e->getMessage(),
-            'file'  => $e->getFile(),
-            'line'  => $e->getLine(),
-        ], 500);
+            return response()->json([
+                'error' => $e->getMessage(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Helper: guarda el binario de una imagen en imagen_prenda.imagen_data
+     * usando decode()/base64 para evitar problemas de encoding con bytea en PostgreSQL.
+     */
+    private function guardarImagenEnBD(int $idPrenda, $file, bool $esPrincipal = true, int $orden = 0): bool
+    {
+        try {
+            $binario = file_get_contents($file->getRealPath());
+            if ($binario === false) {
+                throw new \RuntimeException('No se pudo leer el archivo subido');
+            }
+
+            $mime = $file->getMimeType();
+            $nombreOriginal = $file->getClientOriginalName();
+            $base64 = base64_encode($binario);
+
+            // 1) Crear el registro sin el binario (evita bindear bytea vía Eloquent)
+            $imagen = ImagenPrenda::create([
+                'id_prenda' => $idPrenda,
+                'ruta_archivo' => $nombreOriginal,
+                'imagen_mime' => $mime,
+                'es_principal' => $esPrincipal,
+                'orden' => $orden,
+            ]);
+
+            // 2) Insertar el binario real usando decode(base64) — esto es lo que
+            //    evita el error "invalid byte sequence for encoding UTF8" que
+            //    ocurre al pasar binario crudo como parámetro de texto normal.
+            DB::statement(
+                "UPDATE imagen_prenda SET imagen_data = decode(?, 'base64') WHERE id_imagen = ?",
+                [$base64, $imagen->id_imagen]
+            );
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('❌ Error guardando imagen en BD: ' . $e->getMessage());
+            return false;
         }
     }
 
@@ -347,7 +357,14 @@ class TiendaController extends Controller
             abort(404, 'Imagen no encontrada');
         }
 
-        return response($imagen->imagen_data)
+        // El driver PDO de PostgreSQL puede devolver bytea como resource/stream
+        // en lugar de string. Hay que normalizarlo antes de responder.
+        $datos = $imagen->imagen_data;
+        if (is_resource($datos)) {
+            $datos = stream_get_contents($datos);
+        }
+
+        return response($datos)
             ->header('Content-Type', $imagen->imagen_mime ?? 'image/jpeg')
             ->header('Cache-Control', 'public, max-age=86400');
     }
