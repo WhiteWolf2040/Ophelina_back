@@ -32,6 +32,27 @@ use App\Http\Controllers\API\OpheliaTiendaController;
 |--------------------------------------------------------------------------
 */
 
+Route::get('/test-cloudinary', function () {
+    try {
+        $config = config('cloudinary');
+        return response()->json([
+            'success' => true,
+            'cloud_url_set' => !empty($config['cloud_url']),
+            'cloud_name' => $config['cloud_name'] ?? 'no configurado',
+            'api_key' => $config['api_key'] ?? 'no configurado',
+            'api_secret' => !empty($config['api_secret']) ? 'configurado' : 'no configurado',
+            'class_exists' => class_exists(\CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary::class)
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+});
+
+
+
 // Contacto
 Route::post('/send-email', [ContactController::class, 'SendEmail']);
 
