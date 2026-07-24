@@ -14,9 +14,9 @@ class ImagenPrenda extends Model
     protected $fillable = [
        'id_prenda',
         'ruta_archivo',
-        'imagen_data',      // ✅ Para guardar la imagen en BD
+        'imagen_data',      //  Para guardar la imagen en BD
         'imagen_mime',
-        'cloudinary_url',   // ✅ Para compatibilidad (opcional)
+        'cloudinary_url',   //  Para compatibilidad (opcional)
         'es_principal',
         'orden',
     ];
