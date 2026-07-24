@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Prenda;
-/* use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary; */
+ use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary; 
 
 class TiendaController extends Controller
 {
@@ -140,6 +140,9 @@ class TiendaController extends Controller
 /**
  * Crear producto (sincroniza Inventario + Tienda + Imagen en Cloudinary)
  */
+/**
+ * Crear producto con Cloudinary
+ */
 public function store(Request $request)
 {
     try {
@@ -161,8 +164,9 @@ public function store(Request $request)
             'imagen' => 'nullable|file|image|max:5120',
         ]);
 
-        error_log('✅ Validación pasada');
+        Log::info('✅ Validación pasada');
 
+        // Crear prenda
         $prenda = Prenda::create([
             'id_empresa' => $user->id_empresa,
             'descripcion' => $validated['nombre'],
@@ -176,63 +180,94 @@ public function store(Request $request)
             'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
         ]);
 
-        error_log('✅ Prenda creada ID: ' . $prenda->id_prenda);
+        Log::info('✅ Prenda creada ID: ' . $prenda->id_prenda);
 
         $imagenUrl = null;
         $imagenSubida = false;
 
-        // 💾 GUARDAR IMAGEN LOCALMENTE (SIN CLOUDINARY)
-if ($request->hasFile('imagen')) {
-    error_log('📸 Procesando imagen local...');
-    try {
-        $file = $request->file('imagen');
-        
-        // Verificar que el archivo sea válido
-        if (!$file->isValid()) {
-            throw new \Exception('El archivo de imagen no es válido');
-        }
-        
-        // Crear directorio si no existe
-        $storagePath = storage_path('app/public/productos');
-        if (!file_exists($storagePath)) {
-            if (!mkdir($storagePath, 0777, true)) {
-                throw new \Exception('No se pudo crear el directorio de imágenes');
+        // ✅ SUBIR IMAGEN A CLOUDINARY
+        if ($request->hasFile('imagen')) {
+            Log::info('📸 Procesando imagen con Cloudinary...');
+            try {
+                $file = $request->file('imagen');
+                
+                if (!$file->isValid()) {
+                    throw new \Exception('El archivo de imagen no es válido. Error: ' . $file->getError());
+                }
+                
+                Log::info('Archivo: ' . $file->getClientOriginalName());
+                Log::info('Tamaño: ' . $file->getSize() . ' bytes');
+                Log::info('Mime: ' . $file->getMimeType());
+                
+                // Verificar configuración de Cloudinary
+                $cloudName = config('cloudinary.cloud.cloud_name');
+                Log::info('Cloudinary Cloud Name: ' . ($cloudName ?? 'NO CONFIGURADO'));
+                
+                if (empty($cloudName)) {
+                    throw new \Exception('Cloudinary no está configurado correctamente. Revisa tus variables de entorno.');
+                }
+                
+                // Intentar subir a Cloudinary
+                $resultado = Cloudinary::upload(
+                    $file->getRealPath(),
+                    [
+                        'folder' => 'ophelia/prendas',
+                        'public_id' => 'producto_' . $prenda->id_prenda . '_' . time(),
+                        'use_filename' => true,
+                        'unique_filename' => false,
+                    ]
+                );
+                
+                // Obtener URL segura
+                $imagenUrl = $resultado->getSecurePath();
+                $imagenSubida = true;
+                Log::info('✅ Imagen subida a Cloudinary: ' . $imagenUrl);
+                
+                // Guardar en la tabla ImagenPrenda
+                ImagenPrenda::create([
+                    'id_prenda' => $prenda->id_prenda,
+                    'ruta_archivo' => $file->getClientOriginalName(),
+                    'cloudinary_url' => $imagenUrl,
+                    'imagen_mime' => $file->getMimeType(),
+                    'es_principal' => true,
+                    'orden' => 0,
+                ]);
+                Log::info('✅ Registro en ImagenPrenda creado');
+                
+            } catch (\Exception $e) {
+                Log::error('❌ Error al procesar imagen en Cloudinary: ' . $e->getMessage());
+                Log::error('Stack trace: ' . $e->getTraceAsString());
+                
+                // Intentar guardar en base de datos como fallback
+                try {
+                    Log::info('Intentando guardar imagen en base de datos como fallback...');
+                    $file = $request->file('imagen');
+                    $imagenData = file_get_contents($file->getRealPath());
+                    
+                    ImagenPrenda::create([
+                        'id_prenda' => $prenda->id_prenda,
+                        'ruta_archivo' => $file->getClientOriginalName(),
+                        'imagen_data' => $imagenData,
+                        'imagen_mime' => $file->getMimeType(),
+                        'es_principal' => true,
+                        'orden' => 0,
+                    ]);
+                    
+                    $imagenUrl = url('/api/imagen-prenda/' . $prenda->id_prenda);
+                    $imagenSubida = true;
+                    Log::info('✅ Imagen guardada en base de datos como fallback');
+                    
+                } catch (\Exception $e2) {
+                    Log::error('❌ Error en fallback de BD: ' . $e2->getMessage());
+                    $imagenUrl = null;
+                    $imagenSubida = false;
+                }
             }
+        } else {
+            Log::info('No hay imagen en la request');
         }
-        
-        // Generar nombre único
-        $nombreImagen = 'producto_' . $prenda->id_prenda . '_' . time() . '.' . $file->getClientOriginalExtension();
-        $rutaRelativa = 'productos/' . $nombreImagen;
-        
-        // Mover la imagen con verificación
-        $rutaCompleta = $file->storeAs('public/productos', $nombreImagen);
-        
-        if (!$rutaCompleta) {
-            throw new \Exception('Error al guardar la imagen');
-        }
-        
-        $imagenUrl = asset('storage/' . $rutaRelativa);
-        $imagenSubida = true;
-        error_log('✅ Imagen guardada en: ' . $imagenUrl);
-        
-        // Guardar en la tabla ImagenPrenda
-        ImagenPrenda::create([
-            'id_prenda' => $prenda->id_prenda,
-            'ruta_archivo' => $nombreImagen,
-            'cloudinary_url' => $imagenUrl,
-            'imagen_mime' => $file->getMimeType(),
-            'es_principal' => true,
-            'orden' => 0,
-        ]);
-        
-    } catch (\Exception $e) {
-        error_log('❌ Error al procesar imagen: ' . $e->getMessage());
-        // Continuar sin imagen para no interrumpir el proceso
-        $imagenUrl = null;
-        $imagenSubida = false;
-    }
-}
 
+        // Crear producto en tienda
         $producto = ProductoTienda::create([
             'id_empresa' => $user->id_empresa,
             'id_prenda' => $prenda->id_prenda,
@@ -248,7 +283,7 @@ if ($request->hasFile('imagen')) {
             'fecha_publicacion' => now()->format('Y-m-d'),
         ]);
 
-        error_log('✅ Producto creado ID: ' . $producto->id_producto);
+        Log::info('✅ Producto creado ID: ' . $producto->id_producto);
 
         return response()->json([
             'success' => true,
@@ -261,9 +296,15 @@ if ($request->hasFile('imagen')) {
             ]
         ]);
 
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'success' => false,
+            'errors' => $e->errors()
+        ], 422);
     } catch (\Throwable $e) {
-        error_log('❌ ERROR: ' . $e->getMessage());
-        error_log('📁 Archivo: ' . $e->getFile() . ':' . $e->getLine());
+        Log::error('❌ ERROR GENERAL EN STORE: ' . $e->getMessage());
+        Log::error('📁 Archivo: ' . $e->getFile() . ':' . $e->getLine());
+        Log::error('Stack trace: ' . $e->getTraceAsString());
         
         return response()->json([
             'success' => false,

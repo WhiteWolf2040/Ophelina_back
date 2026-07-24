@@ -33,8 +33,14 @@ WORKDIR /var/www/html
 # Copiar archivos del proyecto
 COPY . .
 
+# ✅ AGREGAR CLOUDINARY AL COMPOSER.JSON
+RUN composer require cloudinary-labs/cloudinary-laravel --no-interaction
+
 # Instalar dependencias
 RUN composer install --optimize-autoloader --no-interaction --no-dev
+
+# ✅ PUBLICAR CONFIGURACIÓN DE CLOUDINARY
+RUN php artisan vendor:publish --provider="CloudinaryLabs\CloudinaryLaravel\CloudinaryServiceProvider" --force
 
 # Configurar permisos
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database \

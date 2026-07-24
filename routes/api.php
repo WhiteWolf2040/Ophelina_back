@@ -32,21 +32,41 @@ use App\Http\Controllers\API\OpheliaTiendaController;
 |--------------------------------------------------------------------------
 */
 
+// ✅ RUTA DE PRUEBA DE CLOUDINARY (PÚBLICA)
 Route::get('/test-cloudinary', function () {
     try {
         $config = config('cloudinary');
+        
+        // Verificar si existe la clase Cloudinary
+        $classExists = class_exists(\CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary::class);
+        
+        // Verificar las variables de entorno
+        $cloudName = env('CLOUDINARY_CLOUD_NAME') ?: 'NO CONFIGURADO';
+        $apiKey = env('CLOUDINARY_API_KEY') ?: 'NO CONFIGURADO';
+        $apiSecret = env('CLOUDINARY_API_SECRET') ? 'CONFIGURADO' : 'NO CONFIGURADO';
+        $cloudUrl = env('CLOUDINARY_URL') ? 'CONFIGURADO' : 'NO CONFIGURADO';
+        
         return response()->json([
             'success' => true,
-            'cloud_url_set' => !empty($config['cloud_url']),
-            'cloud_name' => $config['cloud_name'] ?? 'no configurado',
-            'api_key' => $config['api_key'] ?? 'no configurado',
-            'api_secret' => !empty($config['api_secret']) ? 'configurado' : 'no configurado',
-            'class_exists' => class_exists(\CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary::class)
+            'cloudinary_config' => [
+                'class_exists' => $classExists,
+                'cloud_name' => $cloudName,
+                'api_key' => $apiKey,
+                'api_secret' => $apiSecret,
+                'cloud_url' => $cloudUrl,
+                'config_cloud' => $config['cloud'] ?? null,
+            ],
+            'php_extensions' => [
+                'curl' => extension_loaded('curl') ? '✅' : '❌',
+                'json' => extension_loaded('json') ? '✅' : '❌',
+            ]
         ]);
     } catch (\Exception $e) {
         return response()->json([
             'success' => false,
-            'error' => $e->getMessage()
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
         ], 500);
     }
 });
