@@ -12,11 +12,11 @@ class ImagenPrenda extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'id_prenda',
+       'id_prenda',
         'ruta_archivo',
-        'imagen_data',
+        'imagen_data',      // ✅ Para guardar la imagen en BD
         'imagen_mime',
-        'cloudinary_url', // nuevo
+        'cloudinary_url',   // ✅ Para compatibilidad (opcional)
         'es_principal',
         'orden',
     ];
