@@ -137,7 +137,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'rm -rf /var/www/html/bootstrap/cache/*.php' >> /usr/local/bin/start.sh && \
     echo 'echo "🧹 Caché limpiada"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# === GENERAR .env ===' >> /usr/local/bin/start.sh && \
+  # === GENERAR .env ===
     echo 'cat > /var/www/html/.env << "ENVEOF"' >> /usr/local/bin/start.sh && \
     echo 'APP_NAME=Laravel' >> /usr/local/bin/start.sh && \
     echo 'APP_ENV=production' >> /usr/local/bin/start.sh && \
@@ -154,16 +154,16 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'CACHE_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'SESSION_DRIVER=file' >> /usr/local/bin/start.sh && \
     echo 'CLOUDINARY_URL=${CLOUDINARY_URL}' >> /usr/local/bin/start.sh && \
-    echo 'CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}' >> /var/www/html/.env && \
-    echo 'CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}' >> /var/www/html/.env && \
-    echo 'CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}' >> /var/www/html/.env && \
+    echo 'CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}' >> /usr/local/bin/start.sh && \
+    echo 'CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}' >> /usr/local/bin/start.sh && \
+    echo 'CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}' >> /usr/local/bin/start.sh && \
     echo 'STRIPE_SECRET=${STRIPE_SECRET}' >> /usr/local/bin/start.sh && \
     echo 'STRIPE_SUCCESS_URL=${STRIPE_SUCCESS_URL}' >> /usr/local/bin/start.sh && \
     echo 'STRIPE_CANCEL_URL=${STRIPE_CANCEL_URL}' >> /usr/local/bin/start.sh && \
     echo 'STRIPE_TIENDA_SUCCESS_URL=${STRIPE_TIENDA_SUCCESS_URL}' >> /usr/local/bin/start.sh && \
     echo 'STRIPE_TIENDA_CANCEL_URL=${STRIPE_TIENDA_CANCEL_URL}' >> /usr/local/bin/start.sh && \
     echo 'ENVEOF' >> /usr/local/bin/start.sh && \
-    echo 'echo "📄 .env generado"' >> /usr/local/bin/start.sh && \
+    echo 'echo "📄 .env generado"' >> /usr/local/bin/start.sh
     echo '' >> /usr/local/bin/start.sh && \
     echo '# === GENERAR APP_KEY ===' >> /usr/local/bin/start.sh && \
     echo 'cd /var/www/html' >> /usr/local/bin/start.sh && \

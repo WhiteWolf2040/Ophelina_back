@@ -16,7 +16,7 @@ class ImagenPrenda extends Model
         'ruta_archivo',
         'imagen_data',
         'imagen_mime',
-        'cloudinary_url', // ✅ nuevo
+        'cloudinary_url', // nuevo
         'es_principal',
         'orden',
     ];
