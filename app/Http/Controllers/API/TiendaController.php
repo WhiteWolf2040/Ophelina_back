@@ -157,7 +157,7 @@ class TiendaController extends Controller
                 'visible' => 'boolean',
                 'destacado' => 'boolean',
                 'descuento' => 'numeric|min:0|max:100',
-                'imagen' => 'nullable|file|image|max:5120',
+                'imagen_url' => 'nullable|url|max:500',
             ]);
 
             // Crear prenda
