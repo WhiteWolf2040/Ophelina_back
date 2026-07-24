@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Prenda;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class TiendaController extends Controller
 {
@@ -59,7 +60,6 @@ class TiendaController extends Controller
 
             $productos = $query->orderBy('fecha_publicacion', 'desc')->get();
 
-            // ✅ Agregar campo imagen_url (URL pública) a cada producto, sacada de imagen_prenda
             $productos->each(function (ProductoTienda $p) {
                 $p->imagen_url = $this->urlImagenDePrenda($p->prenda);
             });
@@ -138,7 +138,7 @@ class TiendaController extends Controller
     }
 
     /**
-     * Crear producto (sincroniza Inventario + Tienda + Imagen binaria)
+     * Crear producto (sincroniza Inventario + Tienda + Imagen en Cloudinary)
      */
     public function store(Request $request)
     {
@@ -162,13 +162,10 @@ class TiendaController extends Controller
                 'visible' => 'boolean',
                 'destacado' => 'boolean',
                 'descuento' => 'numeric|min:0|max:100',
-                // ✅ Ahora es un archivo real, no texto
-                'imagen' => 'nullable|file|image|max:5120', // máx 5MB
+                'imagen' => 'nullable|file|image|max:5120',
             ]);
 
-            // ========================================
-            // 🔥 CREAR EN INVENTARIO (prendas)
-            // ========================================
+            // CREAR EN INVENTARIO (prendas)
             $prenda = Prenda::create([
                 'id_empresa' => $user->id_empresa,
                 'descripcion' => $validated['nombre'],
@@ -182,25 +179,25 @@ class TiendaController extends Controller
                 'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
             ]);
 
-            // ========================================
-            // 🔥 GUARDAR IMAGEN COMO BINARIO EN imagen_prenda
-            // ========================================
+            // ✅ SUBIR IMAGEN A CLOUDINARY
             if ($request->hasFile('imagen')) {
                 $file = $request->file('imagen');
 
+                $resultado = Cloudinary::upload($file->getRealPath(), [
+                    'folder' => 'ophelia/prendas',
+                ]);
+
                 ImagenPrenda::create([
                     'id_prenda' => $prenda->id_prenda,
-                    'ruta_archivo' => $file->getClientOriginalName(), // solo referencia informativa
-                    'imagen_data' => file_get_contents($file->getRealPath()),
+                    'ruta_archivo' => $file->getClientOriginalName(),
+                    'cloudinary_url' => $resultado->getSecurePath(),
                     'imagen_mime' => $file->getMimeType(),
                     'es_principal' => true,
                     'orden' => 0,
                 ]);
             }
 
-            // ========================================
-            // 🔥 CREAR EN TIENDA (producto_tienda)
-            // ========================================
+            // CREAR EN TIENDA (producto_tienda)
             $producto = ProductoTienda::create([
                 'id_empresa' => $user->id_empresa,
                 'id_prenda' => $prenda->id_prenda,
@@ -279,18 +276,21 @@ class TiendaController extends Controller
             $producto->descuento = $validated['descuento'] ?? 0;
             $producto->save();
 
-            // ✅ Si viene una imagen nueva, reemplaza la principal anterior
+            // ✅ Si viene una imagen nueva, se sube a Cloudinary
             if ($request->hasFile('imagen')) {
                 $file = $request->file('imagen');
 
-                // Quitar el flag de "principal" de imágenes previas de esta prenda
                 ImagenPrenda::where('id_prenda', $producto->id_prenda)
                     ->update(['es_principal' => false]);
+
+                $resultado = Cloudinary::upload($file->getRealPath(), [
+                    'folder' => 'ophelia/prendas',
+                ]);
 
                 ImagenPrenda::create([
                     'id_prenda' => $producto->id_prenda,
                     'ruta_archivo' => $file->getClientOriginalName(),
-                    'imagen_data' => file_get_contents($file->getRealPath()),
+                    'cloudinary_url' => $resultado->getSecurePath(),
                     'imagen_mime' => $file->getMimeType(),
                     'es_principal' => true,
                     'orden' => 0,
@@ -316,9 +316,9 @@ class TiendaController extends Controller
     }
 
     /**
-     * ✅ NUEVO: sirve los bytes de la imagen principal de una prenda directo desde la BD
+     * Sirve los bytes de la imagen SOLO para registros viejos que aún
+     * tengan binario guardado en la BD (imagen_data) y no cloudinary_url.
      * GET /api/imagen-prenda/{id}
-     * (donde {id} es el id_prenda)
      */
     public function verImagen($id)
     {
@@ -326,7 +326,6 @@ class TiendaController extends Controller
             ->where('es_principal', true)
             ->first();
 
-        // Si no hay una marcada como principal, toma cualquiera que exista
         if (!$imagen) {
             $imagen = ImagenPrenda::where('id_prenda', $id)->first();
         }
@@ -341,7 +340,7 @@ class TiendaController extends Controller
     }
 
     /**
-     * Helper: construye la URL pública de la imagen de una prenda (o null si no tiene)
+     * Helper: prioriza cloudinary_url; si no existe, cae al endpoint viejo de binario.
      */
     private function urlImagenDePrenda(?Prenda $prenda): ?string
     {
@@ -349,13 +348,27 @@ class TiendaController extends Controller
             return null;
         }
 
-        $tieneImagen = ImagenPrenda::where('id_prenda', $prenda->id_prenda)->exists();
+        $imagen = ImagenPrenda::where('id_prenda', $prenda->id_prenda)
+            ->where('es_principal', true)
+            ->first();
 
-        if (!$tieneImagen) {
+        if (!$imagen) {
+            $imagen = ImagenPrenda::where('id_prenda', $prenda->id_prenda)->first();
+        }
+
+        if (!$imagen) {
             return null;
         }
 
-        return url('/api/imagen-prenda/' . $prenda->id_prenda);
+        if (!empty($imagen->cloudinary_url)) {
+            return $imagen->cloudinary_url;
+        }
+
+        if (!empty($imagen->imagen_data)) {
+            return url('/api/imagen-prenda/' . $prenda->id_prenda);
+        }
+
+        return null;
     }
 
     /**

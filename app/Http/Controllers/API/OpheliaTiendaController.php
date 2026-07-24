@@ -22,7 +22,6 @@ class OpheliaTiendaController extends Controller
         $query = ProductoTienda::with('prenda')
             ->where('visible', 1);
 
-        // Búsqueda: nombre, descripción del producto, o tipo/descripción/material de la prenda
         if ($request->filled('buscar')) {
             $buscar = $request->buscar;
             $query->where(function ($q) use ($buscar) {
@@ -36,7 +35,6 @@ class OpheliaTiendaController extends Controller
             });
         }
 
-        // Filtro por categoría
         if ($request->filled('categoria') && $request->categoria !== 'todas') {
             switch ($request->categoria) {
                 case 'exclusivo':
@@ -88,8 +86,8 @@ class OpheliaTiendaController extends Controller
     }
 
     /**
-     * Devuelve la URL pública de la imagen principal guardada en imagen_prenda
-     * para la prenda asociada a este producto. Regresa null si no tiene imagen.
+     * ✅ Devuelve la URL pública de la imagen principal de una prenda.
+     * Prioriza Cloudinary; si no existe, cae al endpoint viejo de binario.
      */
     private function resolverImagenUrl($idPrenda)
     {
@@ -97,13 +95,27 @@ class OpheliaTiendaController extends Controller
             return null;
         }
 
-        $tieneImagen = \App\Models\ImagenPrenda::where('id_prenda', $idPrenda)->exists();
+        $imagen = \App\Models\ImagenPrenda::where('id_prenda', $idPrenda)
+            ->where('es_principal', true)
+            ->first();
 
-        if (!$tieneImagen) {
+        if (!$imagen) {
+            $imagen = \App\Models\ImagenPrenda::where('id_prenda', $idPrenda)->first();
+        }
+
+        if (!$imagen) {
             return null;
         }
 
-        return url('/api/imagen-prenda/' . $idPrenda);
+        if (!empty($imagen->cloudinary_url)) {
+            return $imagen->cloudinary_url;
+        }
+
+        if (!empty($imagen->imagen_data)) {
+            return url('/api/imagen-prenda/' . $idPrenda);
+        }
+
+        return null;
     }
 
     /**
@@ -150,7 +162,6 @@ class OpheliaTiendaController extends Controller
                 ], 409);
             }
 
-            // ✅ El anticipo se calcula sobre el precio YA con descuento aplicado
             $descuento = (float) ($producto->descuento ?? 0);
             $precioFinal = $descuento > 0
                 ? $producto->precio * (1 - $descuento / 100)
