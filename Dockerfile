@@ -102,13 +102,36 @@ RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
     echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
 
 # ==========================================
-# SCRIPT DE ARRANQUE - SIN MIGRACIONES NI SEEDERS
+# SCRIPT DE ARRANQUE - CON EXPORT DE VARIABLES
 # ==========================================
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
     echo 'echo "=== 🚀 INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
+    echo '# === EXPORTAR TODAS LAS VARIABLES DE ENTORNO ===' >> /usr/local/bin/start.sh && \
+    echo 'export DB_HOST=${DB_HOST}' >> /usr/local/bin/start.sh && \
+    echo 'export DB_PORT=${DB_PORT}' >> /usr/local/bin/start.sh && \
+    echo 'export DB_DATABASE=${DB_DATABASE}' >> /usr/local/bin/start.sh && \
+    echo 'export DB_USERNAME=${DB_USERNAME}' >> /usr/local/bin/start.sh && \
+    echo 'export DB_PASSWORD=${DB_PASSWORD}' >> /usr/local/bin/start.sh && \
+    echo 'export CLOUDINARY_URL=${CLOUDINARY_URL}' >> /usr/local/bin/start.sh && \
+    echo 'export CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}' >> /usr/local/bin/start.sh && \
+    echo 'export CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}' >> /usr/local/bin/start.sh && \
+    echo 'export CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}' >> /usr/local/bin/start.sh && \
+    echo 'export STRIPE_SECRET=${STRIPE_SECRET}' >> /usr/local/bin/start.sh && \
+    echo 'export STRIPE_SUCCESS_URL=${STRIPE_SUCCESS_URL}' >> /usr/local/bin/start.sh && \
+    echo 'export STRIPE_CANCEL_URL=${STRIPE_CANCEL_URL}' >> /usr/local/bin/start.sh && \
+    echo 'export APP_KEY=${APP_KEY}' >> /usr/local/bin/start.sh && \
+    echo 'export APP_URL=${APP_URL}' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
     echo '# === VERIFICAR VARIABLES DE ENTORNO ===' >> /usr/local/bin/start.sh && \
+    echo 'echo "🔍 Variables de entorno:"' >> /usr/local/bin/start.sh && \
+    echo 'echo "DB_HOST: ${DB_HOST}"' >> /usr/local/bin/start.sh && \
+    echo 'echo "DB_DATABASE: ${DB_DATABASE}"' >> /usr/local/bin/start.sh && \
+    echo 'echo "DB_USERNAME: ${DB_USERNAME}"' >> /usr/local/bin/start.sh && \
+    echo 'echo "DB_PASSWORD: ${#DB_PASSWORD} caracteres"' >> /usr/local/bin/start.sh && \
+    echo 'echo "CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}"' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
     echo 'if [ -z "$DB_PASSWORD" ]; then' >> /usr/local/bin/start.sh && \
     echo '    echo "❌ ERROR: DB_PASSWORD no está definida en variables de entorno"' >> /usr/local/bin/start.sh && \
     echo '    exit 1' >> /usr/local/bin/start.sh && \
@@ -173,10 +196,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo '    echo "✅ App Key ya existe"' >> /usr/local/bin/start.sh && \
     echo 'fi' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo 'echo "=== DEBUG: Verificando PGPASSWORD ==="' >> /usr/local/bin/start.sh && \
-    echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
-    echo 'echo "PGPASSWORD length: ${#PGPASSWORD}"' >> /usr/local/bin/start.sh && \
-    echo '# === PRUEBA DE CONEXIÓN ===' >> /usr/local/bin/start.sh && \
+    echo '# === PRUEBA DE CONEXIÓN A LA BD ===' >> /usr/local/bin/start.sh && \
     echo 'echo "=== PRUEBA DE CONEXIÓN A LA BD ==="' >> /usr/local/bin/start.sh && \
     echo 'export PGPASSWORD="${DB_PASSWORD}"' >> /usr/local/bin/start.sh && \
     echo 'if psql -h "${DB_HOST}" -U "${DB_USERNAME}" -d "${DB_DATABASE}" -c "SELECT 1" > /dev/null 2>&1; then' >> /usr/local/bin/start.sh && \
