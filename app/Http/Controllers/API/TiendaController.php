@@ -177,12 +177,17 @@ class TiendaController extends Controller
             $imagenUrl = null;
             $imagenSubida = false;
 
-            // ✅ GUARDAR IMAGEN EN BASE DE DATOS (PERSISTE ENTRE DEPLOYS)
-            if ($request->hasFile('imagen')) {
-                $imagenSubida = $this->guardarImagenEnBD($prenda->id_prenda, $request->file('imagen'));
-                if ($imagenSubida) {
-                    $imagenUrl = url('/api/imagen-prenda/' . $prenda->id_prenda);
-                }
+            // ✅ La imagen ya se subió a Cloudinary desde el frontend; aquí solo
+            // guardamos la URL resultante como texto (sin manejar archivos ni binario).
+            if (!empty($validated['imagen_url'])) {
+                ImagenPrenda::create([
+                    'id_prenda' => $prenda->id_prenda,
+                    'cloudinary_url' => $validated['imagen_url'],
+                    'es_principal' => true,
+                    'orden' => 0,
+                ]);
+                $imagenSubida = true;
+                $imagenUrl = $validated['imagen_url'];
             }
 
             // Crear producto en tienda
@@ -259,7 +264,7 @@ class TiendaController extends Controller
                 'visible' => 'boolean',
                 'destacado' => 'boolean',
                 'descuento' => 'numeric|min:0|max:100',
-                'imagen' => 'nullable|file|image|max:5120',
+                'imagen_url' => 'nullable|url|max:500',
             ]);
 
             $producto->nombre = $validated['nombre'];
@@ -272,13 +277,17 @@ class TiendaController extends Controller
             $producto->descuento = $validated['descuento'] ?? 0;
             $producto->save();
 
-            // ✅ Si viene una imagen nueva, se guarda en BD
-            if ($request->hasFile('imagen')) {
-                // Eliminar imagen anterior
+            // ✅ Si viene una imagen_url nueva (ya subida a Cloudinary desde el frontend),
+            // se reemplaza la imagen anterior por la nueva URL.
+            if (!empty($validated['imagen_url'])) {
                 ImagenPrenda::where('id_prenda', $producto->id_prenda)->delete();
 
-                // Guardar nueva imagen en BD (binario vía decode() de Postgres)
-                $this->guardarImagenEnBD($producto->id_prenda, $request->file('imagen'));
+                ImagenPrenda::create([
+                    'id_prenda' => $producto->id_prenda,
+                    'cloudinary_url' => $validated['imagen_url'],
+                    'es_principal' => true,
+                    'orden' => 0,
+                ]);
             }
 
             $producto->load('prenda');
