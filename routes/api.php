@@ -25,6 +25,7 @@ use App\Http\Controllers\API\MisEmpenosController;
 use App\Http\Controllers\API\ApartadoController;
 use App\Http\Controllers\API\StripeWebhookController;
 use App\Http\Controllers\API\OpheliaTiendaController;
+use App\Http\Controllers\API\AbonoController;
 
 /*
 |--------------------------------------------------------------------------
