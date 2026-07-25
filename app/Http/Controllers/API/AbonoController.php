@@ -54,12 +54,25 @@ class AbonoController extends Controller
             }
 
             $saldoPendiente = round($amortizacion->saldo_final, 2);
-            $monto = round((float) $request->input('monto', $saldoPendiente), 2);
 
-            if ($monto <= 0 || $monto > $saldoPendiente) {
+            // ✅ Mora: si la amortización ya tiene días de retraso, se suma el
+            // cargo moratorio (5% mensual default, configurable por empresa
+            // en tasas_interes.porcentaje_moratorio) al máximo permitido a abonar.
+            $diasRetraso = (int) ($amortizacion->dias_retraso ?? 0);
+            $mora = 0.0;
+
+            if ($diasRetraso > 0) {
+                $porcentajeMoratorio = optional($empeno->tasa)->porcentaje_moratorio ?? 5.00;
+                $mora = round($saldoPendiente * ((float) $porcentajeMoratorio / 100 / 30) * $diasRetraso, 2);
+            }
+
+            $saldoPendienteConMora = round($saldoPendiente + $mora, 2);
+            $monto = round((float) $request->input('monto', $saldoPendienteConMora), 2);
+
+            if ($monto <= 0 || $monto > $saldoPendienteConMora) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Monto inválido. Debe ser mayor a 0 y no exceder el saldo pendiente.',
+                    'message' => 'Monto inválido. Debe ser mayor a 0 y no exceder el saldo pendiente' . ($mora > 0 ? ' (incluyendo mora).' : '.'),
                 ], 422);
             }
 
@@ -86,8 +99,10 @@ class AbonoController extends Controller
                     'id_amortizacion' => $amortizacion->id_amortizacion,
                     'id_cliente' => $cliente->id_cliente,
                     'monto' => $monto,
+                    'mora_incluida' => $mora,
                 ],
-                // ✅ Misma convención que OpheliaTiendaController::apartar()
+                // ✅ Reutiliza las mismas variables que ya configuraste en Render,
+                // apuntando a /cliente/empenos (página de "Mis Empeños" del cliente).
                 'success_url' => env('STRIPE_TIENDA_SUCCESS_URL', env('STRIPE_SUCCESS_URL')),
                 'cancel_url' => env('STRIPE_TIENDA_CANCEL_URL', env('STRIPE_CANCEL_URL')),
                 'customer_email' => $user->correo,

@@ -37,6 +37,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read float $total_pagar
  * @property-read bool $proximo_a_vencer
  * @property-read string $estado_frontend
+ * @property-read int $dias_retraso
+ * @property-read float $mora
+ * @property-read float $total_pagar_con_mora
  */
 class MisEmpenos extends Model
 {
@@ -65,6 +68,10 @@ class MisEmpenos extends Model
         'fecha_empeno' => 'date',
         'fecha_vencimiento' => 'date'
     ];
+
+    // Tasa moratoria por defecto (%) si el empeño no tiene id_tasa asignado
+    // o la tasa no tiene porcentaje_moratorio configurado.
+    private const MORA_DEFAULT_PORCENTAJE = 5.00;
 
     // ========== RELACIONES ==========
     public function cliente(): BelongsTo
@@ -152,11 +159,67 @@ class MisEmpenos extends Model
     }
 
     /**
-     * Obtiene el total a pagar (monto + intereses)
+     * Obtiene el total a pagar (monto + intereses), SIN mora
      */
     public function getTotalPagarAttribute(): float
     {
         return $this->monto_prestado + ($this->intereses ?? 0);
+    }
+
+    /**
+     * Días de retraso desde la fecha de vencimiento (0 si no está vencido
+     * o ya está pagado/cancelado)
+     */
+    public function getDiasRetrasoAttribute(): int
+    {
+        if (!$this->fecha_vencimiento || $this->pagado_completo) {
+            return 0;
+        }
+
+        if (in_array($this->estado, ['pagado', 'cancelado'])) {
+            return 0;
+        }
+
+        $hoy = now()->startOfDay();
+        $vencimiento = $this->fecha_vencimiento->copy()->startOfDay();
+
+        if ($vencimiento >= $hoy) {
+            return 0;
+        }
+
+        return $vencimiento->diffInDays($hoy);
+    }
+
+    /**
+     * Cargo por mora: se aplica sobre el saldo restante, prorrateado por
+     * día de retraso, usando el % moratorio configurado por la empresa en
+     * su tasa de interés (o el default de la plataforma si no hay tasa).
+     * Fórmula: saldo_restante * (porcentaje_moratorio / 100 / 30) * dias_retraso
+     */
+    public function getMoraAttribute(): float
+    {
+        $dias = $this->dias_retraso;
+
+        if ($dias <= 0) {
+            return 0.0;
+        }
+
+        $porcentajeMoratorio = optional($this->tasa)->porcentaje_moratorio
+            ?? self::MORA_DEFAULT_PORCENTAJE;
+
+        $saldoRestante = $this->saldo_pendiente['saldo_restante'];
+
+        $mora = $saldoRestante * ((float) $porcentajeMoratorio / 100 / 30) * $dias;
+
+        return round($mora, 2);
+    }
+
+    /**
+     * Total a pagar incluyendo la mora acumulada (si aplica)
+     */
+    public function getTotalPagarConMoraAttribute(): float
+    {
+        return round($this->total_pagar + $this->mora, 2);
     }
 
     /**

@@ -96,10 +96,15 @@ class MisEmpenosController extends Controller
                     'intereses' => '$' . number_format($e->intereses ?? 0, 2),
                     'totalPagar' => '$' . number_format($e->total_pagar, 2),
                     'totalPagarNumerico' => $e->total_pagar,
+                    'diasRetraso' => $e->dias_retraso,
+                    'mora' => $e->mora > 0 ? '$' . number_format($e->mora, 2) : null,
+                    'moraNumerica' => $e->mora,
+                    'totalPagarConMora' => '$' . number_format($e->total_pagar_con_mora, 2),
                     'saldoRestante' => '$' . number_format($saldo['saldo_restante'], 2),
                     'saldoRestanteNumerico' => $saldo['saldo_restante'],
                     'totalAbonado' => '$' . number_format($saldo['total_abonado'], 2),
                     'vencimiento' => optional($e->fecha_vencimiento)->format('d/m/Y'),
+                    'vencimientoTimestamp' => $e->fecha_vencimiento ? $e->fecha_vencimiento->timestamp : null,
                     'imagen' => $this->resolverImagenUrl($e->id_prenda),
                     'abonos' => $e->abonos_formateados,
                     'pagadoCompleto' => $e->pagado_completo,
@@ -108,6 +113,32 @@ class MisEmpenosController extends Controller
                     'estado' => $e->estado_frontend,
                 ];
             });
+
+            // ✅ Orden por urgencia: VENCIDO > PROXIMO A VENCER > ACTIVO > EN TIENDA > PAGADO.
+            // Dentro de cada grupo, el vencimiento más próximo primero.
+            $prioridadEstado = [
+                'VENCIDO' => 0,
+                'PROXIMO A VENCER' => 1,
+                'ACTIVO' => 2,
+                'EN TIENDA' => 3,
+                'PAGADO' => 4,
+            ];
+
+            $data = $data->sort(function ($a, $b) use ($prioridadEstado) {
+                $prioridadA = $prioridadEstado[$a['estado']] ?? 5;
+                $prioridadB = $prioridadEstado[$b['estado']] ?? 5;
+
+                if ($prioridadA !== $prioridadB) {
+                    return $prioridadA <=> $prioridadB;
+                }
+
+                // Dentro del mismo grupo: vencimiento más cercano primero.
+                // Si no hay fecha, se manda al final del grupo.
+                $tsA = $a['vencimientoTimestamp'] ?? PHP_INT_MAX;
+                $tsB = $b['vencimientoTimestamp'] ?? PHP_INT_MAX;
+
+                return $tsA <=> $tsB;
+            })->values();
 
             return response()->json([
                 'success' => true,
@@ -212,6 +243,10 @@ class MisEmpenosController extends Controller
                 'prestado' => '$' . number_format($empeno->monto_prestado, 2),
                 'intereses' => '$' . number_format($empeno->intereses ?? 0, 2),
                 'totalPagar' => '$' . number_format($empeno->total_pagar, 2),
+                'diasRetraso' => $empeno->dias_retraso,
+                'mora' => $empeno->mora > 0 ? '$' . number_format($empeno->mora, 2) : null,
+                'moraNumerica' => $empeno->mora,
+                'totalPagarConMora' => '$' . number_format($empeno->total_pagar_con_mora, 2),
                 'saldoRestante' => '$' . number_format($saldo['saldo_restante'], 2),
                 'totalAbonado' => '$' . number_format($saldo['total_abonado'], 2),
                 'fechaEmpeno' => optional($empeno->fecha_empeno)->format('d/m/Y'),
