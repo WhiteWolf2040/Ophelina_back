@@ -152,6 +152,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/cliente/empenos/resumen', [MisEmpenosController::class, 'getResumenMisEmpenos']); // ✅ AGREGADO
     Route::get('/cliente/empenos/{id}', [MisEmpenosController::class, 'getMisEmpenosDetalle']); // ✅ AGREGADO
 
+        /*
+    ==========================
+    ABONOS A EMPEÑOS (CLIENTE)
+    ==========================
+    */
+    Route::post('/empenos/{empeno}/abono', [AbonoController::class, 'crearSesionPago']);
+ 
+
+    
     /*
     ==========================
     CLIENTE - TIENDA (apartados)
