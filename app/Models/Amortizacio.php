@@ -1,38 +1,22 @@
 <?php
-// app/Models/Amortizacion.php
+// app/Models/Amortizacio.php
 
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Carbon\Carbon;
 
 class Amortizacio extends Model
 {
-    /**
-     * La tabla asociada al modelo.
-     *
-     * @var string
-     */
     protected $table = 'amortizacion';
-
-    /**
-     * La llave primaria de la tabla.
-     *
-     * @var string
-     */
     protected $primaryKey = 'id_amortizacion';
-
-    /**
-     * Indica si el modelo tiene timestamps.
-     *
-     * @var bool
-     */
     public $timestamps = false;
 
-    /**
-     * Los atributos que son asignables en masa.
-     *
-     * @var array
-     */
+    // Único lugar donde vive el % de mora default de la plataforma.
+    // Se usa solo si el empeño no tiene id_tasa asignado o esa tasa no
+    // tiene porcentaje_moratorio configurado (columna en tasas_interes).
+    public const MORA_DEFAULT_PORCENTAJE = 5.00;
+
     protected $fillable = [
         'id_empeno',
         'saldo_inicial',
@@ -49,11 +33,6 @@ class Amortizacio extends Model
         'estado'
     ];
 
-    /**
-     * Los atributos que deben ser convertidos a tipos nativos.
-     *
-     * @var array
-     */
     protected $casts = [
         'saldo_inicial' => 'decimal:2',
         'saldo_final' => 'decimal:2',
@@ -66,117 +45,173 @@ class Amortizacio extends Model
         'fecha_pago_real' => 'date'
     ];
 
-    /**
-     * Obtiene el empeño asociado a esta amortización.
-     */
     public function empeno()
     {
         return $this->belongsTo(Empeno::class, 'id_empeno', 'id_empeno');
     }
 
-    /**
-     * Obtiene los pagos asociados a esta amortización.
-     */
     public function pagos()
     {
         return $this->hasMany(Pago::class, 'id_amortizacion', 'id_amortizacion');
     }
 
-    /**
-     * Scope para filtrar por estado.
-     */
     public function scopePorEstado($query, $estado)
     {
         return $query->where('estado', $estado);
     }
 
-    /**
-     * Scope para filtrar por empeño.
-     */
     public function scopePorEmpeno($query, $id_empeno)
     {
         return $query->where('id_empeno', $id_empeno);
     }
 
-    /**
-     * Scope para obtener pagos pendientes.
-     */
     public function scopePendientes($query)
     {
         return $query->where('estado', 'pendiente');
     }
 
-    /**
-     * Scope para obtener pagos vencidos.
-     */
     public function scopeVencidos($query)
     {
         return $query->where('estado', 'vencido')
                      ->where('fecha_pago_programado', '<', now());
     }
 
-    /**
-     * Verifica si la amortización está pagada.
-     */
     public function getEstaPagadoAttribute()
     {
         return $this->estado === 'pagado';
     }
 
-    /**
-     * Verifica si la amortización está vencida.
-     */
     public function getEstaVencidoAttribute()
     {
-        return $this->estado === 'vencido' || 
+        return $this->estado === 'vencido' ||
                ($this->estado === 'pendiente' && $this->fecha_pago_programado < now());
     }
 
     /**
-     * Calcula los días de retraso si está vencido.
+     * Días de retraso respecto a fecha_pago_programado (0 si no está vencido).
      */
     public function getDiasRetrasoAttribute()
     {
         if (!$this->estaVencido || !$this->fecha_pago_programado) {
             return 0;
         }
-        
+
         return now()->diffInDays($this->fecha_pago_programado);
     }
 
-    /**
-     * Obtiene el saldo pendiente de esta cuota.
-     */
     public function getSaldoPendienteAttribute()
     {
         return $this->monto_total - ($this->monto_pagado ?? 0);
     }
 
     /**
-     * Marca la amortización como pagada.
+     * Fórmula: saldo_final × (porcentaje_moratorio / 100 / 30) × días_de_atraso
+     * La tasa viene de tasas_interes.porcentaje_moratorio (configurable por
+     * cada casa de empeño desde el panel de Configuración); si el empeño no
+     * tiene tasa asignada, usa MORA_DEFAULT_PORCENTAJE (5%).
+     *
+     * @param Carbon|null $fechaReferencia Fecha contra la que se calcula el
+     *   atraso. Si no se pasa, se usa "ahora" (para cotizar cuánto se debe
+     *   hoy). PagoController la pasa explícita porque el cajero puede estar
+     *   registrando un pago con fecha distinta a hoy.
      */
+    public function calcularMora(?Carbon $fechaReferencia = null): float
+    {
+        if (!$this->fecha_pago_programado) {
+            return 0.0;
+        }
+
+        $fechaReferencia = $fechaReferencia ?? now();
+        $fechaProgramada = $this->fecha_pago_programado instanceof Carbon
+            ? $this->fecha_pago_programado
+            : Carbon::parse($this->fecha_pago_programado);
+
+        if ($fechaReferencia->lessThanOrEqualTo($fechaProgramada)) {
+            return 0.0;
+        }
+
+        $diasAtraso = $fechaProgramada->diffInDays($fechaReferencia);
+
+        $porcentajeMoratorio = optional($this->empeno)->tasa->porcentaje_moratorio
+            ?? self::MORA_DEFAULT_PORCENTAJE;
+
+        // Base de cálculo: saldo_final (el saldo real que se sigue actualizando
+        // con cada pago, tanto en sucursal como en línea).
+        $saldo = (float) $this->saldo_final;
+
+        $mora = $saldo * ((float) $porcentajeMoratorio / 100 / 30) * $diasAtraso;
+
+        return round($mora, 2);
+    }
+
+    /**
+     * Días de atraso respecto a una fecha de referencia arbitraria
+     * (usado por PagoController al registrar un pago con fecha distinta a hoy).
+     */
+    public function diasAtrasoRespectoA(Carbon $fechaReferencia): int
+    {
+        if (!$this->fecha_pago_programado) {
+            return 0;
+        }
+
+        $fechaProgramada = $this->fecha_pago_programado instanceof Carbon
+            ? $this->fecha_pago_programado
+            : Carbon::parse($this->fecha_pago_programado);
+
+        if ($fechaReferencia->lessThanOrEqualTo($fechaProgramada)) {
+            return 0;
+        }
+
+        return $fechaProgramada->diffInDays($fechaReferencia);
+    }
+
     public function marcarComoPagado($fecha_pago = null, $monto_pagado = null)
     {
         $this->estado = 'pagado';
         $this->fecha_pago_real = $fecha_pago ?? now();
         $this->monto_pagado = $monto_pagado ?? $this->monto_total;
-        
+
         return $this->save();
     }
 
-    /**
-     * Registra un pago parcial en esta amortización.
-     */
     public function registrarPagoParcial($monto, $fecha_pago = null)
     {
         $this->monto_pagado = ($this->monto_pagado ?? 0) + $monto;
         $this->fecha_pago_real = $fecha_pago ?? now();
-        
-        // Si ya se pagó el total, cambiar estado
+
         if ($this->monto_pagado >= $this->monto_total) {
             $this->estado = 'pagado';
         }
-        
+
         return $this->save();
+    }
+
+    /**
+     * ✅ NUEVO: Prorroga esta cuota (fecha_pago_programado) y, en el mismo
+     * paso, sincroniza empeno.fecha_vencimiento. Son columnas separadas
+     * (Amortizacio.fecha_pago_programado vs Empeno.fecha_vencimiento) y el
+     * front del cliente lee la del empeño, así que si solo se movía una,
+     * la fecha visible para el cliente nunca cambiaba.
+     *
+     * @param int $dias Días a extender (default 30).
+     */
+    public function prorrogar(int $dias = 30): void
+    {
+        $fechaBase = $this->fecha_pago_programado instanceof Carbon
+            ? $this->fecha_pago_programado
+            : Carbon::parse($this->fecha_pago_programado);
+
+        $nuevaFecha = $fechaBase->copy()->addDays($dias);
+
+        $this->fecha_pago_programado = $nuevaFecha;
+        $this->estado = 'pendiente';
+        $this->save();
+
+        if ($this->empeno) {
+            $this->empeno->update([
+                'fecha_vencimiento' => $nuevaFecha,
+                'estado' => 'activo',
+            ]);
+        }
     }
 }

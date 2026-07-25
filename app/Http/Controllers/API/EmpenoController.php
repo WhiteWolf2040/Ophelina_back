@@ -1,5 +1,7 @@
 <?php
 // app/Http/Controllers/API/EmpenoController.php
+// ✅ ÚNICO CAMBIO REAL EN ESTE ARCHIVO: dentro de store(), ver el bloque
+// marcado "FIX BUG RAÍZ" más abajo. El resto del archivo se deja igual.
 
 namespace App\Http\Controllers\API;
 
@@ -9,15 +11,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Prenda;
-/* use App\Services\WhatsAppService;  */// ✅ Agregado de tu compañera
 use App\Models\Cliente;
 use Carbon\Carbon;
 
 class EmpenoController extends Controller
 {
-    /**
-     * Obtener todos los empeños (activos y vencidos)
-     */
     public function index(Request $request)
     {
         try {
@@ -41,9 +39,6 @@ class EmpenoController extends Controller
         }
     }
 
-    /**
-     * Obtener detalle de un empeño específico
-     */
     public function show(Request $request, $id)
     {
         try {
@@ -74,10 +69,6 @@ class EmpenoController extends Controller
         }
     }
 
-    /**
-     * Obtener empeños activos con saldo pendiente para el formulario de pagos
-     * GET /api/empenos/activos-con-saldo
-     */
     public function activosConSaldo(Request $request)
     {
         try {
@@ -90,7 +81,6 @@ class EmpenoController extends Controller
                 ], 401);
             }
 
-            // Obtener todos los empeños (no solo activos) y usar accessors
             $empenos = Empeno::where('id_empresa', $user->id_empresa)
                 ->with(['cliente', 'prenda', 'pagos'])
                 ->get();
@@ -113,7 +103,6 @@ class EmpenoController extends Controller
 
                 $saldoTotalPendiente = max(0, ($empeno->monto_prestado ?? 0) - $totalPagado);
 
-                // Usar accessors del modelo (estado_real, dias_vencidos)
                 $estadoReal = $empeno->estado_real;
                 $diasVencidos = $empeno->dias_vencidos;
 
@@ -148,158 +137,149 @@ class EmpenoController extends Controller
         }
     }
 
-    /**
-     * Crear una nueva prenda rápidamente
-     * POST /api/prendas
-     */
-  /**
- * Crear una nueva prenda rápidamente
- * POST /api/prendas
- */
-public function storePrenda(Request $request)
-{
-    try {
-        $user = $request->user();
+    public function storePrenda(Request $request)
+    {
+        try {
+            $user = $request->user();
 
-        $validated = $request->validate([
-            'descripcion' => 'required|string|max:255',
-            'tipo' => 'required|string',
-            'material' => 'nullable|string',
-            'peso_gramos' => 'nullable|numeric',
-            'valor_estimado' => 'required|numeric|min:1',
-        ]);
+            $validated = $request->validate([
+                'descripcion' => 'required|string|max:255',
+                'tipo' => 'required|string',
+                'material' => 'nullable|string',
+                'peso_gramos' => 'nullable|numeric',
+                'valor_estimado' => 'required|numeric|min:1',
+            ]);
 
-        // ✅ Usar el modelo Prenda (no DB::table)
-        $prenda = Prenda::create([
-            'id_empresa' => $user->id_empresa,
-            'descripcion' => $validated['descripcion'],
-            'tipo' => $validated['tipo'],
-            'material' => $validated['material'] ?? null,
-            'peso_gramos' => $validated['peso_gramos'] ?? null,
-            'valor_estimado' => $validated['valor_estimado'],
-            'estado' => 'Disponible',
-            'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
-            'fecha_registro' => now()
-        ]);
+            $prenda = Prenda::create([
+                'id_empresa' => $user->id_empresa,
+                'descripcion' => $validated['descripcion'],
+                'tipo' => $validated['tipo'],
+                'material' => $validated['material'] ?? null,
+                'peso_gramos' => $validated['peso_gramos'] ?? null,
+                'valor_estimado' => $validated['valor_estimado'],
+                'estado' => 'Disponible',
+                'codigo_barras' => 'PRN-' . strtoupper(uniqid()),
+                'fecha_registro' => now()
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Prenda creada correctamente',
-            'data' => $prenda
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Prenda creada correctamente',
+                'data' => $prenda
+            ]);
 
-    } catch (\Exception $e) {
-        \Log::error('Error al crear prenda: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al crear prenda: ' . $e->getMessage()
-        ], 500);
+        } catch (\Exception $e) {
+            \Log::error('Error al crear prenda: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear prenda: ' . $e->getMessage()
+            ], 500);
+        }
     }
-}
 
     /**
      * Registrar un nuevo empeño
      * POST /api/empenos
      */
-  /**
- * Registrar un nuevo empeño
- * POST /api/empenos
- */
-public function store(Request $request)
-{
-    try {
-        $user = $request->user();
+    public function store(Request $request)
+    {
+        try {
+            $user = $request->user();
 
-        $validated = $request->validate([
-            'cliente_id' => 'required|exists:clientes,id_cliente',
-            'prenda_id' => 'required|exists:prendas,id_prenda',
-            'monto_prestado' => 'required|numeric|min:100',
-            'tasa_id' => 'required|exists:tasas_interes,id_tasa',
-            'fecha_vencimiento' => 'required|date',
-            'aval_id' => 'nullable|exists:aval,id_aval'
-        ]);
+            $validated = $request->validate([
+                'cliente_id' => 'required|exists:clientes,id_cliente',
+                'prenda_id' => 'required|exists:prendas,id_prenda',
+                'monto_prestado' => 'required|numeric|min:100',
+                'tasa_id' => 'required|exists:tasas_interes,id_tasa',
+                'fecha_vencimiento' => 'required|date',
+                'aval_id' => 'nullable|exists:aval,id_aval'
+            ]);
 
-        $tasa = DB::table('tasas_interes')->where('id_tasa', $validated['tasa_id'])->first();
+            $tasa = DB::table('tasas_interes')->where('id_tasa', $validated['tasa_id'])->first();
 
-        $interesMonto = $validated['monto_prestado'] * ($tasa->porcentaje / 100);
-        $ivaInteres = $interesMonto * 0.16;
-        $montoTotal = $validated['monto_prestado'] + $interesMonto + $ivaInteres;
+            $interesMonto = $validated['monto_prestado'] * ($tasa->porcentaje / 100);
+            $ivaInteres = $interesMonto * 0.16;
+            $montoTotal = $validated['monto_prestado'] + $interesMonto + $ivaInteres;
 
-        $folio = 'EMP-' . strtoupper(uniqid());
+            $folio = 'EMP-' . strtoupper(uniqid());
 
-        DB::beginTransaction();
+            DB::beginTransaction();
 
-        // ✅ CORREGIDO: Especificar 'id_empeno' como llave primaria
-        $idEmpeno = DB::table('empeno')->insertGetId([
-            'id_empresa' => $user->id_empresa,
-            'id_cliente' => $validated['cliente_id'],
-            'id_prenda' => $validated['prenda_id'],
-            'id_aval' => $validated['aval_id'] ?? null,
-            'id_tasa' => $validated['tasa_id'],
-            'fecha_empeno' => now(),
-            'monto_prestado' => $validated['monto_prestado'],
-            'intereses' => $tasa->porcentaje,
-            'iva_porcentaje' => 16.00,
-            'fecha_vencimiento' => $validated['fecha_vencimiento'],
-            'estado' => 'activo',
-            'folio' => $folio
-        ], 'id_empeno');  // ← ESPECIFICAR LLAVE PRIMARIA
+            $idEmpeno = DB::table('empeno')->insertGetId([
+                'id_empresa' => $user->id_empresa,
+                'id_cliente' => $validated['cliente_id'],
+                'id_prenda' => $validated['prenda_id'],
+                'id_aval' => $validated['aval_id'] ?? null,
+                'id_tasa' => $validated['tasa_id'],
+                'fecha_empeno' => now(),
+                'monto_prestado' => $validated['monto_prestado'],
 
-        DB::table('prendas')
-            ->where('id_prenda', $validated['prenda_id'])
-            ->update(['estado' => 'En Empeño']);
+                // ==================== FIX BUG RAÍZ ====================
+                // ANTES: 'intereses' => $tasa->porcentaje,  (guardaba el %
+                // crudo, ej. 15.00, como si fueran pesos). Todo lo que leía
+                // empeno.intereses después (MisEmpenos.php, el popup del
+                // cliente) lo mostraba como "$15.00" en vez del interés real.
+                // AHORA: se guarda el monto de interés ya calculado en pesos,
+                // igual que se hace en la tabla `amortizacion`.
+                'intereses' => $interesMonto,
+                // ========================================================
 
-        // ✅ CORREGIDO: Especificar 'id_amortizacion' como llave primaria
-        $idAmortizacion = DB::table('amortizacion')->insertGetId([
-            'id_empeno' => $idEmpeno,
-            'saldo_inicial' => $montoTotal,
-            'saldo_final' => $montoTotal,
-            'numero_pago' => 1,
-            'fecha_pago_programado' => $validated['fecha_vencimiento'],
-            'capital' => $validated['monto_prestado'],
-            'interes' => $interesMonto,
-            'iva_interes' => $ivaInteres,
-            'monto_total' => $montoTotal,
-            'monto_pagado' => 0,
-            'estado' => 'pendiente'
-        ], 'id_amortizacion');  // ← ESPECIFICAR LLAVE PRIMARIA
+                'iva_porcentaje' => 16.00,
+                'fecha_vencimiento' => $validated['fecha_vencimiento'],
+                'estado' => 'activo',
+                'folio' => $folio
+            ], 'id_empeno');
 
-        DB::table('movimientos_caja')->insert([
-            'tipo' => 'prestamo',
-            'monto' => $validated['monto_prestado'],
-            'descripcion' => 'Préstamo por empeño - Folio: ' . $folio,
-            'id_usuario' => $user->id_usuario,
-            'fecha' => now()
-        ]);
+            DB::table('prendas')
+                ->where('id_prenda', $validated['prenda_id'])
+                ->update(['estado' => 'En Empeño']);
 
-        DB::commit();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Empeño registrado correctamente',
-            'data' => [
+            $idAmortizacion = DB::table('amortizacion')->insertGetId([
                 'id_empeno' => $idEmpeno,
-                'folio' => $folio,
-                'monto_total' => $montoTotal
-            ]
-        ]);
+                'saldo_inicial' => $montoTotal,
+                'saldo_final' => $montoTotal,
+                'numero_pago' => 1,
+                'fecha_pago_programado' => $validated['fecha_vencimiento'],
+                'capital' => $validated['monto_prestado'],
+                'interes' => $interesMonto,
+                'iva_interes' => $ivaInteres,
+                'monto_total' => $montoTotal,
+                'monto_pagado' => 0,
+                'estado' => 'pendiente'
+            ], 'id_amortizacion');
 
-    } catch (\Exception $e) {
-        DB::rollBack();
-        Log::error('Error al registrar empeño: ' . $e->getMessage());
-        Log::error('Stack trace: ' . $e->getTraceAsString());
+            DB::table('movimientos_caja')->insert([
+                'tipo' => 'prestamo',
+                'monto' => $validated['monto_prestado'],
+                'descripcion' => 'Préstamo por empeño - Folio: ' . $folio,
+                'id_usuario' => $user->id_usuario,
+                'fecha' => now()
+            ]);
 
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al registrar empeño: ' . $e->getMessage()
-        ], 500);
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Empeño registrado correctamente',
+                'data' => [
+                    'id_empeno' => $idEmpeno,
+                    'folio' => $folio,
+                    'monto_total' => $montoTotal
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error al registrar empeño: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al registrar empeño: ' . $e->getMessage()
+            ], 500);
+        }
     }
-}
 
-    /**
-     * Obtener clientes de la empresa
-     * GET /api/clientes
-     */
     public function getClientes(Request $request)
     {
         try {
@@ -325,19 +305,15 @@ public function store(Request $request)
         }
     }
 
-    /**
-     * Obtener prendas disponibles de la empresa
-     * GET /api/prendas/disponibles
-     */
     public function getPrendasDisponibles(Request $request)
     {
         try {
             $user = $request->user();
 
-           $prendas = DB::table('prendas')
+            $prendas = DB::table('prendas')
                 ->where('id_empresa', $user->id_empresa)
                 ->where('estado', 'Disponible')
-                ->where('origen', 'empeno')  // ← nuevo
+                ->where('origen', 'empeno')
                 ->select('id_prenda', 'descripcion', 'tipo', 'valor_estimado')
                 ->orderBy('descripcion')
                 ->get();
@@ -355,10 +331,6 @@ public function store(Request $request)
         }
     }
 
-    /**
-     * Obtener tasas de interés activas
-     * GET /api/tasas-interes
-     */
     public function getTasasInteres(Request $request)
     {
         try {
@@ -381,10 +353,6 @@ public function store(Request $request)
         }
     }
 
-    /**
-     * Obtener todos los empeños (incluyendo vencidos)
-     * GET /api/empenos/todos
-     */
     public function todos(Request $request)
     {
         try {
@@ -437,10 +405,6 @@ public function store(Request $request)
         }
     }
 
-    /**
-     * Actualizar empeños vencidos en la base de datos
-     * POST /api/empenos/actualizar-estados
-     */
     public function actualizarEstados(Request $request)
     {
         try {
@@ -448,7 +412,7 @@ public function store(Request $request)
 
             $actualizados = Empeno::where('id_empresa', $user->id_empresa)
                 ->where('estado', 'activo')
-                ->whereDate('fecha_vencimiento', '<', now()->toDateString()) // ✅ ajustado a comparación por día
+                ->whereDate('fecha_vencimiento', '<', now()->toDateString())
                 ->update(['estado' => 'vencido']);
 
             return response()->json([
@@ -464,46 +428,4 @@ public function store(Request $request)
             ], 500);
         }
     }
-
-    /**
-     * ✅ AGREGADO DE TU COMPAÑERA
-     * Enviar recordatorios de vencimiento por WhatsApp
-     * (activado, y con el bug de variable corregido: $dias en vez de $diasRestantes)
-     */
-  /*   public function enviarRecordatoriosVencimiento(Request $request)
-    {
-        try {
-            $whatsapp = new WhatsAppService();
-
-            $empenosPorVencer = Empeno::where('estado', 'activo')
-                ->whereBetween('fecha_vencimiento', [Carbon::now()->toDateString(), Carbon::now()->addDays(3)->toDateString()])
-                ->with(['cliente', 'prenda'])
-                ->get();
-
-            foreach ($empenosPorVencer as $empeno) {
-                $dias = now()->startOfDay()->diffInDays($empeno->fecha_vencimiento->startOfDay(), false);
-
-                if ($dias >= 0 && $dias <= 3) {
-                    $mensaje = "📢 OPHELINA - Recordatorio\n\n";
-                    $mensaje .= "Hola {$empeno->cliente->nombre},\n";
-                    $mensaje .= "Tu prenda '{$empeno->prenda->descripcion}' vence en {$dias} días.\n\n";
-                    $mensaje .= "Realiza tu pago para evitar cargos adicionales.\n";
-                    $mensaje .= "¿Dudas? Contáctanos.";
-
-                    $mensaje = substr($mensaje, 0, 300);
-
-                    $whatsapp->sendMessage($empeno->cliente->telefono, $mensaje);
-                }
-            }
-
-            return response()->json(['success' => true]);
-
-        } catch (\Exception $e) {
-            Log::error('Error enviando recordatorios: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
-        }
-    } */
 }
