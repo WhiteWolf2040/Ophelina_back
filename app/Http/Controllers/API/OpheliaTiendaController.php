@@ -19,70 +19,111 @@ class OpheliaTiendaController extends Controller
      */
     public function getProductos(Request $request)
     {
-        $query = ProductoTienda::with('prenda')
-            ->where('visible', 1);
-
-        if ($request->filled('buscar')) {
-            $buscar = $request->buscar;
-            $query->where(function ($q) use ($buscar) {
-                $q->where('nombre', 'like', "%{$buscar}%")
-                  ->orWhere('descripcion', 'like', "%{$buscar}%")
-                  ->orWhereHas('prenda', function ($p) use ($buscar) {
-                      $p->where('tipo', 'like', "%{$buscar}%")
-                        ->orWhere('descripcion', 'like', "%{$buscar}%")
-                        ->orWhere('material', 'like', "%{$buscar}%");
-                  });
-            });
-        }
-
-        if ($request->filled('categoria') && $request->categoria !== 'todas') {
-            switch ($request->categoria) {
-                case 'exclusivo':
-                    $query->where('destacado', 1);
-                    break;
-                case 'electronicos':
-                    $query->whereHas('prenda', function ($p) {
-                        $p->where('tipo', 'Electrónica');
-                    });
-                    break;
-                case 'oro':
-                case 'plata':
-                    $query->whereHas('prenda', function ($p) use ($request) {
-                        $p->where('material', $request->categoria);
-                    });
-                    break;
+        try {
+            // ✅ Obtener el usuario autenticado
+            $user = $request->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
             }
+
+            // ✅ Obtener el cliente y su empresa
+            $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
+            
+            if (!$cliente) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cliente no encontrado'
+                ], 404);
+            }
+
+            // ✅ ID de la empresa del cliente
+            $idEmpresa = $cliente->id_empresa;
+
+            // ✅ Filtrar productos SOLO de la empresa del cliente
+            $query = ProductoTienda::with('prenda')
+                ->where('visible', 1)
+                ->where('id_empresa', $idEmpresa); // 🔥 FILTRO POR EMPRESA
+
+            // Búsqueda por texto
+            if ($request->filled('buscar')) {
+                $buscar = $request->buscar;
+                $query->where(function ($q) use ($buscar) {
+                    $q->where('nombre', 'like', "%{$buscar}%")
+                      ->orWhere('descripcion', 'like', "%{$buscar}%")
+                      ->orWhereHas('prenda', function ($p) use ($buscar) {
+                          $p->where('tipo', 'like', "%{$buscar}%")
+                            ->orWhere('descripcion', 'like', "%{$buscar}%")
+                            ->orWhere('material', 'like', "%{$buscar}%");
+                      });
+                });
+            }
+
+            // Filtro por categoría
+            if ($request->filled('categoria') && $request->categoria !== 'todas') {
+                switch ($request->categoria) {
+                    case 'exclusivo':
+                        $query->where('destacado', 1);
+                        break;
+                    case 'electronicos':
+                        $query->whereHas('prenda', function ($p) {
+                            $p->where('tipo', 'Electrónica');
+                        });
+                        break;
+                    case 'oro':
+                    case 'plata':
+                        $query->whereHas('prenda', function ($p) use ($request) {
+                            $p->where('material', $request->categoria);
+                        });
+                        break;
+                }
+            }
+
+            $productos = $query->orderBy('fecha_publicacion', 'desc')->get();
+
+            $data = $productos->map(function (ProductoTienda $p) {
+                $precio = (float) $p->precio;
+                $descuento = (float) ($p->descuento ?? 0);
+                $precioConDescuento = $descuento > 0
+                    ? $precio * (1 - $descuento / 100)
+                    : $precio;
+
+                return [
+                    'id' => $p->id_producto,
+                    'nombre' => $p->nombre,
+                    'descripcion' => $p->descripcion,
+                    'precio' => '$' . number_format($precioConDescuento, 2),
+                    'precioOriginal' => '$' . number_format($precio, 2),
+                    'precioNumerico' => $precioConDescuento,
+                    'descuento' => $descuento,
+                    'anticipo' => '$' . number_format($precioConDescuento * 0.5, 2),
+                    'anticipoNumerico' => round($precioConDescuento * 0.5, 2),
+                    'imagen' => $this->resolverImagenUrl($p->id_prenda),
+                    'categoria' => $this->obtenerCategoria($p->prenda),
+                    'material' => $p->prenda->material ?? null,
+                    'exclusivo' => (bool) $p->destacado,
+                    'estado_producto' => $p->estado_producto,
+                    'stock' => $p->stock,
+                ];
+            });
+
+            return response()->json([
+                'success' => true, 
+                'data' => $data,
+                'empresa_id' => $idEmpresa // Opcional: para debug
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en OpheliaTiendaController@getProductos: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar productos',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        $productos = $query->orderBy('fecha_publicacion', 'desc')->get();
-
-        $data = $productos->map(function (ProductoTienda $p) {
-            $precio = (float) $p->precio;
-            $descuento = (float) ($p->descuento ?? 0);
-            $precioConDescuento = $descuento > 0
-                ? $precio * (1 - $descuento / 100)
-                : $precio;
-
-            return [
-                'id' => $p->id_producto,
-                'nombre' => $p->nombre,
-                'descripcion' => $p->descripcion,
-                'precio' => '$' . number_format($precioConDescuento, 2),
-                'precioOriginal' => '$' . number_format($precio, 2),
-                'precioNumerico' => $precioConDescuento,
-                'descuento' => $descuento,
-                'anticipo' => '$' . number_format($precioConDescuento * 0.5, 2),
-                'anticipoNumerico' => round($precioConDescuento * 0.5, 2),
-                'imagen' => $this->resolverImagenUrl($p->id_prenda),
-                'categoria' => $this->obtenerCategoria($p->prenda),
-                'material' => $p->prenda->material ?? null,
-                'exclusivo' => (bool) $p->destacado,
-                'estado_producto' => $p->estado_producto,
-                'stock' => $p->stock,
-            ];
-        });
-
-        return response()->json(['success' => true, 'data' => $data]);
     }
 
     /**
