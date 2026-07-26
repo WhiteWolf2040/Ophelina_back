@@ -22,7 +22,7 @@ class OpheliaTiendaController extends Controller
         try {
             // ✅ Obtener el usuario autenticado
             $user = $request->user();
-            
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -32,7 +32,7 @@ class OpheliaTiendaController extends Controller
 
             // ✅ Obtener el cliente y su empresa
             $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
-            
+
             if (!$cliente) {
                 return response()->json([
                     'success' => false,
@@ -111,7 +111,7 @@ class OpheliaTiendaController extends Controller
             });
 
             return response()->json([
-                'success' => true, 
+                'success' => true,
                 'data' => $data,
                 'empresa_id' => $idEmpresa // Opcional: para debug
             ]);
@@ -157,6 +157,21 @@ class OpheliaTiendaController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * ✅ NUEVO: helper para agregarle un query param a una URL base,
+     * sin importar si esa URL base ya trae otros parámetros o no.
+     * Usado para inyectar &tipo=apartado a las URLs genéricas
+     * STRIPE_TIENDA_SUCCESS_URL / STRIPE_TIENDA_CANCEL_URL, que ahora
+     * también reutiliza AbonoController con &tipo=abono / &tipo=prorroga.
+     * Así una sola variable de entorno sirve para los 3 flujos sin que
+     * se pisen entre sí.
+     */
+    private function agregarParametro(string $urlBase, string $clave, string $valor): string
+    {
+        $separador = (strpos($urlBase, '?') !== false) ? '&' : '?';
+        return $urlBase . $separador . $clave . '=' . urlencode($valor);
     }
 
     /**
@@ -223,6 +238,16 @@ class OpheliaTiendaController extends Controller
 
             Stripe::setApiKey(env('STRIPE_SECRET'));
 
+            // ✅ CORREGIDO: STRIPE_TIENDA_SUCCESS_URL / STRIPE_TIENDA_CANCEL_URL
+            // ahora son URLs base GENÉRICAS (ej. https://ophelina-front.vercel.app/homecliente?pago=exitoso)
+            // compartidas también con AbonoController. Aquí le agregamos
+            // &tipo=apartado dinámicamente para no pisar el &tipo=abono /
+            // &tipo=prorroga que agrega ese otro controlador.
+            $successBase = env('STRIPE_TIENDA_SUCCESS_URL', env('STRIPE_SUCCESS_URL'));
+            $cancelBase = env('STRIPE_TIENDA_CANCEL_URL', env('STRIPE_CANCEL_URL'));
+            $successUrl = $this->agregarParametro($successBase, 'tipo', 'apartado');
+            $cancelUrl = $this->agregarParametro($cancelBase, 'tipo', 'apartado');
+
             $session = Session::create([
                 'payment_method_types' => ['card'],
                 'line_items' => [[
@@ -236,8 +261,8 @@ class OpheliaTiendaController extends Controller
                     'quantity' => 1,
                 ]],
                 'mode' => 'payment',
-                'success_url' => env('STRIPE_TIENDA_SUCCESS_URL', env('STRIPE_SUCCESS_URL')),
-                'cancel_url' => env('STRIPE_TIENDA_CANCEL_URL', env('STRIPE_CANCEL_URL')),
+                'success_url' => $successUrl,
+                'cancel_url' => $cancelUrl,
                 'metadata' => [
                     'id_apartado' => $apartado->id_apartado,
                 ],

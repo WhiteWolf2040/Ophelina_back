@@ -114,6 +114,18 @@ class AbonoController extends Controller
             // directo, no config('services.stripe.secret') (que no existe mapeado).
             $stripe = new StripeClient(env('STRIPE_SECRET'));
 
+            // ✅ CORREGIDO: STRIPE_TIENDA_SUCCESS_URL / STRIPE_TIENDA_CANCEL_URL
+            // ahora son URLs base GENÉRICAS compartidas por los 3 flujos
+            // (apartado, abono, prórroga), ej:
+            //   https://ophelina-front.vercel.app/homecliente?pago=exitoso
+            // Aquí le agregamos &tipo=abono o &tipo=prorroga dinámicamente,
+            // para que el frontend sepa qué toast mostrar SIN necesitar una
+            // variable de entorno distinta por cada tipo de operación (eso
+            // evitaría que se pisen entre sí como pasaría si cada controlador
+            // asumiera un valor fijo distinto en la misma variable).
+            $successUrl = $this->agregarParametro(env('STRIPE_TIENDA_SUCCESS_URL'), 'tipo', $tipo);
+            $cancelUrl = $this->agregarParametro(env('STRIPE_TIENDA_CANCEL_URL'), 'tipo', $tipo);
+
             $session = $stripe->checkout->sessions->create([
                 'mode' => 'payment',
                 'payment_method_types' => ['card'],
@@ -135,10 +147,8 @@ class AbonoController extends Controller
                     'monto' => $monto,
                     'mora_incluida' => $mora,
                 ],
-                // Reutiliza las mismas variables que ya configuraste en Render,
-                // apuntando a /cliente/empenos (página de "Mis Empeños" del cliente).
-                'success_url' => env('STRIPE_TIENDA_SUCCESS_URL'),
-                'cancel_url' => env('STRIPE_TIENDA_CANCEL_URL'),
+                'success_url' => $successUrl,
+                'cancel_url' => $cancelUrl,
                 'customer_email' => $user->correo,
             ]);
 
@@ -232,6 +242,18 @@ class AbonoController extends Controller
                 'message' => 'Error al calcular la cotización',
             ], 500);
         }
+    }
+
+    /**
+     * ✅ NUEVO: helper para agregarle un query param a una URL base,
+     * sin importar si esa URL base ya trae otros parámetros o no.
+     * Usado para inyectar &tipo=abono / &tipo=prorroga / &tipo=apartado
+     * a las URLs genéricas STRIPE_TIENDA_SUCCESS_URL / _CANCEL_URL.
+     */
+    private function agregarParametro(string $urlBase, string $clave, string $valor): string
+    {
+        $separador = (strpos($urlBase, '?') !== false) ? '&' : '?';
+        return $urlBase . $separador . $clave . '=' . urlencode($valor);
     }
 
     // El registro del pago ya NO se hace aquí. Stripe llama al webhook
