@@ -18,7 +18,7 @@ use App\Http\Controllers\API\ReportesController;
 use App\Http\Controllers\API\ConfiguracionController;
 use App\Http\Controllers\API\PrendaController;
 
-// ✅ NUEVOS IMPORTS PARA CLIENTE
+//  NUEVOS IMPORTS PARA CLIENTE
 use App\Http\Controllers\API\OpheliaHomeController;
 use App\Http\Controllers\API\NotificacionController;
 use App\Http\Controllers\API\MisEmpenosController;
@@ -33,7 +33,7 @@ use App\Http\Controllers\API\AbonoController;
 |--------------------------------------------------------------------------
 */
 
-// ✅ RUTA DE PRUEBA DE CLOUDINARY (PÚBLICA)
+//  RUTA DE PRUEBA DE CLOUDINARY (PÚBLICA)
 Route::get('/test-cloudinary', function () {
     try {
         $config = config('cloudinary');
@@ -80,27 +80,27 @@ Route::post('/send-email', [ContactController::class, 'SendEmail']);
 // Autenticación
 Route::post('/login', [AuthController::class, 'login']);
 
-// ✅ Stripe - Rutas PÚBLICAS (no requieren token de autenticación)
+//  Stripe - Rutas PÚBLICAS (no requieren token de autenticación)
 Route::prefix('stripe')->group(function () {
     Route::post('/create-checkout-session', [StripeController::class, 'createCheckoutSession']);
     Route::post('/activate-free-plan', [StripeController::class, 'activateFreePlan']);
 });
 
-// ✅ WEBHOOK DE STRIPE - DEBE SER PÚBLICO
+//  WEBHOOK DE STRIPE - DEBE SER PÚBLICO
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
 
 Route::get('/imagen-prenda/{id}', [App\Http\Controllers\API\TiendaController::class, 'verImagen']);
-// ✅ RUTAS PÚBLICAS PARA TIENDA (catálogo sin autenticación)
+//  RUTAS PÚBLICAS PARA TIENDA (catálogo sin autenticación)
 Route::prefix('public')->group(function () {
     Route::get('/productos', [TiendaController::class, 'catalogoPublico']);
     Route::get('/productos/{id}', [TiendaController::class, 'detallePublico']);
 
 });
 
-// ✅ RUTAS PÚBLICAS PARA CLIENTE - TIENDA (catálogo visible sin login)
+//  RUTAS PÚBLICAS PARA CLIENTE - TIENDA (catálogo visible sin login)
 Route::get('/tienda/productos', [OpheliaTiendaController::class, 'getProductos']);
 
-// ✅ RUTAS PÚBLICAS PARA APARTADOS (crear sesión de pago)
+//  RUTAS PÚBLICAS PARA APARTADOS (crear sesión de pago)
 Route::post('/apartados/crear-sesion', [ApartadoController::class, 'crearSesion']);
 
 /*
@@ -135,23 +135,23 @@ Route::middleware('auth:sanctum')->group(function () {
     NOTIFICACIONES (CLIENTE)
     ==========================
     */
-    Route::get('/notificaciones', [NotificacionController::class, 'index']); // ✅ AGREGADO
+    Route::get('/notificaciones', [NotificacionController::class, 'index']); //  AGREGADO
 
     /*
     ==========================
     HOME DEL CLIENTE (DASHBOARD CLIENTE)
     ==========================
     */
-    Route::get('/homecliente', [OpheliaHomeController::class, 'index']); // ✅ AGREGADO
+    Route::get('/homecliente', [OpheliaHomeController::class, 'index']); //  AGREGADO
 
     /*
     ==========================
     MIS EMPEÑOS (CLIENTE)
     ==========================
     */
-    Route::get('/cliente/empenos', [MisEmpenosController::class, 'getMisEmpenos']); // ✅ AGREGADO
-    Route::get('/cliente/empenos/resumen', [MisEmpenosController::class, 'getResumenMisEmpenos']); // ✅ AGREGADO
-    Route::get('/cliente/empenos/{id}', [MisEmpenosController::class, 'getMisEmpenosDetalle']); // ✅ AGREGADO
+    Route::get('/cliente/empenos', [MisEmpenosController::class, 'getMisEmpenos']); //  AGREGADO
+    Route::get('/cliente/empenos/resumen', [MisEmpenosController::class, 'getResumenMisEmpenos']); //  AGREGADO
+    Route::get('/cliente/empenos/{id}', [MisEmpenosController::class, 'getMisEmpenosDetalle']); //  AGREGADO
 
         /*
     ==========================
@@ -159,6 +159,10 @@ Route::middleware('auth:sanctum')->group(function () {
     ==========================
     */
     Route::post('/empenos/{empeno}/abono', [AbonoController::class, 'crearSesionPago']);
+    Route::get('/empenos/{empeno}/cotizacion', [AbonoController::class, 'cotizacion']);
+    Route::get('/cliente/tickets', [TicketController::class, 'index']);
+    Route::get('/cliente/tickets/{id}', [TicketController::class, 'show']); 
+
  
 
     
@@ -167,12 +171,12 @@ Route::middleware('auth:sanctum')->group(function () {
     CLIENTE - TIENDA (apartados)
     ==========================
     */
-    // ✅ RUTA CORREGIDA: /cliente/tienda/productos (para que coincida con el frontend)
+    //  RUTA CORREGIDA: /cliente/tienda/productos (para que coincida con el frontend)
     Route::prefix('cliente/tienda')->group(function () {
         Route::get('/productos', [OpheliaTiendaController::class, 'getProductos']);
     });
 
-    // ✅ RUTAS PARA APARTAR Y VER APARTADOS
+    //  RUTAS PARA APARTAR Y VER APARTADOS
     Route::prefix('tienda')->group(function () {
         Route::post('/productos/{id}/apartar', [OpheliaTiendaController::class, 'apartar']);
         Route::get('/apartados', [OpheliaTiendaController::class, 'misApartados']);
