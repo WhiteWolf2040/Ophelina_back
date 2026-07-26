@@ -26,6 +26,7 @@ use App\Http\Controllers\API\ApartadoController;
 use App\Http\Controllers\API\StripeWebhookController;
 use App\Http\Controllers\API\OpheliaTiendaController;
 use App\Http\Controllers\API\AbonoController;
+use App\Http\Controllers\API\TicketController;
 
 /*
 |--------------------------------------------------------------------------
@@ -161,7 +162,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/empenos/{empeno}/abono', [AbonoController::class, 'crearSesionPago']);
     Route::get('/empenos/{empeno}/cotizacion', [AbonoController::class, 'cotizacion']);
     Route::get('/cliente/tickets', [TicketController::class, 'index']);
-    Route::get('/cliente/tickets/{id}', [TicketController::class, 'show']); 
+    Route::get('/cliente/tickets/{id}', [TicketController::class, 'show']);
+
 
  
 
