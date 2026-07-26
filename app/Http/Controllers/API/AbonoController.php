@@ -123,8 +123,22 @@ class AbonoController extends Controller
             // variable de entorno distinta por cada tipo de operación (eso
             // evitaría que se pisen entre sí como pasaría si cada controlador
             // asumiera un valor fijo distinto en la misma variable).
-            $successUrl = $this->agregarParametro(env('STRIPE_TIENDA_SUCCESS_URL'), 'tipo', $tipo);
-            $cancelUrl = $this->agregarParametro(env('STRIPE_TIENDA_CANCEL_URL'), 'tipo', $tipo);
+            $successBase = env('STRIPE_TIENDA_SUCCESS_URL');
+            $cancelBase = env('STRIPE_TIENDA_CANCEL_URL');
+
+            // ✅ NUEVO: misma validación defensiva que en OpheliaTiendaController@apartar.
+            // Evita un TypeError fatal (no capturable por el catch de abajo)
+            // si estas env vars vienen null.
+            if (empty($successBase) || empty($cancelBase)) {
+                Log::error('❌ STRIPE_TIENDA_SUCCESS_URL o STRIPE_TIENDA_CANCEL_URL no están configuradas (revisa las env vars en Render y haz un redeploy).');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Configuración de pago incompleta en el servidor (faltan URLs de Stripe). Contacta al administrador.',
+                ], 500);
+            }
+
+            $successUrl = $this->agregarParametro($successBase, 'tipo', $tipo);
+            $cancelUrl = $this->agregarParametro($cancelBase, 'tipo', $tipo);
 
             $session = $stripe->checkout->sessions->create([
                 'mode' => 'payment',

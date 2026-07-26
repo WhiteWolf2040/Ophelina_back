@@ -116,7 +116,7 @@ class OpheliaTiendaController extends Controller
                 'empresa_id' => $idEmpresa // Opcional: para debug
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Error en OpheliaTiendaController@getProductos: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
@@ -245,6 +245,22 @@ class OpheliaTiendaController extends Controller
             // &tipo=prorroga que agrega ese otro controlador.
             $successBase = env('STRIPE_TIENDA_SUCCESS_URL', env('STRIPE_SUCCESS_URL'));
             $cancelBase = env('STRIPE_TIENDA_CANCEL_URL', env('STRIPE_CANCEL_URL'));
+
+            // ✅ NUEVO: validación defensiva. Si estas variables vienen null
+            // (typo en el nombre en Render, o no se hizo redeploy después de
+            // guardarlas), pasar null a agregarParametro() -que exige
+            // string- provocaría un TypeError FATAL que no cae en el catch
+            // de abajo (TypeError no extiende Exception en PHP 8), y eso se
+            // ve en el frontend como un 500 genérico sin mensaje. Mejor
+            // devolver un error controlado y explícito.
+            if (empty($successBase) || empty($cancelBase)) {
+                Log::error('❌ STRIPE_TIENDA_SUCCESS_URL o STRIPE_TIENDA_CANCEL_URL no están configuradas (revisa las env vars en Render y haz un redeploy).');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Configuración de pago incompleta en el servidor (faltan URLs de Stripe). Contacta al administrador.',
+                ], 500);
+            }
+
             $successUrl = $this->agregarParametro($successBase, 'tipo', 'apartado');
             $cancelUrl = $this->agregarParametro($cancelBase, 'tipo', 'apartado');
 
@@ -283,7 +299,7 @@ class OpheliaTiendaController extends Controller
                     'anticipo' => '$' . number_format($montoAnticipo, 2),
                 ],
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Error en OpheliaTiendaController@apartar: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
