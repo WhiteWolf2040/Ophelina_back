@@ -116,6 +116,12 @@ class TiendaController extends Controller
                 ->select(DB::raw('SUM(precio * stock) as total'))
                 ->value('total') ?? 0;
 
+             $publicacionesAutomaticas = ProductoTienda::where('id_empresa', $empresaId)
+                ->whereNull('deleted_at')
+                ->where('publicacion_automatica', true)
+                ->count();
+
+
             return response()->json([
                 'success' => true,
                 'total' => $total,
@@ -124,7 +130,7 @@ class TiendaController extends Controller
                 'destacados' => $destacados,
                 'bajo_stock' => 0,
                 'valor_total' => number_format($valorTotal, 2),
-                'publicaciones_automaticas' => 0
+                'publicaciones_automaticas' => $publicacionesAutomaticas
             ]);
 
         } catch (\Throwable $e) {
@@ -589,31 +595,127 @@ class TiendaController extends Controller
     /**
      * Publicación automática
      */
-    public function publicacionAutomatica(Request $request)
-    {
-        try {
-            $user = $request->user();
+   /**
+ * Publicación automática: busca empeños vencidos (con periodo de gracia
+ * cumplido) que aún no tengan producto en tienda, y los publica.
+ * - Crea la fila en producto_tienda
+ * - Copia la imagen principal de la prenda (si existe) a producto_tienda
+ *   vía ImagenPrenda, igual que hace store()
+ * - Marca la prenda como 'Vencido'
+ * - Marca el empeño como 'en_tienda' (desaparece de "Mis Empeños" activos)
+ *
+ * POST /api/tienda/publicacion-automatica
+ * body: { dias_gracia?: number }
+ */
+/**
+ * Publicación automática: busca empeños vencidos (con periodo de gracia
+ * cumplido) que aún no tengan producto en tienda, y los publica.
+ *
+ * POST /api/tienda/publicacion-automatica
+ * body: { dias_gracia?: number }
+ */
+public function publicacionAutomatica(Request $request)
+{
+    try {
+        $user = $request->user();
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Publicación automática ejecutada',
-                'productos_creados' => 0
-            ]);
-
-        } catch (\Exception $e) {
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error en publicación automática: ' . $e->getMessage()
-            ], 500);
+                'message' => 'Usuario no autenticado'
+            ], 401);
         }
+
+        $diasGracia = (int) $request->input(
+            'dias_gracia',
+            $user->empresa->dias_gracia_publicacion ?? 5
+        );
+
+        $fechaLimite = now()->subDays($diasGracia)->toDateString();
+
+        // 1) Igual que EmpenoController@actualizarEstados: pasar a 'vencido'
+        //    los que ya vencieron por fecha y seguían como 'activo'
+        DB::table('empeno')
+            ->where('id_empresa', $user->id_empresa)
+            ->where('estado', 'activo')
+            ->whereDate('fecha_vencimiento', '<', now()->toDateString())
+            ->update(['estado' => 'vencido']);
+
+        // 2) Candidatos: vencidos, con periodo de gracia cumplido, y que
+        //    todavía NO tengan producto_tienda creado (ni borrado)
+        $empenosElegibles = DB::table('empeno as e')
+            ->join('prendas as p', 'p.id_prenda', '=', 'e.id_prenda')
+            ->where('e.id_empresa', $user->id_empresa)
+            ->where('e.estado', 'vencido')
+            ->whereDate('e.fecha_vencimiento', '<=', $fechaLimite)
+            ->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                  ->from('producto_tienda as pt')
+                  ->whereColumn('pt.id_empeno_original', 'e.id_empeno')
+                  ->whereNull('pt.deleted_at');
+            })
+            ->select(
+                'e.id_empeno', 'e.id_prenda', 'e.folio',
+                'p.descripcion', 'p.tipo', 'p.valor_estimado', 'p.imagen_url'
+            )
+            ->get();
+
+        $creados = 0;
+
+        DB::beginTransaction();
+
+        foreach ($empenosElegibles as $item) {
+            DB::table('producto_tienda')->insert([
+                'id_empresa'             => $user->id_empresa,
+                'id_prenda'              => $item->id_prenda,
+                'id_empeno_original'     => $item->id_empeno,
+                'nombre'                 => $item->descripcion,
+                'categoria'              => $item->tipo,
+                'precio'                 => $item->valor_estimado,
+                'stock'                  => 1,
+                'descripcion'            => $item->descripcion,
+                'estado_producto'        => 'Buen estado',
+                'visible'                => true,
+                'destacado'              => false,
+                'descuento'              => 0,
+                'imagen_url'             => $item->imagen_url, // ← se copia directo, columna ya existe
+                'publicacion_automatica' => true,
+                'fecha_publicacion'      => now()->format('Y-m-d'),
+            ]);
+
+            // La prenda pasa a 'Vencido' (ya no está "En Empeño", está en venta)
+            DB::table('prendas')
+                ->where('id_prenda', $item->id_prenda)
+                ->update(['estado' => 'Vencido']);
+
+            // El empeño se marca 'en_tienda' → sale de "Mis Empeños" activos
+            DB::table('empeno')
+                ->where('id_empeno', $item->id_empeno)
+                ->update(['estado' => 'en_tienda']);
+
+            $creados++;
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$creados} producto(s) publicado(s) automáticamente",
+            'productos_creados' => $creados,
+        ]);
+
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        Log::error('❌ Error en publicacionAutomatica: ' . $e->getMessage());
+        Log::error($e->getTraceAsString());
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al ejecutar la publicación automática',
+            'error' => $e->getMessage(),
+        ], 500);
     }
+}
 
     /**
      * Configurar días de gracia

@@ -78,6 +78,7 @@ class MisEmpenosController extends Controller
 
             $empenos = MisEmpenos::with(['prenda', 'pagos', 'empresa'])
                 ->where('id_cliente', $idCliente)
+                ->where('estado', '!=', 'en_tienda')   // ← agregar
                 ->orderBy('fecha_empeno', 'desc')
                 ->get();
 
