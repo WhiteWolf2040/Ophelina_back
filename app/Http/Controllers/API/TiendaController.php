@@ -595,18 +595,6 @@ class TiendaController extends Controller
     /**
      * Publicación automática
      */
-   /**
- * Publicación automática: busca empeños vencidos (con periodo de gracia
- * cumplido) que aún no tengan producto en tienda, y los publica.
- * - Crea la fila en producto_tienda
- * - Copia la imagen principal de la prenda (si existe) a producto_tienda
- *   vía ImagenPrenda, igual que hace store()
- * - Marca la prenda como 'Vencido'
- * - Marca el empeño como 'en_tienda' (desaparece de "Mis Empeños" activos)
- *
- * POST /api/tienda/publicacion-automatica
- * body: { dias_gracia?: number }
- */
 /**
  * Publicación automática: busca empeños vencidos (con periodo de gracia
  * cumplido) que aún no tengan producto en tienda, y los publica.
