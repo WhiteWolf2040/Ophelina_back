@@ -57,17 +57,19 @@ class OpheliaHomeController extends Controller
                 $interesesTotal += $empeno->intereses ?? 0;
 
                 // Próximos a vencer (activos con vencimiento en 7 días)
-                if ($empeno->estado === 'activo' && $empeno->fecha_vencimiento) {
-                    $dias = now()->diffInDays($empeno->fecha_vencimiento, false);
-                    if ($dias <= 7 && $dias >= 0) {
-                        $proximosVencer[] = [
-                            'id' => $empeno->id_empeno,
-                            'nombre' => DB::table('prendas')->where('id_prenda', $empeno->id_prenda)->value('descripcion') ?? 'Sin nombre',
-                            'fechaVencimiento' => date('d/m/Y', strtotime($empeno->fecha_vencimiento)),
-                            'diasRestantes' => $dias . ' días restantes'
-                        ];
+                    if ($empeno->estado === 'activo' && $empeno->fecha_vencimiento) {
+                        // Usamos diffInDays con floor para obtener números enteros
+                        $dias = floor(now()->diffInDays($empeno->fecha_vencimiento, false));
+                        
+                        if ($dias <= 7 && $dias >= 0) {
+                            $proximosVencer[] = [
+                                'id' => $empeno->id_empeno,
+                                'nombre' => DB::table('prendas')->where('id_prenda', $empeno->id_prenda)->value('descripcion') ?? 'Sin nombre',
+                                'fechaVencimiento' => date('d/m/Y', strtotime($empeno->fecha_vencimiento)),
+                                'diasRestantes' => $dias . ' días restantes'
+                            ];
+                        }
                     }
-                }
             }
 
             // Calcular pagados (aquellos con saldoRestante <= 0)

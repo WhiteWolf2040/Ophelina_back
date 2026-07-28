@@ -291,6 +291,19 @@ class OpheliaTiendaController extends Controller
             $producto->visible = 0;
             $producto->save();
 
+            // ✅ NUEVO: refleja el apartado también en el inventario del
+            // dueño. Como cada ProductoTienda corresponde 1 a 1 con una
+            // Prenda física (confirmado: no hay múltiples unidades por
+            // artículo), marcamos esa prenda como 'Apartado' para que el
+            // admin la vea así en /inventario, en vez de que el artículo
+            // simplemente "desaparezca" de la tienda sin ninguna señal en
+            // el inventario de por qué.
+            if ($producto->id_prenda) {
+                \App\Models\Prenda::where('id_prenda', $producto->id_prenda)->update([
+                    'estado' => 'Apartado',
+                ]);
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => [

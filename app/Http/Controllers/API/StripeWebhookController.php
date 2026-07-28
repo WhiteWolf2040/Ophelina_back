@@ -7,6 +7,7 @@ use App\Models\Apartado;
 use App\Models\Amortizacio;
 use App\Models\Pago;
 use App\Models\Empeno;
+use App\Models\Prenda;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -66,11 +67,36 @@ class StripeWebhookController extends Controller
             $idApartado = $session->metadata->id_apartado ?? null;
 
             if ($idApartado) {
-                Apartado::where('id_apartado', $idApartado)->update([
-                    'stripe_payment_status' => 'fallido',
-                    'estado' => 'cancelado',
-                ]);
-                Log::info('⏱️ Sesión expirada, apartado cancelado: id_apartado=' . $idApartado);
+                $apartado = Apartado::find($idApartado);
+
+                if ($apartado) {
+                    $apartado->update([
+                        'stripe_payment_status' => 'fallido',
+                        'estado' => 'cancelado',
+                    ]);
+
+                    // ✅ NUEVO: al expirar sin pagar, se revierte todo lo
+                    // que se había reservado en OpheliaTiendaController@apartar
+                    // -el producto vuelve a ser visible en la tienda y la
+                    // prenda regresa a 'Disponible' en el inventario del
+                    // dueño-. Antes esto no pasaba: un apartado que
+                    // expiraba dejaba el producto oculto para siempre.
+                    $producto = $apartado->producto;
+                    if ($producto) {
+                        $producto->visible = 1;
+                        $producto->save();
+
+                        if ($producto->id_prenda) {
+                            Prenda::where('id_prenda', $producto->id_prenda)->update([
+                                'estado' => 'Disponible',
+                            ]);
+                        }
+                    }
+
+                    Log::info('⏱️ Sesión expirada, apartado cancelado y producto restaurado: id_apartado=' . $idApartado);
+                } else {
+                    Log::warning('⚠️ Webhook de expiración recibido pero apartado no encontrado: id_apartado=' . $idApartado);
+                }
             }
 
             // Para abonos/prórrogas no hace falta hacer nada al expirar: no
