@@ -1,6 +1,4 @@
 <?php
-// app/Http/Controllers/API/MisEmpenosController.php
-
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
@@ -12,73 +10,43 @@ use Illuminate\Support\Facades\Log;
 
 class MisEmpenosController extends Controller
 {
-    /**
-     * Helper: obtiene el id_cliente del usuario autenticado.
-     * Sigue el mismo patrón que OpheliaTiendaController.
-     */
     private function obtenerClienteId(Request $request): ?int
     {
         $user = $request->user();
-        if (!$user) {
-            return null;
-        }
+        if (!$user) return null;
 
         $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
-
         return $cliente ? $cliente->id_cliente : null;
     }
 
-    /**
-     * Helper: URL de la imagen principal de una prenda (Cloudinary o binario legacy).
-     */
     private function resolverImagenUrl($idPrenda): ?string
     {
-        if (empty($idPrenda)) {
-            return null;
-        }
+        if (empty($idPrenda)) return null;
 
-        $imagen = ImagenPrenda::where('id_prenda', $idPrenda)
-            ->where('es_principal', true)
-            ->first();
-
+        $imagen = ImagenPrenda::where('id_prenda', $idPrenda)->where('es_principal', true)->first();
         if (!$imagen) {
             $imagen = ImagenPrenda::where('id_prenda', $idPrenda)->first();
         }
+        if (!$imagen) return null;
 
-        if (!$imagen) {
-            return null;
-        }
-
-        if (!empty($imagen->cloudinary_url)) {
-            return $imagen->cloudinary_url;
-        }
-
-        if (!empty($imagen->imagen_data)) {
-            return url('/api/imagen-prenda/' . $idPrenda);
-        }
-
+        if (!empty($imagen->cloudinary_url)) return $imagen->cloudinary_url;
+        if (!empty($imagen->imagen_data)) return url('/api/imagen-prenda/' . $idPrenda);
         return null;
     }
 
-    /**
-     * Listado de empeños del cliente autenticado.
-     * GET /api/cliente/empenos
-     */
     public function getMisEmpenos(Request $request)
     {
         try {
             $idCliente = $this->obtenerClienteId($request);
 
             if (!$idCliente) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cliente no encontrado para este usuario',
-                ], 404);
+                return response()->json(['success' => false, 'message' => 'Cliente no encontrado para este usuario'], 404);
             }
 
-            $empenos = MisEmpenos::with(['prenda', 'pagos', 'empresa'])
+            // ✅ NUEVO: 'tasa' agregada al eager load, para exponer el % real
+            $empenos = MisEmpenos::with(['prenda', 'pagos', 'empresa', 'tasa'])
                 ->where('id_cliente', $idCliente)
-                ->where('estado', '!=', 'en_tienda')   // ← agregar
+                ->where('estado', '!=', 'en_tienda')
                 ->orderBy('fecha_empeno', 'desc')
                 ->get();
 
@@ -95,6 +63,9 @@ class MisEmpenosController extends Controller
                     'prestado' => '$' . number_format($e->monto_prestado, 2),
                     'prestadoNumerico' => (float) $e->monto_prestado,
                     'intereses' => '$' . number_format($e->intereses ?? 0, 2),
+                    // ✅ NUEVO: % real de interés y plazo, para mostrarlos coherentemente
+                    'tasaPorcentaje' => optional($e->tasa)->porcentaje,
+                    'plazoMeses' => $e->plazo_meses ?? 1,
                     'totalPagar' => '$' . number_format($e->total_pagar, 2),
                     'totalPagarNumerico' => $e->total_pagar,
                     'diasRetraso' => $e->dias_retraso,
@@ -115,36 +86,22 @@ class MisEmpenosController extends Controller
                 ];
             });
 
-            // ✅ Orden por urgencia: VENCIDO > PROXIMO A VENCER > ACTIVO > EN TIENDA > PAGADO.
-            // Dentro de cada grupo, el vencimiento más próximo primero.
             $prioridadEstado = [
-                'VENCIDO' => 0,
-                'PROXIMO A VENCER' => 1,
-                'ACTIVO' => 2,
-                'EN TIENDA' => 3,
-                'PAGADO' => 4,
+                'VENCIDO' => 0, 'PROXIMO A VENCER' => 1, 'ACTIVO' => 2, 'EN TIENDA' => 3, 'PAGADO' => 4,
             ];
 
             $data = $data->sort(function ($a, $b) use ($prioridadEstado) {
                 $prioridadA = $prioridadEstado[$a['estado']] ?? 5;
                 $prioridadB = $prioridadEstado[$b['estado']] ?? 5;
 
-                if ($prioridadA !== $prioridadB) {
-                    return $prioridadA <=> $prioridadB;
-                }
+                if ($prioridadA !== $prioridadB) return $prioridadA <=> $prioridadB;
 
-                // Dentro del mismo grupo: vencimiento más cercano primero.
-                // Si no hay fecha, se manda al final del grupo.
                 $tsA = $a['vencimientoTimestamp'] ?? PHP_INT_MAX;
                 $tsB = $b['vencimientoTimestamp'] ?? PHP_INT_MAX;
-
                 return $tsA <=> $tsB;
             })->values();
 
-            return response()->json([
-                'success' => true,
-                'data' => $data,
-            ]);
+            return response()->json(['success' => true, 'data' => $data]);
 
         } catch (\Throwable $e) {
             Log::error('Error en MisEmpenosController@getMisEmpenos: ' . $e->getMessage());
@@ -156,83 +113,65 @@ class MisEmpenosController extends Controller
         }
     }
 
-    /**
-     * Resumen/estadísticas de los empeños del cliente autenticado.
-     * GET /api/cliente/empenos/resumen
-     */
-  public function getResumenMisEmpenos(Request $request)
-{
-    try {
-        $idCliente = $this->obtenerClienteId($request);
+    public function getResumenMisEmpenos(Request $request)
+    {
+        try {
+            $idCliente = $this->obtenerClienteId($request);
 
-        if (!$idCliente) {
+            if (!$idCliente) {
+                return response()->json(['success' => false, 'message' => 'Cliente no encontrado para este usuario'], 404);
+            }
+
+            $empenos = MisEmpenos::with('pagos')
+                ->where('id_cliente', $idCliente)
+                ->get();
+
+            $activos = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'ACTIVO')->count();
+            $vencidos = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'VENCIDO')->count();
+            $pagados = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'PAGADO')->count();
+            $proximosAVencer = $empenos->filter(fn (MisEmpenos $e) => $e->proximo_a_vencer)->count();
+
+            $totalPrestado = $empenos->sum(fn (MisEmpenos $e) => (float) $e->monto_prestado);
+            $totalPendiente = $empenos->sum(fn (MisEmpenos $e) => $e->saldo_pendiente['saldo_restante']);
+
+            return response()->json([
+                'success' => true,
+                'total' => $empenos->count(),
+                'activos' => $activos,
+                'vencidos' => $vencidos,
+                'pagados' => $pagados,
+                'proximos_a_vencer' => $proximosAVencer,
+                'total_prestado' => number_format($totalPrestado, 2),
+                'total_pendiente' => number_format($totalPendiente, 2),
+            ]);
+
+        } catch (\Throwable $e) {
+            Log::error('Error en MisEmpenosController@getResumenMisEmpenos: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Cliente no encontrado para este usuario',
-            ], 404);
+                'message' => 'Error al cargar el resumen',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-
-        // ✅ NUEVO: eager load de 'pagos', igual que getMisEmpenos().
-        // Sin esto, cada llamada a saldo_pendiente (dentro de los filter/sum
-        // de abajo) disparaba una query nueva por cada empeño del cliente.
-        $empenos = MisEmpenos::with('pagos')
-            ->where('id_cliente', $idCliente)
-            ->get();
-
-        $activos = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'ACTIVO')->count();
-        $vencidos = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'VENCIDO')->count();
-        $pagados = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'PAGADO')->count();
-        $proximosAVencer = $empenos->filter(fn (MisEmpenos $e) => $e->proximo_a_vencer)->count();
-
-        $totalPrestado = $empenos->sum(fn (MisEmpenos $e) => (float) $e->monto_prestado);
-        $totalPendiente = $empenos->sum(fn (MisEmpenos $e) => $e->saldo_pendiente['saldo_restante']);
-
-        return response()->json([
-            'success' => true,
-            'total' => $empenos->count(),
-            'activos' => $activos,
-            'vencidos' => $vencidos,
-            'pagados' => $pagados,
-            'proximos_a_vencer' => $proximosAVencer,
-            'total_prestado' => number_format($totalPrestado, 2),
-            'total_pendiente' => number_format($totalPendiente, 2),
-        ]);
-
-    } catch (\Throwable $e) {
-        Log::error('Error en MisEmpenosController@getResumenMisEmpenos: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al cargar el resumen',
-            'error' => $e->getMessage(),
-        ], 500);
     }
-}
-    /**
-     * Detalle de un empeño específico del cliente autenticado.
-     * GET /api/cliente/empenos/{id}
-     */
+
     public function getMisEmpenosDetalle(Request $request, $id)
     {
         try {
             $idCliente = $this->obtenerClienteId($request);
 
             if (!$idCliente) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cliente no encontrado para este usuario',
-                ], 404);
+                return response()->json(['success' => false, 'message' => 'Cliente no encontrado para este usuario'], 404);
             }
 
+            // ✅ NUEVO: 'tasa' agregada
             $empeno = MisEmpenos::with(['prenda', 'pagos', 'empresa', 'aval', 'tasa'])
                 ->where('id_empeno', $id)
-                ->where('id_cliente', $idCliente) // seguridad: solo su propio empeño
+                ->where('id_cliente', $idCliente)
                 ->first();
 
             if (!$empeno) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Empeño no encontrado',
-                ], 404);
+                return response()->json(['success' => false, 'message' => 'Empeño no encontrado'], 404);
             }
 
             $saldo = $empeno->saldo_pendiente;
@@ -247,6 +186,8 @@ class MisEmpenosController extends Controller
                 'casaEmpeño' => optional($empeno->empresa)->nombre_comercial ?? optional($empeno->empresa)->nombre ?? 'N/A',
                 'prestado' => '$' . number_format($empeno->monto_prestado, 2),
                 'intereses' => '$' . number_format($empeno->intereses ?? 0, 2),
+                'tasaPorcentaje' => optional($empeno->tasa)->porcentaje,
+                'plazoMeses' => $empeno->plazo_meses ?? 1,
                 'totalPagar' => '$' . number_format($empeno->total_pagar, 2),
                 'diasRetraso' => $empeno->dias_retraso,
                 'mora' => $empeno->mora > 0 ? '$' . number_format($empeno->mora, 2) : null,
@@ -264,10 +205,7 @@ class MisEmpenosController extends Controller
                 'estado' => $empeno->estado_frontend,
             ];
 
-            return response()->json([
-                'success' => true,
-                'data' => $data,
-            ]);
+            return response()->json(['success' => true, 'data' => $data]);
 
         } catch (\Throwable $e) {
             Log::error('Error en MisEmpenosController@getMisEmpenosDetalle: ' . $e->getMessage());

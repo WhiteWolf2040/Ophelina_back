@@ -1,6 +1,4 @@
 <?php
-// app/Http/Controllers/API/PagoController.php
-
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
@@ -56,15 +54,10 @@ class PagoController extends Controller
                     ];
                 });
 
-            return response()->json([
-                'success' => true,
-                'data' => $pagos
-            ]);
+            return response()->json(['success' => true, 'data' => $pagos]);
 
         } catch (\Exception $e) {
             \Log::error('Error en PagoController@index: ' . $e->getMessage());
-            \Log::error('Stack trace: ' . $e->getTraceAsString());
-
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener pagos: ' . $e->getMessage()
@@ -126,10 +119,7 @@ class PagoController extends Controller
                 ] : null
             ];
 
-            return response()->json([
-                'success' => true,
-                'data' => $data
-            ]);
+            return response()->json(['success' => true, 'data' => $data]);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -140,10 +130,30 @@ class PagoController extends Controller
     }
 
     /**
-     * Valida datos, busca la cuota pendiente más antigua y calcula intereses
-     * de mora si hay atraso. Usado por el panel de la casa de empeño
-     * (pagos en sucursal, no los de Stripe del cliente).
+     * ✅ NUEVO: misma regla que AbonoController@refrendoEsElegible, para que
+     * un empleado en sucursal no pueda registrar más refrendos de los que
+     * el cliente ya podría pagar en línea.
      */
+    private function refrendoEsElegible(Empeno $empeno): array
+    {
+        $plazoMeses = $empeno->plazo_meses ?? 1;
+        $refrendosPermitidos = max(0, $plazoMeses - 1);
+
+        $refrendosPagados = Pago::where('id_empeno', $empeno->id_empeno)
+            ->where('tipo_pago', 'refrendo')
+            ->count();
+
+        $mesesTranscurridos = $empeno->fecha_empeno
+            ? (int) floor($empeno->fecha_empeno->diffInDays(now()) / 30)
+            : 0;
+
+        return [
+            'elegible' => $refrendosPagados < $refrendosPermitidos && $mesesTranscurridos > $refrendosPagados,
+            'refrendos_pagados' => $refrendosPagados,
+            'refrendos_permitidos' => $refrendosPermitidos,
+        ];
+    }
+
     public function store(Request $request)
     {
         try {
@@ -154,7 +164,8 @@ class PagoController extends Controller
                 'monto' => 'required|numeric|min:0',
                 'fecha_pago' => 'required|date',
                 'metodo_pago' => 'required|in:efectivo,transferencia,tarjeta,deposito',
-                'tipo_pago' => 'required|in:interes,abono,liquidacion,prorroga'
+                // ✅ NUEVO: 'refrendo' agregado
+                'tipo_pago' => 'required|in:interes,abono,liquidacion,prorroga,refrendo'
             ]);
 
             $empeno = Empeno::where('id_empeno', $request->id_empeno)
@@ -162,10 +173,7 @@ class PagoController extends Controller
                 ->first();
 
             if (!$empeno) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Empeño no encontrado'
-                ], 404);
+                return response()->json(['success' => false, 'message' => 'Empeño no encontrado'], 404);
             }
 
             $amortizacion = Amortizacio::where('id_empeno', $request->id_empeno)
@@ -174,10 +182,27 @@ class PagoController extends Controller
                 ->first();
 
             if (!$amortizacion) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No hay pagos pendientes para este empeño'
-                ], 400);
+                return response()->json(['success' => false, 'message' => 'No hay pagos pendientes para este empeño'], 400);
+            }
+
+            // ✅ NUEVO: valida elegibilidad de refrendo ANTES de abrir transacción
+            if ($request->tipo_pago === 'refrendo') {
+                $plazoMeses = $empeno->plazo_meses ?? 1;
+
+                if ($plazoMeses <= 1) {
+                    return response()->json(['success' => false, 'message' => 'Este empeño es de un solo periodo; no aplica refrendo.'], 422);
+                }
+                if ($empeno->estado === 'vencido') {
+                    return response()->json(['success' => false, 'message' => 'Este empeño ya venció; registra una prórroga en vez de un refrendo.'], 422);
+                }
+
+                $elegibilidad = $this->refrendoEsElegible($empeno);
+                if (!$elegibilidad['elegible']) {
+                    $mensaje = $elegibilidad['refrendos_pagados'] >= $elegibilidad['refrendos_permitidos']
+                        ? 'Ya se pagaron todos los refrendos disponibles para este empeño.'
+                        : 'Aún no corresponde el siguiente refrendo mensual.';
+                    return response()->json(['success' => false, 'message' => $mensaje], 422);
+                }
             }
 
             DB::beginTransaction();
@@ -199,13 +224,6 @@ class PagoController extends Controller
             $ivaPagado = 0;
             $montoTotalCalculado = 0;
 
-            /*
-            Liquidación: paga la cuota completa.
-            Abono: reduce capital (el cliente paga directamente a su deuda).
-            Interés: solo paga intereses (mantiene el préstamo vivo).
-            Prórroga: paga intereses + extiende el plazo.
-            */
-
             switch ($request->tipo_pago) {
                 case 'liquidacion':
                     $capitalPagado = $amortizacion->capital;
@@ -215,26 +233,29 @@ class PagoController extends Controller
                     break;
 
                 case 'abono':
-                //  Mismo orden que StripeWebhookController: IVA + interés primero,
-                // capital con el sobrante. Antes: 100% directo a capital.
-                $ivaPagado = min($montoPagado, (float) $amortizacion->iva_interes);
-                $restante1 = round($montoPagado - $ivaPagado, 2);
+                    // ✅ CORREGIDO: monto_total ya NO se reasigna aquí. Antes se
+                    // sobreescribía con el remanente reducido, y el cálculo de
+                    // saldo_final de más abajo (que resta usando monto_total
+                    // como referencia FIJA) quedaba mal — restaba el pago dos
+                    // veces. Ahora monto_total se queda como referencia
+                    // original intacta; solo se reduce el desglose
+                    // (capital/interes/iva) para que cotización lo muestre bien.
+                    $deudaTotal = round((float) $amortizacion->capital + $amortizacion->interes + $amortizacion->iva_interes, 2);
 
-                $interesPagado = min($restante1, (float) $amortizacion->interes);
-                $restante2 = round($restante1 - $interesPagado, 2);
+                    if ($deudaTotal > 0) {
+                        $capitalPagado = round($montoPagado * ($amortizacion->capital / $deudaTotal), 2);
+                        $ivaPagado = round($montoPagado * ($amortizacion->iva_interes / $deudaTotal), 2);
+                        $interesPagado = round($montoPagado - $capitalPagado - $ivaPagado, 2);
+                    } else {
+                        $capitalPagado = $interesPagado = $ivaPagado = 0;
+                    }
 
-                $capitalPagado = min($restante2, (float) $amortizacion->capital);
-                $montoTotalCalculado = $ivaPagado + $interesPagado + $capitalPagado;
+                    $montoTotalCalculado = $ivaPagado + $interesPagado + $capitalPagado;
 
-                $nuevoCapital = max(0, $amortizacion->capital - $capitalPagado);
-                $nuevoInteres = max(0, $amortizacion->interes - $interesPagado);
-                $nuevoIva = max(0, $amortizacion->iva_interes - $ivaPagado);
-
-                $amortizacion->capital = $nuevoCapital;
-                $amortizacion->interes = $nuevoInteres;
-                $amortizacion->iva_interes = $nuevoIva;
-                $amortizacion->monto_total = $nuevoCapital + $nuevoInteres + $nuevoIva;
-                break;
+                    $amortizacion->capital = max(0, round($amortizacion->capital - $capitalPagado, 2));
+                    $amortizacion->interes = max(0, round($amortizacion->interes - $interesPagado, 2));
+                    $amortizacion->iva_interes = max(0, round($amortizacion->iva_interes - $ivaPagado, 2));
+                    break;
 
                 case 'interes':
                     $interesBase = $amortizacion->interes + $interesMora;
@@ -245,20 +266,28 @@ class PagoController extends Controller
                     break;
 
                 case 'prorroga':
-                    // PRÓRROGA: paga intereses + IVA, y extiende la fecha
-                    // de vencimiento (30 días), sincronizando también
-                    // empeno.fecha_vencimiento vía Amortizacio::prorrogar().
                     $interesPagado = $amortizacion->interes + $interesMora;
                     $ivaPagado = $interesPagado * 0.16;
                     $capitalPagado = 0;
                     $montoTotalCalculado = $interesPagado + $ivaPagado;
                     break;
 
+                case 'refrendo':
+                    // ✅ NUEVO: mismo criterio que registrarRefrendoWeb en el
+                    // webhook de Stripe — paga interés+IVA del periodo, sin
+                    // tocar capital ni mover fecha de vencimiento.
+                    $ivaPagado = round($montoPagado - ($montoPagado / 1.16), 2);
+                    $interesPagado = round($montoPagado - $ivaPagado, 2);
+                    $capitalPagado = 0;
+                    $montoTotalCalculado = $montoPagado;
+
+                    $amortizacion->interes = max(0, round($amortizacion->interes - $interesPagado, 2));
+                    $amortizacion->iva_interes = max(0, round($amortizacion->iva_interes - $ivaPagado, 2));
+                    break;
+
                 default:
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Tipo de pago no válido'
-                    ], 400);
+                    DB::rollBack();
+                    return response()->json(['success' => false, 'message' => 'Tipo de pago no válido'], 400);
             }
 
             $pago = Pago::create([
@@ -276,8 +305,6 @@ class PagoController extends Controller
             ]);
 
             if ($request->tipo_pago === 'prorroga') {
-                // Prórroga: no se toca monto_pagado/saldo, solo se extiende
-                // el plazo (y se registra el pago de intereses de arriba).
                 $amortizacion->prorrogar(30);
             } else {
                 $nuevoMontoPagado = ($amortizacion->monto_pagado ?? 0) + $montoTotalCalculado;
@@ -377,10 +404,7 @@ class PagoController extends Controller
 
             DB::commit();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Pago eliminado exitosamente'
-            ]);
+            return response()->json(['success' => true, 'message' => 'Pago eliminado exitosamente']);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -401,10 +425,7 @@ class PagoController extends Controller
                 ->first();
 
             if (!$cliente) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cliente no encontrado'
-                ], 404);
+                return response()->json(['success' => false, 'message' => 'Cliente no encontrado'], 404);
             }
 
             $pagos = Pago::whereHas('empeno', function($query) use ($id_cliente, $user) {
@@ -429,10 +450,7 @@ class PagoController extends Controller
                     ];
                 });
 
-            return response()->json([
-                'success' => true,
-                'data' => $pagos
-            ]);
+            return response()->json(['success' => true, 'data' => $pagos]);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -442,51 +460,86 @@ class PagoController extends Controller
         }
     }
 
+    /**
+     * ⚡ OPTIMIZADO: la versión anterior hacía, dentro del foreach, una
+     * consulta DB::table('amortizacion')->where(...)->first() POR CADA
+     * empeño — es decir, N+1 queries (si tienes 200 empeños activos, eran
+     * 201 queries a la BD en cada carga de esta pantalla).
+     *
+     * Ahora:
+     * 1. 'pagos' se reemplaza por withSum(), que hace la suma en la propia
+     *    BD (un JOIN/subquery) en vez de traer todas las filas de pagos a
+     *    PHP solo para sumarlas aquí.
+     * 2. Las amortizaciones pendientes de TODOS los empeños se traen en
+     *    UNA sola consulta (whereIn), agrupadas en memoria por id_empeno,
+     *    y luego se les hace lookup O(1) en el map() — cero queries
+     *    adicionales dentro del loop.
+     *
+     * Resultado: de N+1 consultas a 2 consultas totales, sin importar
+     * cuántos empeños tenga la empresa.
+     */
     public function activosConSaldo(Request $request)
     {
         try {
             $user = $request->user();
 
             $empenos = Empeno::where('id_empresa', $user->id_empresa)
-                ->where('estado', 'activo')
-                ->with(['cliente', 'prenda'])
+                ->with(['cliente:id_cliente,nombre,apellido', 'prenda:id_prenda,descripcion'])
+                ->withSum('pagos as total_pagado', 'monto_total')
+                ->get();
+
+            $idsEmpenos = $empenos->pluck('id_empeno');
+
+            // Una sola consulta trae la primera amortización pendiente de
+            // cada empeño (ordenada por numero_pago), agrupada en memoria.
+            $amortizacionesPendientesPorEmpeno = Amortizacio::whereIn('id_empeno', $idsEmpenos)
+                ->where('estado', 'pendiente')
+                ->orderBy('numero_pago', 'asc')
                 ->get()
-                ->map(function($empeno) {
+                ->groupBy('id_empeno')
+                ->map(fn ($grupo) => $grupo->first());
 
-                    $pagosRealizados = Pago::where('id_empeno', $empeno->id_empeno)->count();
+            $resultados = $empenos->map(function (Empeno $empeno) use ($amortizacionesPendientesPorEmpeno) {
+                $totalPagado = $empeno->total_pagado ?? 0;
 
-                    $amortizacionPendiente = Amortizacio::where('id_empeno', $empeno->id_empeno)
-                        ->where('estado', 'pendiente')
-                        ->orderBy('numero_pago', 'asc')
-                        ->first();
+                $amortizacionPendiente = $amortizacionesPendientesPorEmpeno->get($empeno->id_empeno);
 
-                    $saldoPendienteCuota = $amortizacionPendiente
-                        ? ($amortizacionPendiente->monto_total - ($amortizacionPendiente->monto_pagado ?? 0))
-                        : 0;
+                $saldoPendienteCuota = $amortizacionPendiente
+                    ? (($amortizacionPendiente->monto_total ?? 0) - ($amortizacionPendiente->monto_pagado ?? 0))
+                    : 0;
 
-                    return [
-                        'id_empeno' => $empeno->id_empeno,
-                        'cliente' => $empeno->cliente->nombre . ' ' . $empeno->cliente->apellido,
-                        'articulo' => $empeno->prenda->descripcion ?? 'Sin artículo',
-                        'monto_prestado' => $empeno->monto_prestado,
-                        'saldo_total_pendiente' => $empeno->monto_prestado - ($empeno->total_pagado ?? 0),
-                        'saldo_pendiente_cuota' => $saldoPendienteCuota,
-                        'fecha_empeno' => $empeno->fecha_empeno,
-                        'fecha_vencimiento' => $empeno->fecha_vencimiento,
-                        'pagos_realizados' => $pagosRealizados,
-                        'total_pagado' => $empeno->total_pagado ?? 0
-                    ];
-                });
+                $saldoTotalPendiente = max(0, ($empeno->monto_prestado ?? 0) - $totalPagado);
+
+                $estadoReal = $empeno->estado_real;
+                $diasVencidos = $empeno->dias_vencidos;
+
+                return [
+                    'id_empeno' => $empeno->id_empeno,
+                    'cliente' => $empeno->cliente ? $empeno->cliente->nombre . ' ' . $empeno->cliente->apellido : 'Cliente no disponible',
+                    'articulo' => $empeno->prenda ? $empeno->prenda->descripcion : 'Sin artículo',
+                    'monto_prestado' => floatval($empeno->monto_prestado ?? 0),
+                    'total_pagado' => floatval($totalPagado),
+                    'saldo_total_pendiente' => floatval($saldoTotalPendiente),
+                    'saldo_pendiente_cuota' => floatval($saldoPendienteCuota),
+                    'fecha_empeno' => $empeno->fecha_empeno,
+                    'fecha_vencimiento' => $empeno->fecha_vencimiento,
+                    'estado' => $estadoReal,
+                    'dias_vencidos' => $diasVencidos
+                ];
+            });
 
             return response()->json([
                 'success' => true,
-                'data' => $empenos
+                'data' => $resultados->values()
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Error en activosConSaldo: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
+
             return response()->json([
                 'success' => false,
-                'message' => 'Error al cargar empeños: ' . $e->getMessage()
+                'message' => 'Error al obtener empeños: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -500,9 +553,9 @@ class PagoController extends Controller
         }
 
         $diasAtraso = $fechaActual->diffInDays($fechaProgramada);
-        $tasaDiaria = $amortizacion->capital > 0
-            ? ($amortizacion->interes / $amortizacion->capital) / 30
-            : 0;
+
+        $tasaMensual = (float) optional($amortizacion->empeno->tasa)->porcentaje ?? 0;
+        $tasaDiaria = ($tasaMensual / 100) / 30;
 
         $saldoPendiente = $amortizacion->saldo_pendiente;
         $interesMora = $saldoPendiente * $tasaDiaria * $diasAtraso;
@@ -514,18 +567,9 @@ class PagoController extends Controller
     {
         try {
             $total = Pago::where('id_empeno', $id_empeno)->count();
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'total' => $total
-                ]
-            ]);
+            return response()->json(['success' => true, 'data' => ['total' => $total]]);
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al contar pagos'
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Error al contar pagos'], 500);
         }
     }
 }

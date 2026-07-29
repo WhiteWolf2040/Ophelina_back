@@ -41,9 +41,7 @@ class StripeWebhookController extends Controller
                 $apartado = Apartado::find($idApartado);
 
                 if ($apartado) {
-                    $apartado->update([
-                        'stripe_payment_status' => 'pagado',
-                    ]);
+                    $apartado->update(['stripe_payment_status' => 'pagado']);
 
                     $producto = $apartado->producto;
                     if ($producto && $producto->stock > 0) {
@@ -97,18 +95,10 @@ class StripeWebhookController extends Controller
     }
 
     /**
-     * Registra el abono (o la prórroga) a un empeño una vez que Stripe
-     * confirma el pago.
+     * Registra abono, prórroga o refrendo una vez que Stripe confirma el pago.
      *
-     * ✅ ABONO — Opción C (orden de prioridad estándar del sector /
-     * práctica documentada por CONDUSEF): IVA + interés se cubren primero,
-     * completos, hasta donde alcance el monto abonado; el sobrante -si lo
-     * hay- reduce el capital (deuda principal). Mismo criterio aplicado en
-     * PagoController@store para pagos en sucursal, para que ambos canales
-     * (cliente en línea / empleado presencial) se comporten igual.
-     *
-     * IMPORTANTE: el saldo TOTAL pendiente (saldo_final) siempre se reduce
-     * por el monto completo pagado, sin importar el reparto interno.
+     * ABONO: prorrateo — capital, interés e IVA se reparten en la misma
+     * proporción en que existen en la deuda total.
      */
     private function registrarAbono($session, $idAmortizacion)
     {
@@ -142,15 +132,23 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // ==================== Opción C: IVA + interés primero, capital con el sobrante ====================
-            $ivaPagado = min($monto, (float) $amortizacion->iva_interes);
-            $restante1 = round($monto - $ivaPagado, 2);
+            // ✅ NUEVO
+            if ($tipo === 'refrendo_empeno') {
+                $this->registrarRefrendoWeb($session, $amortizacion, $idEmpeno, $monto);
+                return;
+            }
 
-            $interesPagado = min($restante1, (float) $amortizacion->interes);
-            $restante2 = round($restante1 - $interesPagado, 2);
+            // ==================== Prorrateo ====================
+            $deudaTotal = round((float) $amortizacion->capital + $amortizacion->interes + $amortizacion->iva_interes, 2);
 
-            $capitalPagado = min($restante2, (float) $amortizacion->capital);
-            // =======================================================================================================
+            if ($deudaTotal > 0) {
+                $capitalPagado = round($monto * ($amortizacion->capital / $deudaTotal), 2);
+                $ivaPagado = round($monto * ($amortizacion->iva_interes / $deudaTotal), 2);
+                $interesPagado = round($monto - $capitalPagado - $ivaPagado, 2);
+            } else {
+                $capitalPagado = $interesPagado = $ivaPagado = 0;
+            }
+            // =====================================================
 
             Pago::create([
                 'id_empeno' => $idEmpeno,
@@ -165,8 +163,6 @@ class StripeWebhookController extends Controller
                 'referencia' => $session->id,
             ]);
 
-            // Se reduce el capital/interés/IVA real de la cuota, para que
-            // cotizacion() refleje siempre lo que realmente queda pendiente.
             $nuevoCapital = max(0, round($amortizacion->capital - $capitalPagado, 2));
             $nuevoInteres = max(0, round($amortizacion->interes - $interesPagado, 2));
             $nuevoIva     = max(0, round($amortizacion->iva_interes - $ivaPagado, 2));
@@ -213,5 +209,42 @@ class StripeWebhookController extends Controller
         $amortizacion->prorrogar(30);
 
         Log::info('✅ Prórroga registrada desde web: id_empeno=' . $idEmpeno . ' monto=' . $monto);
+    }
+
+    /**
+     * ✅ NUEVO: registra el refrendo mensual — reduce interés/IVA pendiente
+     * de este periodo, NO toca capital, NO mueve fecha_vencimiento.
+     */
+    private function registrarRefrendoWeb($session, Amortizacio $amortizacion, $idEmpeno, float $monto): void
+    {
+        $ivaPagado = round($monto - ($monto / 1.16), 2);
+        $interesPagado = round($monto - $ivaPagado, 2);
+
+        Pago::create([
+            'id_empeno' => $idEmpeno,
+            'id_amortizacion' => $amortizacion->id_amortizacion,
+            'fecha_pago' => now()->toDateString(),
+            'capital_pagado' => 0,
+            'interes_pagado' => $interesPagado,
+            'iva_pagado' => $ivaPagado,
+            'monto_total' => $monto,
+            'tipo_pago' => 'refrendo',
+            'metodo_pago' => 'tarjeta',
+            'referencia' => $session->id,
+        ]);
+
+        $nuevoInteres = max(0, round($amortizacion->interes - $interesPagado, 2));
+        $nuevoIva = max(0, round($amortizacion->iva_interes - $ivaPagado, 2));
+        $nuevoMontoPagado = $amortizacion->monto_pagado + $monto;
+        $nuevoSaldo = max(0, round($amortizacion->saldo_inicial - $nuevoMontoPagado, 2));
+
+        $amortizacion->update([
+            'interes' => $nuevoInteres,
+            'iva_interes' => $nuevoIva,
+            'monto_pagado' => $nuevoMontoPagado,
+            'saldo_final' => $nuevoSaldo,
+        ]);
+
+        Log::info('✅ Refrendo registrado desde web: id_empeno=' . $idEmpeno . ' monto=' . $monto);
     }
 }

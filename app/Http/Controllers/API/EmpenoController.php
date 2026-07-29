@@ -192,12 +192,13 @@ class EmpenoController extends Controller
                 'monto_prestado' => 'required|numeric|min:100',
                 'tasa_id' => 'required|exists:tasas_interes,id_tasa',
                 'fecha_vencimiento' => 'required|date',
-                'aval_id' => 'nullable|exists:aval,id_aval'
+                'aval_id' => 'nullable|exists:aval,id_aval',
+                'plazo_meses' => 'required|integer|min:1|max:6'
             ]);
 
             $tasa = DB::table('tasas_interes')->where('id_tasa', $validated['tasa_id'])->first();
 
-            $interesMonto = $validated['monto_prestado'] * ($tasa->porcentaje / 100);
+            $interesMonto = $validated['monto_prestado'] * ($tasa->porcentaje / 100) * $validated['plazo_meses'];
             $ivaInteres = $interesMonto * 0.16;
             $montoTotal = $validated['monto_prestado'] + $interesMonto + $ivaInteres;
 
@@ -226,6 +227,7 @@ class EmpenoController extends Controller
 
                 'iva_porcentaje' => 16.00,
                 'fecha_vencimiento' => $validated['fecha_vencimiento'],
+                   'plazo_meses' => $validated['plazo_meses'], 
                 'estado' => 'activo',
                 'folio' => $folio
             ], 'id_empeno');

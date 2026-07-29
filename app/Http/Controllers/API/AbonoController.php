@@ -5,6 +5,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Cliente;
 use App\Models\Empeno;
 use App\Models\Amortizacio;
+use App\Models\Pago;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Stripe\StripeClient;
@@ -12,16 +13,36 @@ use Stripe\StripeClient;
 class AbonoController extends Controller
 {
     /**
-     * Crea una sesión de Stripe Checkout para que el cliente abone a su
-     * empeño (parcial o liquidación total) O para prorrogar 30 días.
-     *
-     * POST /api/empenos/{empeno}/abono
-     * body:
-     *   - monto: number (opcional; solo aplica si tipo=abono. Si no se
-     *     manda, se sugiere el saldo pendiente + mora)
-     *   - tipo: 'abono' | 'prorroga'  ✅ NUEVO. Default 'abono' para no
-     *     romper llamadas viejas del frontend que todavía no lo mandan.
+     * ✅ NUEVO: determina si el empeño puede refrendar ahora mismo.
+     * Regla: máximo (plazo_meses - 1) refrendos en toda la vida del
+     * préstamo (el último mes se liquida o se prorroga, no se refrenda),
+     * y solo uno por mes ya transcurrido desde fecha_empeno -- evita que
+     * el cliente pague varios refrendos seguidos el mismo día.
      */
+    private function refrendoEsElegible(Empeno $empeno): array
+    {
+        $plazoMeses = $empeno->plazo_meses ?? 1;
+        $refrendosPermitidos = max(0, $plazoMeses - 1);
+
+        $refrendosPagados = Pago::where('id_empeno', $empeno->id_empeno)
+            ->where('tipo_pago', 'refrendo')
+            ->count();
+
+        $mesesTranscurridos = $empeno->fecha_empeno
+            ? (int) floor($empeno->fecha_empeno->diffInDays(now()) / 30)
+            : 0;
+
+        $elegible = $refrendosPagados < $refrendosPermitidos
+            && $mesesTranscurridos > $refrendosPagados;
+
+        return [
+            'elegible' => $elegible,
+            'refrendos_pagados' => $refrendosPagados,
+            'refrendos_permitidos' => $refrendosPermitidos,
+            'meses_transcurridos' => $mesesTranscurridos,
+        ];
+    }
+
     public function crearSesionPago(Request $request, Empeno $empeno)
     {
         try {
@@ -30,8 +51,6 @@ class AbonoController extends Controller
                 return response()->json(['success' => false, 'message' => 'No autenticado'], 401);
             }
 
-            // Mismo patrón que OpheliaTiendaController: el id_cliente no vive
-            // directo en el usuario, se busca por id_usuario en la tabla clientes.
             $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
 
             if (!$cliente || (int) $empeno->id_cliente !== (int) $cliente->id_cliente) {
@@ -57,29 +76,18 @@ class AbonoController extends Controller
                 ], 422);
             }
 
-            // ✅ NUEVO: 'abono' (default) o 'prorroga'
             $tipo = $request->input('tipo', 'abono');
 
-            if (!in_array($tipo, ['abono', 'prorroga'], true)) {
+            if (!in_array($tipo, ['abono', 'prorroga', 'refrendo'], true)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Tipo de operación no válido.',
                 ], 422);
             }
 
-            // Mora: si la amortización ya tiene días de retraso, se suma el
-            // cargo moratorio (5% mensual default, configurable por empresa
-            // en tasas_interes.porcentaje_moratorio). Se usa el mismo método
-            // del modelo (calcularMora) que ya usa el resto del proyecto, en
-            // vez de recalcularlo manualmente aquí otra vez.
             $mora = $amortizacion->calcularMora();
 
             if ($tipo === 'prorroga') {
-                // ==================== NUEVO: FLUJO DE PRÓRROGA ====================
-                // La prórroga NO es un monto libre elegido por el cliente: cobra
-                // el interés de la cuota actual (+ mora si la hay) más su IVA,
-                // y a cambio extiende 30 días el vencimiento. Se ignora
-                // cualquier 'monto' que venga en el body.
                 $interesConMora = round((float) $amortizacion->interes + $mora, 2);
                 $ivaInteres = round($interesConMora * 0.16, 2);
                 $monto = round($interesConMora + $ivaInteres, 2);
@@ -93,7 +101,50 @@ class AbonoController extends Controller
 
                 $nombreProducto = "Prórroga 30 días - empeño {$empeno->folio}";
                 $tipoMetadata = 'prorroga_empeno';
-                // ===================================================================
+
+            } elseif ($tipo === 'refrendo') {
+                $plazoMeses = $empeno->plazo_meses ?? 1;
+
+                if ($plazoMeses <= 1) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Este empeño es de un solo periodo; no aplica refrendo. Usa la prórroga cuando venza.',
+                    ], 422);
+                }
+
+                if ($empeno->estado === 'vencido') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Este empeño ya venció; usa la prórroga en vez del refrendo.',
+                    ], 422);
+                }
+
+                // ✅ NUEVO: bloquea refrendos duplicados o adelantados
+                $elegibilidad = $this->refrendoEsElegible($empeno);
+                if (!$elegibilidad['elegible']) {
+                    $mensaje = $elegibilidad['refrendos_pagados'] >= $elegibilidad['refrendos_permitidos']
+                        ? 'Ya pagaste todos los refrendos disponibles para este empeño; al vencer, usa la prórroga.'
+                        : 'Aún no te toca pagar el siguiente refrendo mensual.';
+
+                    return response()->json(['success' => false, 'message' => $mensaje], 422);
+                }
+
+                $interesMensualOriginal = round(((float) $empeno->intereses) / $plazoMeses, 2);
+                $interesDisponible = min($interesMensualOriginal, (float) $amortizacion->interes);
+                $interesConMora = round($interesDisponible + $mora, 2);
+                $ivaRefrendo = round($interesConMora * 0.16, 2);
+                $monto = round($interesConMora + $ivaRefrendo, 2);
+
+                if ($monto <= 0) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No hay refrendo pendiente por pagar en este periodo.',
+                    ], 422);
+                }
+
+                $nombreProducto = "Refrendo mensual - empeño {$empeno->folio}";
+                $tipoMetadata = 'refrendo_empeno';
+
             } else {
                 $saldoPendiente = round($amortizacion->saldo_final, 2);
                 $saldoPendienteConMora = round($saldoPendiente + $mora, 2);
@@ -110,30 +161,16 @@ class AbonoController extends Controller
                 $tipoMetadata = 'abono_empeno';
             }
 
-            // Misma convención que el resto del proyecto: env('STRIPE_SECRET')
-            // directo, no config('services.stripe.secret') (que no existe mapeado).
             $stripe = new StripeClient(env('STRIPE_SECRET'));
 
-            // ✅ CORREGIDO: STRIPE_TIENDA_SUCCESS_URL / STRIPE_TIENDA_CANCEL_URL
-            // ahora son URLs base GENÉRICAS compartidas por los 3 flujos
-            // (apartado, abono, prórroga), ej:
-            //   https://ophelina-front.vercel.app/homecliente?pago=exitoso
-            // Aquí le agregamos &tipo=abono o &tipo=prorroga dinámicamente,
-            // para que el frontend sepa qué toast mostrar SIN necesitar una
-            // variable de entorno distinta por cada tipo de operación (eso
-            // evitaría que se pisen entre sí como pasaría si cada controlador
-            // asumiera un valor fijo distinto en la misma variable).
             $successBase = env('STRIPE_TIENDA_SUCCESS_URL');
             $cancelBase = env('STRIPE_TIENDA_CANCEL_URL');
 
-            // ✅ NUEVO: misma validación defensiva que en OpheliaTiendaController@apartar.
-            // Evita un TypeError fatal (no capturable por el catch de abajo)
-            // si estas env vars vienen null.
             if (empty($successBase) || empty($cancelBase)) {
-                Log::error('❌ STRIPE_TIENDA_SUCCESS_URL o STRIPE_TIENDA_CANCEL_URL no están configuradas (revisa las env vars en Render y haz un redeploy).');
+                Log::error('❌ STRIPE_TIENDA_SUCCESS_URL o STRIPE_TIENDA_CANCEL_URL no están configuradas.');
                 return response()->json([
                     'success' => false,
-                    'message' => 'Configuración de pago incompleta en el servidor (faltan URLs de Stripe). Contacta al administrador.',
+                    'message' => 'Configuración de pago incompleta en el servidor. Contacta al administrador.',
                 ], 500);
             }
 
@@ -147,9 +184,7 @@ class AbonoController extends Controller
                     'price_data' => [
                         'currency' => 'mxn',
                         'unit_amount' => (int) round($monto * 100),
-                        'product_data' => [
-                            'name' => $nombreProducto,
-                        ],
+                        'product_data' => ['name' => $nombreProducto],
                     ],
                     'quantity' => 1,
                 ]],
@@ -187,13 +222,6 @@ class AbonoController extends Controller
         }
     }
 
-    /**
-     * ✅ NUEVO: desglose de lo que se debe ANTES de pagar, para que el
-     * cliente vea capital / interés / mora / IVA en el popup, en vez de
-     * solo un input vacío de "monto a abonar".
-     *
-     * GET /api/empenos/{empeno}/cotizacion
-     */
     public function cotizacion(Request $request, Empeno $empeno)
     {
         try {
@@ -227,24 +255,43 @@ class AbonoController extends Controller
             $ivaProrroga = round($interesConMora * 0.16, 2);
             $montoProrroga = round($interesConMora + $ivaProrroga, 2);
 
+            $plazoMeses = $empeno->plazo_meses ?? 1;
+            $montoRefrendo = 0;
+            $elegibilidadRefrendo = ['elegible' => false, 'refrendos_pagados' => 0, 'refrendos_permitidos' => 0];
+
+            if ($plazoMeses > 1 && $empeno->estado !== 'vencido') {
+                $elegibilidadRefrendo = $this->refrendoEsElegible($empeno);
+
+                if ($elegibilidadRefrendo['elegible']) {
+                    $interesMensualOriginal = round(((float) $empeno->intereses) / $plazoMeses, 2);
+                    $interesDisponible = min($interesMensualOriginal, (float) $amortizacion->interes);
+                    $interesRefrendoConMora = round($interesDisponible + $mora, 2);
+                    $ivaRefrendo = round($interesRefrendoConMora * 0.16, 2);
+                    $montoRefrendo = round($interesRefrendoConMora + $ivaRefrendo, 2);
+                }
+            }
+
             $saldoPendiente = round((float) $amortizacion->saldo_final, 2);
             $totalConMora = round($saldoPendiente + $mora, 2);
 
             return response()->json([
                 'success' => true,
                 'data' => [
-                    // Desglose "original" de la cuota (referencia para el cliente)
                     'capital' => round((float) $amortizacion->capital, 2),
                     'interes' => round((float) $amortizacion->interes, 2),
                     'iva_interes' => round((float) $amortizacion->iva_interes, 2),
-                    // Mora acumulada por días de atraso (0 si no hay atraso)
                     'mora' => $mora,
                     'dias_atraso' => $diasAtraso,
-                    // Lo que realmente puede abonar (tope del input)
                     'saldo_pendiente' => $saldoPendiente,
                     'saldo_pendiente_con_mora' => $totalConMora,
-                    // Lo que cuesta prorrogar (fijo, no editable por el cliente)
                     'monto_prorroga' => $montoProrroga,
+                    'plazo_meses' => $plazoMeses,
+                    // ✅ NUEVO: tasa real, para que el cliente vea el % coherente
+                    'tasa_porcentaje' => optional($empeno->tasa)->porcentaje,
+                    'aplica_refrendo' => $elegibilidadRefrendo['elegible'],
+                    'monto_refrendo' => $montoRefrendo,
+                    'refrendos_pagados' => $elegibilidadRefrendo['refrendos_pagados'],
+                    'refrendos_permitidos' => $elegibilidadRefrendo['refrendos_permitidos'],
                     'fecha_vencimiento_actual' => optional($empeno->fecha_vencimiento)->format('d/m/Y'),
                 ],
             ]);
@@ -258,19 +305,9 @@ class AbonoController extends Controller
         }
     }
 
-    /**
-     * ✅ NUEVO: helper para agregarle un query param a una URL base,
-     * sin importar si esa URL base ya trae otros parámetros o no.
-     * Usado para inyectar &tipo=abono / &tipo=prorroga / &tipo=apartado
-     * a las URLs genéricas STRIPE_TIENDA_SUCCESS_URL / _CANCEL_URL.
-     */
     private function agregarParametro(string $urlBase, string $clave, string $valor): string
     {
         $separador = (strpos($urlBase, '?') !== false) ? '&' : '?';
         return $urlBase . $separador . $clave . '=' . urlencode($valor);
     }
-
-    // El registro del pago ya NO se hace aquí. Stripe llama al webhook
-    // que ya tienes en StripeWebhookController::handle, que es el único
-    // lugar donde se confirma que el pago realmente se completó.
 }
