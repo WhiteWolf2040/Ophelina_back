@@ -39,18 +39,13 @@ class StripeWebhookController extends Controller
 
             if ($idApartado) {
                 $apartado = Apartado::find($idApartado);
-
                 if ($apartado) {
                     $apartado->update(['stripe_payment_status' => 'pagado']);
-
                     $producto = $apartado->producto;
                     if ($producto && $producto->stock > 0) {
                         $producto->decrement('stock');
                     }
-
                     Log::info('✅ Apartado confirmado como pagado: id_apartado=' . $idApartado);
-                } else {
-                    Log::warning('⚠️ Webhook recibido pero apartado no encontrado: id_apartado=' . $idApartado);
                 }
             }
 
@@ -65,28 +60,22 @@ class StripeWebhookController extends Controller
 
             if ($idApartado) {
                 $apartado = Apartado::find($idApartado);
-
                 if ($apartado) {
                     $apartado->update([
                         'stripe_payment_status' => 'fallido',
                         'estado' => 'cancelado',
                     ]);
-
                     $producto = $apartado->producto;
                     if ($producto) {
                         $producto->visible = 1;
                         $producto->save();
-
                         if ($producto->id_prenda) {
                             Prenda::where('id_prenda', $producto->id_prenda)->update([
                                 'estado' => 'Disponible',
                             ]);
                         }
                     }
-
-                    Log::info('⏱️ Sesión expirada, apartado cancelado y producto restaurado: id_apartado=' . $idApartado);
-                } else {
-                    Log::warning('⚠️ Webhook de expiración recibido pero apartado no encontrado: id_apartado=' . $idApartado);
+                    Log::info('⏱️ Sesión expirada, apartado cancelado: id_apartado=' . $idApartado);
                 }
             }
         }
@@ -94,12 +83,6 @@ class StripeWebhookController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /**
-     * Registra abono, prórroga o refrendo una vez que Stripe confirma el pago.
-     *
-     * ABONO: prorrateo — capital, interés e IVA se reparten en la misma
-     * proporción en que existen en la deuda total.
-     */
     private function registrarAbono($session, $idAmortizacion)
     {
         $idEmpeno = $session->metadata->id_empeno ?? null;
@@ -107,7 +90,7 @@ class StripeWebhookController extends Controller
         $tipo = $session->metadata->tipo ?? 'abono_empeno';
 
         if (!$idEmpeno || $monto <= 0) {
-            Log::warning('⚠️ Webhook de abono recibido con metadata incompleto: id_amortizacion=' . $idAmortizacion);
+            Log::warning('⚠️ Webhook de abono recibido con metadata incompleto');
             return;
         }
 
@@ -117,7 +100,7 @@ class StripeWebhookController extends Controller
                 ->first();
 
             if (!$amortizacion) {
-                Log::warning('⚠️ Webhook de abono recibido pero amortización no encontrada: id_amortizacion=' . $idAmortizacion);
+                Log::warning('⚠️ Webhook de abono recibido pero amortización no encontrada');
                 return;
             }
 
@@ -127,18 +110,13 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            if ($tipo === 'prorroga_empeno') {
-                $this->registrarPrórrogaWeb($session, $amortizacion, $idEmpeno, $monto);
-                return;
-            }
-
-            // ✅ NUEVO
+            // ✅ REFRENDO: paga intereses del periodo completo y extiende fecha
             if ($tipo === 'refrendo_empeno') {
                 $this->registrarRefrendoWeb($session, $amortizacion, $idEmpeno, $monto);
                 return;
             }
 
-            // ==================== Prorrateo ====================
+            // ==================== ABONO (Prorrateo) ====================
             $deudaTotal = round((float) $amortizacion->capital + $amortizacion->interes + $amortizacion->iva_interes, 2);
 
             if ($deudaTotal > 0) {
@@ -148,7 +126,6 @@ class StripeWebhookController extends Controller
             } else {
                 $capitalPagado = $interesPagado = $ivaPagado = 0;
             }
-            // =====================================================
 
             Pago::create([
                 'id_empeno' => $idEmpeno,
@@ -165,7 +142,7 @@ class StripeWebhookController extends Controller
 
             $nuevoCapital = max(0, round($amortizacion->capital - $capitalPagado, 2));
             $nuevoInteres = max(0, round($amortizacion->interes - $interesPagado, 2));
-            $nuevoIva     = max(0, round($amortizacion->iva_interes - $ivaPagado, 2));
+            $nuevoIva = max(0, round($amortizacion->iva_interes - $ivaPagado, 2));
 
             $nuevoMontoPagado = $amortizacion->monto_pagado + $monto;
             $nuevoSaldo = round($amortizacion->saldo_inicial - $nuevoMontoPagado, 2);
@@ -184,39 +161,21 @@ class StripeWebhookController extends Controller
                 Empeno::where('id_empeno', $idEmpeno)->update(['estado' => 'pagado']);
             }
 
-            Log::info('✅ Abono registrado: id_empeno=' . $idEmpeno . ' capital=' . $capitalPagado . ' interes=' . $interesPagado . ' iva=' . $ivaPagado);
+            Log::info('✅ Abono registrado: id_empeno=' . $idEmpeno);
         });
     }
 
-    private function registrarPrórrogaWeb($session, Amortizacio $amortizacion, $idEmpeno, float $monto): void
-    {
-        $ivaPagado = round($monto - ($monto / 1.16), 2);
-        $interesPagado = round($monto - $ivaPagado, 2);
-
-        Pago::create([
-            'id_empeno' => $idEmpeno,
-            'id_amortizacion' => $amortizacion->id_amortizacion,
-            'fecha_pago' => now()->toDateString(),
-            'capital_pagado' => 0,
-            'interes_pagado' => $interesPagado,
-            'iva_pagado' => $ivaPagado,
-            'monto_total' => $monto,
-            'tipo_pago' => 'prorroga',
-            'metodo_pago' => 'tarjeta',
-            'referencia' => $session->id,
-        ]);
-
-        $amortizacion->prorrogar(30);
-
-        Log::info('✅ Prórroga registrada desde web: id_empeno=' . $idEmpeno . ' monto=' . $monto);
-    }
-
     /**
-     * ✅ NUEVO: registra el refrendo mensual — reduce interés/IVA pendiente
-     * de este periodo, NO toca capital, NO mueve fecha_vencimiento.
+     * ✅ REGISTRA REFRENDO: paga intereses del periodo completo y extiende fecha
      */
     private function registrarRefrendoWeb($session, Amortizacio $amortizacion, $idEmpeno, float $monto): void
     {
+        $empeno = Empeno::find($idEmpeno);
+        if (!$empeno) {
+            Log::warning('⚠️ Empeño no encontrado para refrendo: id=' . $idEmpeno);
+            return;
+        }
+
         $ivaPagado = round($monto - ($monto / 1.16), 2);
         $interesPagado = round($monto - $ivaPagado, 2);
 
@@ -233,6 +192,16 @@ class StripeWebhookController extends Controller
             'referencia' => $session->id,
         ]);
 
+        // ✅ OBTENER EL PLAZO ORIGINAL
+        $plazoMeses = $empeno->plazo_meses ?? 1;
+        
+        // ✅ EXTENDER LA FECHA DE VENCIMIENTO POR EL PLAZO COMPLETO
+        $nuevaFechaVencimiento = now()->addMonths($plazoMeses);
+        $empeno->update([
+            'fecha_vencimiento' => $nuevaFechaVencimiento,
+        ]);
+        
+        // ✅ ACTUALIZAR LA AMORTIZACIÓN
         $nuevoInteres = max(0, round($amortizacion->interes - $interesPagado, 2));
         $nuevoIva = max(0, round($amortizacion->iva_interes - $ivaPagado, 2));
         $nuevoMontoPagado = $amortizacion->monto_pagado + $monto;
@@ -243,8 +212,11 @@ class StripeWebhookController extends Controller
             'iva_interes' => $nuevoIva,
             'monto_pagado' => $nuevoMontoPagado,
             'saldo_final' => $nuevoSaldo,
+            'fecha_pago_programado' => $nuevaFechaVencimiento,
         ]);
 
-        Log::info('✅ Refrendo registrado desde web: id_empeno=' . $idEmpeno . ' monto=' . $monto);
+        Log::info('✅ Refrendo registrado: id_empeno=' . $idEmpeno . 
+                  ' monto=' . $monto . 
+                  ' nueva_fecha=' . $nuevaFechaVencimiento->format('Y-m-d'));
     }
 }

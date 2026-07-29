@@ -272,18 +272,34 @@ class PagoController extends Controller
                     $montoTotalCalculado = $interesPagado + $ivaPagado;
                     break;
 
-                case 'refrendo':
-                    // ✅ NUEVO: mismo criterio que registrarRefrendoWeb en el
-                    // webhook de Stripe — paga interés+IVA del periodo, sin
-                    // tocar capital ni mover fecha de vencimiento.
-                    $ivaPagado = round($montoPagado - ($montoPagado / 1.16), 2);
-                    $interesPagado = round($montoPagado - $ivaPagado, 2);
-                    $capitalPagado = 0;
-                    $montoTotalCalculado = $montoPagado;
+               // Dentro del método store(), en el switch:
 
-                    $amortizacion->interes = max(0, round($amortizacion->interes - $interesPagado, 2));
-                    $amortizacion->iva_interes = max(0, round($amortizacion->iva_interes - $ivaPagado, 2));
-                    break;
+            case 'refrendo':
+                // ✅ OBTENER PLAZO ORIGINAL
+                $plazoMeses = $empeno->plazo_meses ?? 1;
+                $capitalRestante = (float) $amortizacion->capital;
+                $tasaPorcentaje = optional($empeno->tasa)->porcentaje ?? 15;
+                
+                // ✅ CALCULAR INTERÉS TOTAL DEL PERIODO COMPLETO
+                $interesTotal = $capitalRestante * ($tasaPorcentaje / 100) * $plazoMeses;
+                $ivaTotal = $interesTotal * 0.16;
+                $montoRefrendo = round($interesTotal + $ivaTotal + $interesMora, 2);
+                
+                $ivaPagado = round($montoRefrendo - ($montoRefrendo / 1.16), 2);
+                $interesPagado = round($montoRefrendo - $ivaPagado, 2);
+                $capitalPagado = 0;
+                $montoTotalCalculado = $montoRefrendo;
+
+                $amortizacion->interes = max(0, round($amortizacion->interes - $interesPagado, 2));
+                $amortizacion->iva_interes = max(0, round($amortizacion->iva_interes - $ivaPagado, 2));
+                
+                // ✅ EXTENDER FECHA DE VENCIMIENTO POR EL PLAZO COMPLETO
+                $nuevaFecha = now()->addMonths($plazoMeses);
+                $empeno->fecha_vencimiento = $nuevaFecha;
+                $empeno->save();
+                
+                $amortizacion->fecha_pago_programado = $nuevaFecha;
+                break;
 
                 default:
                     DB::rollBack();

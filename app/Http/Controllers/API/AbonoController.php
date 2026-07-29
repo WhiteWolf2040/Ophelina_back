@@ -14,32 +14,23 @@ class AbonoController extends Controller
 {
     /**
      * ✅ NUEVO: determina si el empeño puede refrendar ahora mismo.
-     * Regla: máximo (plazo_meses - 1) refrendos en toda la vida del
-     * préstamo (el último mes se liquida o se prorroga, no se refrenda),
-     * y solo uno por mes ya transcurrido desde fecha_empeno -- evita que
-     * el cliente pague varios refrendos seguidos el mismo día.
+     * El cliente puede refrendar mientras no haya pagado el plazo completo.
      */
     private function refrendoEsElegible(Empeno $empeno): array
     {
         $plazoMeses = $empeno->plazo_meses ?? 1;
-        $refrendosPermitidos = max(0, $plazoMeses - 1);
-
+        
         $refrendosPagados = Pago::where('id_empeno', $empeno->id_empeno)
             ->where('tipo_pago', 'refrendo')
             ->count();
 
-        $mesesTranscurridos = $empeno->fecha_empeno
-            ? (int) floor($empeno->fecha_empeno->diffInDays(now()) / 30)
-            : 0;
-
-        $elegible = $refrendosPagados < $refrendosPermitidos
-            && $mesesTranscurridos > $refrendosPagados;
+        // ✅ Puede refrendar si ha pagado menos refrendos que el plazo en meses
+        $elegible = $refrendosPagados < $plazoMeses;
 
         return [
             'elegible' => $elegible,
             'refrendos_pagados' => $refrendosPagados,
-            'refrendos_permitidos' => $refrendosPermitidos,
-            'meses_transcurridos' => $mesesTranscurridos,
+            'refrendos_permitidos' => $plazoMeses,
         ];
     }
 
@@ -78,7 +69,7 @@ class AbonoController extends Controller
 
             $tipo = $request->input('tipo', 'abono');
 
-            if (!in_array($tipo, ['abono', 'prorroga', 'refrendo'], true)) {
+            if (!in_array($tipo, ['abono', 'refrendo'], true)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Tipo de operación no válido.',
@@ -87,65 +78,39 @@ class AbonoController extends Controller
 
             $mora = $amortizacion->calcularMora();
 
-            if ($tipo === 'prorroga') {
-                $interesConMora = round((float) $amortizacion->interes + $mora, 2);
-                $ivaInteres = round($interesConMora * 0.16, 2);
-                $monto = round($interesConMora + $ivaInteres, 2);
-
-                if ($monto <= 0) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'No hay interés pendiente que prorrogar en este empeño.',
-                    ], 422);
-                }
-
-                $nombreProducto = "Prórroga 30 días - empeño {$empeno->folio}";
-                $tipoMetadata = 'prorroga_empeno';
-
-            } elseif ($tipo === 'refrendo') {
+            if ($tipo === 'refrendo') {
+                // ✅ OBTENER EL PLAZO ORIGINAL EN MESES
                 $plazoMeses = $empeno->plazo_meses ?? 1;
-
-                if ($plazoMeses <= 1) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Este empeño es de un solo periodo; no aplica refrendo. Usa la prórroga cuando venza.',
-                    ], 422);
-                }
-
-                if ($empeno->estado === 'vencido') {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Este empeño ya venció; usa la prórroga en vez del refrendo.',
-                    ], 422);
-                }
-
-                // ✅ NUEVO: bloquea refrendos duplicados o adelantados
+                
+                // ✅ VERIFICAR ELEGIBILIDAD
                 $elegibilidad = $this->refrendoEsElegible($empeno);
                 if (!$elegibilidad['elegible']) {
-                    $mensaje = $elegibilidad['refrendos_pagados'] >= $elegibilidad['refrendos_permitidos']
-                        ? 'Ya pagaste todos los refrendos disponibles para este empeño; al vencer, usa la prórroga.'
-                        : 'Aún no te toca pagar el siguiente refrendo mensual.';
-
-                    return response()->json(['success' => false, 'message' => $mensaje], 422);
-                }
-
-                $interesMensualOriginal = round(((float) $empeno->intereses) / $plazoMeses, 2);
-                $interesDisponible = min($interesMensualOriginal, (float) $amortizacion->interes);
-                $interesConMora = round($interesDisponible + $mora, 2);
-                $ivaRefrendo = round($interesConMora * 0.16, 2);
-                $monto = round($interesConMora + $ivaRefrendo, 2);
-
-                if ($monto <= 0) {
                     return response()->json([
-                        'success' => false,
-                        'message' => 'No hay refrendo pendiente por pagar en este periodo.',
+                        'success' => false, 
+                        'message' => 'Ya has pagado todos los refrendos disponibles para este empeño.'
                     ], 422);
                 }
 
-                $nombreProducto = "Refrendo mensual - empeño {$empeno->folio}";
+                // ✅ CALCULAR INTERÉS TOTAL DEL PERIODO COMPLETO
+                $capitalRestante = (float) $amortizacion->capital;
+                $tasaPorcentaje = optional($empeno->tasa)->porcentaje ?? 15;
+                
+                $interesTotalPeriodo = $capitalRestante * ($tasaPorcentaje / 100) * $plazoMeses;
+                $ivaPeriodo = $interesTotalPeriodo * 0.16;
+                $monto = round($interesTotalPeriodo + $ivaPeriodo + $mora, 2);
+                
+                if ($monto <= 0) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No hay interés pendiente por pagar en este periodo.',
+                    ], 422);
+                }
+                
+                $nombreProducto = "Refrendo {$plazoMeses} meses - empeño {$empeno->folio}";
                 $tipoMetadata = 'refrendo_empeno';
 
             } else {
+                // ABONO
                 $saldoPendiente = round($amortizacion->saldo_final, 2);
                 $saldoPendienteConMora = round($saldoPendiente + $mora, 2);
                 $monto = round((float) $request->input('monto', $saldoPendienteConMora), 2);
@@ -195,6 +160,7 @@ class AbonoController extends Controller
                     'id_cliente' => $cliente->id_cliente,
                     'monto' => $monto,
                     'mora_incluida' => $mora,
+                    'plazo_meses' => $empeno->plazo_meses ?? 1, // ✅ PARA EL WEBHOOK
                 ],
                 'success_url' => $successUrl,
                 'cancel_url' => $cancelUrl,
@@ -216,8 +182,6 @@ class AbonoController extends Controller
                 'success' => false,
                 'message' => 'Error al iniciar el pago',
                 'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
             ], 500);
         }
     }
@@ -251,25 +215,17 @@ class AbonoController extends Controller
             $mora = $amortizacion->calcularMora();
             $diasAtraso = $amortizacion->dias_retraso;
 
-            $interesConMora = round((float) $amortizacion->interes + $mora, 2);
-            $ivaProrroga = round($interesConMora * 0.16, 2);
-            $montoProrroga = round($interesConMora + $ivaProrroga, 2);
-
             $plazoMeses = $empeno->plazo_meses ?? 1;
-            $montoRefrendo = 0;
-            $elegibilidadRefrendo = ['elegible' => false, 'refrendos_pagados' => 0, 'refrendos_permitidos' => 0];
-
-            if ($plazoMeses > 1 && $empeno->estado !== 'vencido') {
-                $elegibilidadRefrendo = $this->refrendoEsElegible($empeno);
-
-                if ($elegibilidadRefrendo['elegible']) {
-                    $interesMensualOriginal = round(((float) $empeno->intereses) / $plazoMeses, 2);
-                    $interesDisponible = min($interesMensualOriginal, (float) $amortizacion->interes);
-                    $interesRefrendoConMora = round($interesDisponible + $mora, 2);
-                    $ivaRefrendo = round($interesRefrendoConMora * 0.16, 2);
-                    $montoRefrendo = round($interesRefrendoConMora + $ivaRefrendo, 2);
-                }
-            }
+            $capitalRestante = round((float) $amortizacion->capital, 2);
+            $tasaPorcentaje = optional($empeno->tasa)->porcentaje ?? 15;
+            
+            // ✅ CALCULAR REFRENDO POR EL PLAZO COMPLETO
+            $interesRefrendo = $capitalRestante * ($tasaPorcentaje / 100) * $plazoMeses;
+            $ivaRefrendo = $interesRefrendo * 0.16;
+            $montoRefrendo = round($interesRefrendo + $ivaRefrendo + $mora, 2);
+            
+            // ✅ VERIFICAR ELEGIBILIDAD
+            $elegibilidadRefrendo = $this->refrendoEsElegible($empeno);
 
             $saldoPendiente = round((float) $amortizacion->saldo_final, 2);
             $totalConMora = round($saldoPendiente + $mora, 2);
@@ -284,15 +240,17 @@ class AbonoController extends Controller
                     'dias_atraso' => $diasAtraso,
                     'saldo_pendiente' => $saldoPendiente,
                     'saldo_pendiente_con_mora' => $totalConMora,
-                    'monto_prorroga' => $montoProrroga,
                     'plazo_meses' => $plazoMeses,
-                    // ✅ NUEVO: tasa real, para que el cliente vea el % coherente
-                    'tasa_porcentaje' => optional($empeno->tasa)->porcentaje,
+                    'tasa_porcentaje' => $tasaPorcentaje,
+                    // ✅ REFRENDO CORREGIDO
                     'aplica_refrendo' => $elegibilidadRefrendo['elegible'],
                     'monto_refrendo' => $montoRefrendo,
                     'refrendos_pagados' => $elegibilidadRefrendo['refrendos_pagados'],
                     'refrendos_permitidos' => $elegibilidadRefrendo['refrendos_permitidos'],
                     'fecha_vencimiento_actual' => optional($empeno->fecha_vencimiento)->format('d/m/Y'),
+                    'nueva_fecha_vencimiento' => $elegibilidadRefrendo['elegible'] 
+                        ? now()->addMonths($plazoMeses)->format('d/m/Y')
+                        : null,
                 ],
             ]);
 
