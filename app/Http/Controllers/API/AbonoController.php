@@ -186,82 +186,93 @@ class AbonoController extends Controller
         }
     }
 
-    public function cotizacion(Request $request, Empeno $empeno)
-    {
-        try {
-            $user = $request->user();
-            if (!$user) {
-                return response()->json(['success' => false, 'message' => 'No autenticado'], 401);
-            }
+  public function cotizacion(Request $request, Empeno $empeno)
+{
+    try {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'No autenticado'], 401);
+        }
 
-            $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
+        $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
 
-            if (!$cliente || (int) $empeno->id_cliente !== (int) $cliente->id_cliente) {
-                return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
-            }
+        if (!$cliente || (int) $empeno->id_cliente !== (int) $cliente->id_cliente) {
+            return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
+        }
 
-            $amortizacion = Amortizacio::where('id_empeno', $empeno->id_empeno)
-                ->where('estado', '!=', 'pagado')
-                ->orderBy('numero_pago')
-                ->first();
+        $amortizacion = Amortizacio::where('id_empeno', $empeno->id_empeno)
+            ->where('estado', '!=', 'pagado')
+            ->orderBy('numero_pago')
+            ->first();
 
-            if (!$amortizacion) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No hay saldo pendiente en este empeño.',
-                ], 422);
-            }
-
-            $mora = $amortizacion->calcularMora();
-            $diasAtraso = $amortizacion->dias_retraso;
-
-            $plazoMeses = $empeno->plazo_meses ?? 1;
-            $capitalRestante = round((float) $amortizacion->capital, 2);
-            $tasaPorcentaje = optional($empeno->tasa)->porcentaje ?? 15;
-            
-            // ✅ CALCULAR REFRENDO POR EL PLAZO COMPLETO
-            $interesRefrendo = $capitalRestante * ($tasaPorcentaje / 100) * $plazoMeses;
-            $ivaRefrendo = $interesRefrendo * 0.16;
-            $montoRefrendo = round($interesRefrendo + $ivaRefrendo + $mora, 2);
-            
-            // ✅ VERIFICAR ELEGIBILIDAD
-            $elegibilidadRefrendo = $this->refrendoEsElegible($empeno);
-
-            $saldoPendiente = round((float) $amortizacion->saldo_final, 2);
-            $totalConMora = round($saldoPendiente + $mora, 2);
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'capital' => round((float) $amortizacion->capital, 2),
-                    'interes' => round((float) $amortizacion->interes, 2),
-                    'iva_interes' => round((float) $amortizacion->iva_interes, 2),
-                    'mora' => $mora,
-                    'dias_atraso' => $diasAtraso,
-                    'saldo_pendiente' => $saldoPendiente,
-                    'saldo_pendiente_con_mora' => $totalConMora,
-                    'plazo_meses' => $plazoMeses,
-                    'tasa_porcentaje' => $tasaPorcentaje,
-                    // ✅ REFRENDO CORREGIDO
-                    'aplica_refrendo' => $elegibilidadRefrendo['elegible'],
-                    'monto_refrendo' => $montoRefrendo,
-                    'refrendos_pagados' => $elegibilidadRefrendo['refrendos_pagados'],
-                    'refrendos_permitidos' => $elegibilidadRefrendo['refrendos_permitidos'],
-                    'fecha_vencimiento_actual' => optional($empeno->fecha_vencimiento)->format('d/m/Y'),
-                    'nueva_fecha_vencimiento' => $elegibilidadRefrendo['elegible'] 
-                        ? now()->addMonths($plazoMeses)->format('d/m/Y')
-                        : null,
-                ],
-            ]);
-
-        } catch (\Throwable $e) {
-            Log::error('❌ Error en AbonoController@cotizacion: ' . $e->getMessage());
+        if (!$amortizacion) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al calcular la cotización',
-            ], 500);
+                'message' => 'No hay saldo pendiente en este empeño.',
+            ], 422);
         }
+
+        $mora = $amortizacion->calcularMora();
+        $diasAtraso = $amortizacion->dias_retraso;
+
+        $plazoMeses = $empeno->plazo_meses ?? 1;
+        $capitalRestante = round((float) $amortizacion->capital, 2);
+        $tasaPorcentaje = optional($empeno->tasa)->porcentaje ?? 15;
+        
+        // ✅ CALCULAR REFRENDO POR EL PLAZO COMPLETO
+        $interesRefrendo = $capitalRestante * ($tasaPorcentaje / 100) * $plazoMeses;
+        $ivaRefrendo = $interesRefrendo * 0.16;
+        $montoRefrendo = round($interesRefrendo + $ivaRefrendo + $mora, 2);
+        
+        // ✅ VERIFICAR ELEGIBILIDAD PARA REFRENDO
+        $refrendosPagados = Pago::where('id_empeno', $empeno->id_empeno)
+            ->where('tipo_pago', 'refrendo')
+            ->count();
+        
+        $puedeRefrendar = $refrendosPagados < $plazoMeses;
+
+        // ✅ DATOS CORRECTOS PARA EL ABONO (sin mora, sin recalcular)
+        $saldoPendiente = round((float) $amortizacion->saldo_final, 2);
+        $totalConMora = round($saldoPendiente + $mora, 2);
+        
+        // ✅ INTERESES ACTUALES DE LA AMORTIZACIÓN (los que realmente se deben)
+        $interesActual = round((float) $amortizacion->interes, 2);
+        $ivaActual = round((float) $amortizacion->iva_interes, 2);
+        $capitalActual = round((float) $amortizacion->capital, 2);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                // ✅ DATOS REALES PARA EL ABONO
+                'capital' => $capitalActual,
+                'interes' => $interesActual,
+                'iva_interes' => $ivaActual,
+                'mora' => $mora,
+                'dias_atraso' => $diasAtraso,
+                'saldo_pendiente' => $saldoPendiente,
+                'saldo_pendiente_con_mora' => $totalConMora,
+                'plazo_meses' => $plazoMeses,
+                'tasa_porcentaje' => $tasaPorcentaje,
+                // ✅ REFRENDO
+                'aplica_refrendo' => $puedeRefrendar,
+                'monto_refrendo' => $montoRefrendo,
+                'refrendos_pagados' => $refrendosPagados,
+                'refrendos_permitidos' => $plazoMeses,
+                'fecha_vencimiento_actual' => optional($empeno->fecha_vencimiento)->format('d/m/Y'),
+                'nueva_fecha_vencimiento' => $puedeRefrendar 
+                    ? now()->addMonths($plazoMeses)->format('d/m/Y')
+                    : null,
+            ],
+        ]);
+
+    } catch (\Throwable $e) {
+        Log::error('❌ Error en AbonoController@cotizacion: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al calcular la cotización',
+        ], 500);
     }
+}
 
     private function agregarParametro(string $urlBase, string $clave, string $valor): string
     {
