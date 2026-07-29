@@ -50,41 +50,41 @@ class MisEmpenosController extends Controller
                 ->orderBy('fecha_empeno', 'desc')
                 ->get();
 
-            $data = $empenos->map(function (MisEmpenos $e) {
-                $saldo = $e->saldo_pendiente;
+          $data = $empenos->map(function (MisEmpenos $e) {
+        $saldo = $e->saldo_pendiente;
 
-                return [
-                    'id' => $e->id_empeno,
-                    'folio' => $e->folio,
-                    'nombre' => $e->prenda->descripcion ?? 'Prenda sin descripción',
-                    'descripcion' => $e->prenda->descripcion ?? '',
-                    'gramos' => $e->prenda->peso_gramos ? $e->prenda->peso_gramos . ' gramos' : null,
-                    'casaEmpeño' => optional($e->empresa)->nombre_comercial ?? optional($e->empresa)->nombre ?? 'N/A',
-                    'prestado' => '$' . number_format($e->monto_prestado, 2),
-                    'prestadoNumerico' => (float) $e->monto_prestado,
-                    'intereses' => '$' . number_format($e->intereses ?? 0, 2),
-                    // ✅ NUEVO: % real de interés y plazo, para mostrarlos coherentemente
-                    'tasaPorcentaje' => optional($e->tasa)->porcentaje,
-                    'plazoMeses' => $e->plazo_meses ?? 1,
-                    'totalPagar' => '$' . number_format($e->total_pagar, 2),
-                    'totalPagarNumerico' => $e->total_pagar,
-                    'diasRetraso' => $e->dias_retraso,
-                    'mora' => $e->mora > 0 ? '$' . number_format($e->mora, 2) : null,
-                    'moraNumerica' => $e->mora,
-                    'totalPagarConMora' => '$' . number_format($e->total_pagar_con_mora, 2),
-                    'saldoRestante' => '$' . number_format($saldo['saldo_restante'], 2),
-                    'saldoRestanteNumerico' => $saldo['saldo_restante'],
-                    'totalAbonado' => '$' . number_format($saldo['total_abonado'], 2),
-                    'vencimiento' => optional($e->fecha_vencimiento)->format('d/m/Y'),
-                    'vencimientoTimestamp' => $e->fecha_vencimiento ? $e->fecha_vencimiento->timestamp : null,
-                    'imagen' => $this->resolverImagenUrl($e->id_prenda),
-                    'abonos' => $e->abonos_formateados,
-                    'pagadoCompleto' => $e->pagado_completo,
-                    'enTienda' => $e->en_tienda,
-                    'proximoAVencer' => $e->proximo_a_vencer,
-                    'estado' => $e->estado_frontend,
-                ];
-            });
+        return [
+            'id' => $e->id_empeno,
+            'folio' => $e->folio,
+            'nombre' => $e->prenda->descripcion ?? 'Prenda sin descripción',
+            'descripcion' => $e->prenda->descripcion ?? '',
+            'gramos' => $e->prenda->peso_gramos ? $e->prenda->peso_gramos . ' gramos' : null,
+            'casaEmpeño' => optional($e->empresa)->nombre_comercial ?? optional($e->empresa)->nombre ?? 'N/A',
+            // ✅ ENVIAR NÚMEROS SIN FORMATO
+            'prestado' => (float) $e->monto_prestado,
+            'prestadoNumerico' => (float) $e->monto_prestado,
+            'intereses' => (float) ($e->intereses ?? 0),
+            'tasaPorcentaje' => optional($e->tasa)->porcentaje,
+            'plazoMeses' => $e->plazo_meses ?? 1,
+            'totalPagar' => (float) $e->total_pagar,
+            'totalPagarNumerico' => $e->total_pagar,
+            'diasRetraso' => $e->dias_retraso,
+            'mora' => (float) $e->mora,
+            'moraNumerica' => $e->mora,
+            'totalPagarConMora' => (float) $e->total_pagar_con_mora,
+            'saldoRestante' => (float) $saldo['saldo_restante'],
+            'saldoRestanteNumerico' => $saldo['saldo_restante'],
+            'totalAbonado' => (float) $saldo['total_abonado'],
+            'vencimiento' => optional($e->fecha_vencimiento)->format('d/m/Y'),
+            'vencimientoTimestamp' => $e->fecha_vencimiento ? $e->fecha_vencimiento->timestamp : null,
+            'imagen' => $this->resolverImagenUrl($e->id_prenda),
+            'abonos' => $e->abonos_formateados,
+            'pagadoCompleto' => $e->pagado_completo,
+            'enTienda' => $e->en_tienda,
+            'proximoAVencer' => $e->proximo_a_vencer,
+            'estado' => $e->estado_frontend,
+        ];
+    });
 
             $prioridadEstado = [
                 'VENCIDO' => 0, 'PROXIMO A VENCER' => 1, 'ACTIVO' => 2, 'EN TIENDA' => 3, 'PAGADO' => 4,

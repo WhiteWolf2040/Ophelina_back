@@ -243,8 +243,7 @@ class AbonoController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
-                // ✅ DATOS REALES PARA EL ABONO
-                'capital' => $capitalActual,
+          'capital' => $capitalActual,
                 'interes' => $interesActual,
                 'iva_interes' => $ivaActual,
                 'mora' => $mora,
@@ -253,7 +252,6 @@ class AbonoController extends Controller
                 'saldo_pendiente_con_mora' => $totalConMora,
                 'plazo_meses' => $plazoMeses,
                 'tasa_porcentaje' => $tasaPorcentaje,
-                // ✅ REFRENDO
                 'aplica_refrendo' => $puedeRefrendar,
                 'monto_refrendo' => $montoRefrendo,
                 'refrendos_pagados' => $refrendosPagados,
