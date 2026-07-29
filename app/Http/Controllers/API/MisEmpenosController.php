@@ -160,49 +160,53 @@ class MisEmpenosController extends Controller
      * Resumen/estadísticas de los empeños del cliente autenticado.
      * GET /api/cliente/empenos/resumen
      */
-    public function getResumenMisEmpenos(Request $request)
-    {
-        try {
-            $idCliente = $this->obtenerClienteId($request);
+  public function getResumenMisEmpenos(Request $request)
+{
+    try {
+        $idCliente = $this->obtenerClienteId($request);
 
-            if (!$idCliente) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cliente no encontrado para este usuario',
-                ], 404);
-            }
-
-            $empenos = MisEmpenos::where('id_cliente', $idCliente)->get();
-
-            $activos = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'ACTIVO')->count();
-            $vencidos = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'VENCIDO')->count();
-            $pagados = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'PAGADO')->count();
-            $proximosAVencer = $empenos->filter(fn (MisEmpenos $e) => $e->proximo_a_vencer)->count();
-
-            $totalPrestado = $empenos->sum(fn (MisEmpenos $e) => (float) $e->monto_prestado);
-            $totalPendiente = $empenos->sum(fn (MisEmpenos $e) => $e->saldo_pendiente['saldo_restante']);
-
-            return response()->json([
-                'success' => true,
-                'total' => $empenos->count(),
-                'activos' => $activos,
-                'vencidos' => $vencidos,
-                'pagados' => $pagados,
-                'proximos_a_vencer' => $proximosAVencer,
-                'total_prestado' => number_format($totalPrestado, 2),
-                'total_pendiente' => number_format($totalPendiente, 2),
-            ]);
-
-        } catch (\Throwable $e) {
-            Log::error('Error en MisEmpenosController@getResumenMisEmpenos: ' . $e->getMessage());
+        if (!$idCliente) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al cargar el resumen',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => 'Cliente no encontrado para este usuario',
+            ], 404);
         }
-    }
 
+        // ✅ NUEVO: eager load de 'pagos', igual que getMisEmpenos().
+        // Sin esto, cada llamada a saldo_pendiente (dentro de los filter/sum
+        // de abajo) disparaba una query nueva por cada empeño del cliente.
+        $empenos = MisEmpenos::with('pagos')
+            ->where('id_cliente', $idCliente)
+            ->get();
+
+        $activos = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'ACTIVO')->count();
+        $vencidos = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'VENCIDO')->count();
+        $pagados = $empenos->filter(fn (MisEmpenos $e) => $e->estado_frontend === 'PAGADO')->count();
+        $proximosAVencer = $empenos->filter(fn (MisEmpenos $e) => $e->proximo_a_vencer)->count();
+
+        $totalPrestado = $empenos->sum(fn (MisEmpenos $e) => (float) $e->monto_prestado);
+        $totalPendiente = $empenos->sum(fn (MisEmpenos $e) => $e->saldo_pendiente['saldo_restante']);
+
+        return response()->json([
+            'success' => true,
+            'total' => $empenos->count(),
+            'activos' => $activos,
+            'vencidos' => $vencidos,
+            'pagados' => $pagados,
+            'proximos_a_vencer' => $proximosAVencer,
+            'total_prestado' => number_format($totalPrestado, 2),
+            'total_pendiente' => number_format($totalPendiente, 2),
+        ]);
+
+    } catch (\Throwable $e) {
+        Log::error('Error en MisEmpenosController@getResumenMisEmpenos: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al cargar el resumen',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
     /**
      * Detalle de un empeño específico del cliente autenticado.
      * GET /api/cliente/empenos/{id}

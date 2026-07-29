@@ -155,16 +155,17 @@ class Empeno extends Model
     /**
      * Obtiene el monto total con intereses (de tu compañera)
      */
-    public function getMontoTotalAttribute()
-    {
-        if (isset($this->attributes['monto_total']) && $this->attributes['monto_total']) {
-            return $this->attributes['monto_total'];
-        }
+            public function getMontoTotalAttribute()
+            {
+                if (isset($this->attributes['monto_total']) && $this->attributes['monto_total']) {
+                    return $this->attributes['monto_total'];
+                }
 
-        $interes = $this->monto_prestado * ($this->intereses / 100);
-        $iva = $interes * ($this->iva_porcentaje / 100);
-        return $this->monto_prestado + $interes + $iva;
-    }
+                $interes = (float) ($this->intereses ?? 0); // ya es monto en pesos, no %
+                $iva = $interes * (((float) ($this->iva_porcentaje ?? 16)) / 100);
+
+                return $this->monto_prestado + $interes + $iva;
+            }
 
     // ============================================
     // SCOPES (comparación por día, consistente con el resto)

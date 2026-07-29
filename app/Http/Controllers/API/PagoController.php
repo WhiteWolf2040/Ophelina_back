@@ -215,29 +215,26 @@ class PagoController extends Controller
                     break;
 
                 case 'abono':
-                    // ABONO: solo reduce el capital, no paga intereses.
-                    $capitalPagado = min($montoPagado, $amortizacion->capital);
-                    $interesPagado = 0;
-                    $ivaPagado = 0;
-                    $montoTotalCalculado = $capitalPagado;
+                //  Mismo orden que StripeWebhookController: IVA + interés primero,
+                // capital con el sobrante. Antes: 100% directo a capital.
+                $ivaPagado = min($montoPagado, (float) $amortizacion->iva_interes);
+                $restante1 = round($montoPagado - $ivaPagado, 2);
 
-                    // ==================== FIX BUG ====================
-                    // ANTES: se recalculaba el interés proporcional usando
-                    // `$amortizacion->capital_original`, un atributo que NO
-                    // existe en el modelo ni en la tabla -> División entre
-                    // null -> DivisionByZeroError en cualquier abono real.
-                    //
-                    // AHORA: al reducir el capital, el interés y el IVA ya
-                    // facturados NO se recalculan (el interés de una cuota
-                    // ya generada no cambia solo porque se abone capital;
-                    // eso solo pasaría si decidieran re-cotizar la cuota,
-                    // lo cual es una decisión de negocio aparte). Solo se
-                    // ajusta monto_total para reflejar el nuevo capital.
-                    $nuevoCapital = max(0, $amortizacion->capital - $capitalPagado);
-                    $amortizacion->capital = $nuevoCapital;
-                    $amortizacion->monto_total = $nuevoCapital + $amortizacion->interes + $amortizacion->iva_interes;
-                    // ===================================================
-                    break;
+                $interesPagado = min($restante1, (float) $amortizacion->interes);
+                $restante2 = round($restante1 - $interesPagado, 2);
+
+                $capitalPagado = min($restante2, (float) $amortizacion->capital);
+                $montoTotalCalculado = $ivaPagado + $interesPagado + $capitalPagado;
+
+                $nuevoCapital = max(0, $amortizacion->capital - $capitalPagado);
+                $nuevoInteres = max(0, $amortizacion->interes - $interesPagado);
+                $nuevoIva = max(0, $amortizacion->iva_interes - $ivaPagado);
+
+                $amortizacion->capital = $nuevoCapital;
+                $amortizacion->interes = $nuevoInteres;
+                $amortizacion->iva_interes = $nuevoIva;
+                $amortizacion->monto_total = $nuevoCapital + $nuevoInteres + $nuevoIva;
+                break;
 
                 case 'interes':
                     $interesBase = $amortizacion->interes + $interesMora;

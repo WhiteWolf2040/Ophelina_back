@@ -56,7 +56,6 @@ class StripeWebhookController extends Controller
                 }
             }
 
-            // Abonos y prórrogas a empeños (vienen de AbonoController::crearSesionPago)
             if ($idAmortizacion) {
                 $this->registrarAbono($session, $idAmortizacion);
             }
@@ -75,12 +74,6 @@ class StripeWebhookController extends Controller
                         'estado' => 'cancelado',
                     ]);
 
-                    // ✅ NUEVO: al expirar sin pagar, se revierte todo lo
-                    // que se había reservado en OpheliaTiendaController@apartar
-                    // -el producto vuelve a ser visible en la tienda y la
-                    // prenda regresa a 'Disponible' en el inventario del
-                    // dueño-. Antes esto no pasaba: un apartado que
-                    // expiraba dejaba el producto oculto para siempre.
                     $producto = $apartado->producto;
                     if ($producto) {
                         $producto->visible = 1;
@@ -98,9 +91,6 @@ class StripeWebhookController extends Controller
                     Log::warning('⚠️ Webhook de expiración recibido pero apartado no encontrado: id_apartado=' . $idApartado);
                 }
             }
-
-            // Para abonos/prórrogas no hace falta hacer nada al expirar: no
-            // se reserva ningún saldo ni fecha mientras el checkout está pendiente.
         }
 
         return response()->json(['success' => true]);
@@ -108,34 +98,22 @@ class StripeWebhookController extends Controller
 
     /**
      * Registra el abono (o la prórroga) a un empeño una vez que Stripe
-     * confirma el pago (viene de AbonoController::crearSesionPago).
+     * confirma el pago.
      *
-     * Metadata esperada en la sesión de Stripe (viene de
-     * AbonoController::crearSesionPago):
-     *   - tipo: 'abono_empeno' | 'prorroga_empeno'  (✅ 'prorroga_empeno' es
-     *     NUEVO, antes no existía ningún valor que lo distinguiera)
-     *   - id_empeno
-     *   - id_amortizacion
-     *   - id_cliente
-     *   - monto
-     *   - mora_incluida
+     * ✅ ABONO — Opción C (orden de prioridad estándar del sector /
+     * práctica documentada por CONDUSEF): IVA + interés se cubren primero,
+     * completos, hasta donde alcance el monto abonado; el sobrante -si lo
+     * hay- reduce el capital (deuda principal). Mismo criterio aplicado en
+     * PagoController@store para pagos en sucursal, para que ambos canales
+     * (cliente en línea / empleado presencial) se comporten igual.
      *
-     * - 'abono_empeno': reparte el monto proporcionalmente entre capital e
-     *   interés según la composición pendiente de la amortización, actualiza
-     *   monto_pagado/saldo_final, y marca como pagado el empeño si el saldo
-     *   llega a 0. NO mueve la fecha de vencimiento.
-     * - 'prorroga_empeno': registra el pago de intereses (+IVA) y extiende
-     *   30 días tanto Amortizacio.fecha_pago_programado como
-     *   Empeno.fecha_vencimiento (vía Amortizacio::prorrogar(), que
-     *   sincroniza ambas).
+     * IMPORTANTE: el saldo TOTAL pendiente (saldo_final) siempre se reduce
+     * por el monto completo pagado, sin importar el reparto interno.
      */
     private function registrarAbono($session, $idAmortizacion)
     {
         $idEmpeno = $session->metadata->id_empeno ?? null;
         $monto = (float) ($session->metadata->monto ?? 0);
-        // ✅ NUEVO: AbonoController manda 'abono_empeno' o 'prorroga_empeno'
-        // en la metadata. Si por algún motivo no viene (sesiones viejas ya
-        // creadas antes de este cambio), se asume 'abono_empeno'.
         $tipo = $session->metadata->tipo ?? 'abono_empeno';
 
         if (!$idEmpeno || $monto <= 0) {
@@ -153,7 +131,6 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Evita duplicar el pago si Stripe reenvía el mismo evento
             $yaRegistrado = Pago::where('referencia', $session->id)->exists();
             if ($yaRegistrado) {
                 Log::info('ℹ️ Pago ya registrado previamente para esta sesión: ' . $session->id);
@@ -165,14 +142,15 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // ---- Flujo normal de abono (sin cambios de lógica) ----
-            $totalOriginal = $amortizacion->capital + $amortizacion->interes + $amortizacion->iva_interes;
-            $propCapital = $totalOriginal > 0 ? $amortizacion->capital / $totalOriginal : 0;
-            $propInteres = $totalOriginal > 0 ? $amortizacion->interes / $totalOriginal : 0;
+            // ==================== Opción C: IVA + interés primero, capital con el sobrante ====================
+            $ivaPagado = min($monto, (float) $amortizacion->iva_interes);
+            $restante1 = round($monto - $ivaPagado, 2);
 
-            $capitalPagado = round($monto * $propCapital, 2);
-            $interesPagado = round($monto * $propInteres, 2);
-            $ivaPagado = round($monto - $capitalPagado - $interesPagado, 2);
+            $interesPagado = min($restante1, (float) $amortizacion->interes);
+            $restante2 = round($restante1 - $interesPagado, 2);
+
+            $capitalPagado = min($restante2, (float) $amortizacion->capital);
+            // =======================================================================================================
 
             Pago::create([
                 'id_empeno' => $idEmpeno,
@@ -187,10 +165,19 @@ class StripeWebhookController extends Controller
                 'referencia' => $session->id,
             ]);
 
+            // Se reduce el capital/interés/IVA real de la cuota, para que
+            // cotizacion() refleje siempre lo que realmente queda pendiente.
+            $nuevoCapital = max(0, round($amortizacion->capital - $capitalPagado, 2));
+            $nuevoInteres = max(0, round($amortizacion->interes - $interesPagado, 2));
+            $nuevoIva     = max(0, round($amortizacion->iva_interes - $ivaPagado, 2));
+
             $nuevoMontoPagado = $amortizacion->monto_pagado + $monto;
             $nuevoSaldo = round($amortizacion->saldo_inicial - $nuevoMontoPagado, 2);
 
             $amortizacion->update([
+                'capital' => $nuevoCapital,
+                'interes' => $nuevoInteres,
+                'iva_interes' => $nuevoIva,
                 'monto_pagado' => $nuevoMontoPagado,
                 'saldo_final' => max($nuevoSaldo, 0),
                 'estado' => $nuevoSaldo <= 0 ? 'pagado' : 'pendiente',
@@ -201,17 +188,10 @@ class StripeWebhookController extends Controller
                 Empeno::where('id_empeno', $idEmpeno)->update(['estado' => 'pagado']);
             }
 
-            Log::info('✅ Abono registrado: id_empeno=' . $idEmpeno . ' monto=' . $monto);
+            Log::info('✅ Abono registrado: id_empeno=' . $idEmpeno . ' capital=' . $capitalPagado . ' interes=' . $interesPagado . ' iva=' . $ivaPagado);
         });
     }
 
-    /**
-     * ✅ NUEVO: registra el pago de intereses de una prórroga hecha desde la
-     * web y extiende el vencimiento 30 días.
-     *
-     * Importante: el monto de una prórroga cubre intereses (+ IVA), NO
-     * capital, así que no reduce el capital de la amortización.
-     */
     private function registrarPrórrogaWeb($session, Amortizacio $amortizacion, $idEmpeno, float $monto): void
     {
         $ivaPagado = round($monto - ($monto / 1.16), 2);
@@ -230,7 +210,6 @@ class StripeWebhookController extends Controller
             'referencia' => $session->id,
         ]);
 
-        // Extiende fecha_pago_programado Y empeno.fecha_vencimiento juntas.
         $amortizacion->prorrogar(30);
 
         Log::info('✅ Prórroga registrada desde web: id_empeno=' . $idEmpeno . ' monto=' . $monto);

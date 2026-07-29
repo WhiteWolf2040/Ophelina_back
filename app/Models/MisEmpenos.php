@@ -7,40 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * @property int $id_empeno
- * @property int $id_empresa
- * @property int $id_cliente
- * @property int $id_prenda
- * @property int|null $id_aval
- * @property int|null $id_tasa
- * @property string $fecha_empeno
- * @property float $monto_prestado
- * @property float $intereses
- * @property float|null $iva_porcentaje
- * @property string|null $fecha_vencimiento
- * @property string $estado
- * @property string|null $folio
- *
- * @property-read Cliente $cliente
- * @property-read Prenda $prenda
- * @property-read Aval|null $aval
- * @property-read TasaInteres|null $tasa
- * @property-read Empresa $empresa
- * @property-read \Illuminate\Database\Eloquent\Collection|Pago[] $pagos
- * @property-read \Illuminate\Database\Eloquent\Collection|Amortizacio[] $amortizaciones
- *
- * @property-read array $saldo_pendiente
- * @property-read bool $pagado_completo
- * @property-read bool $en_tienda
- * @property-read array $abonos_formateados
- * @property-read float $total_pagar
- * @property-read bool $proximo_a_vencer
- * @property-read string $estado_frontend
- * @property-read int $dias_retraso
- * @property-read float $mora
- * @property-read float $total_pagar_con_mora
- */
 class MisEmpenos extends Model
 {
     protected $table = 'empeno';
@@ -48,18 +14,9 @@ class MisEmpenos extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'id_empresa',
-        'id_cliente',
-        'id_prenda',
-        'id_aval',
-        'id_tasa',
-        'fecha_empeno',
-        'monto_prestado',
-        'intereses',
-        'iva_porcentaje',
-        'fecha_vencimiento',
-        'estado',
-        'folio'
+        'id_empresa', 'id_cliente', 'id_prenda', 'id_aval', 'id_tasa',
+        'fecha_empeno', 'monto_prestado', 'intereses', 'iva_porcentaje',
+        'fecha_vencimiento', 'estado', 'folio'
     ];
 
     protected $casts = [
@@ -69,86 +26,64 @@ class MisEmpenos extends Model
         'fecha_vencimiento' => 'date'
     ];
 
-    // Tasa moratoria por defecto (%) si el empeño no tiene id_tasa asignado
-    // o la tasa no tiene porcentaje_moratorio configurado.
     private const MORA_DEFAULT_PORCENTAJE = 5.00;
 
-    // ========== RELACIONES ==========
-    public function cliente(): BelongsTo
-    {
-        return $this->belongsTo(Cliente::class, 'id_cliente');
-    }
+    // ✅ Caché en memoria: el saldo se calcula UNA vez por instancia,
+    // aunque se le llame varias veces en cascada (pagado_completo,
+    // estado_frontend, mora, etc. lo invocan internamente).
+    private ?array $saldoPendienteCache = null;
 
-    public function prenda(): BelongsTo
-    {
-        return $this->belongsTo(Prenda::class, 'id_prenda');
-    }
-
-    public function aval(): BelongsTo
-    {
-        return $this->belongsTo(Aval::class, 'id_aval');
-    }
-
-    public function tasa(): BelongsTo
-    {
-        return $this->belongsTo(TasaInteres::class, 'id_tasa');
-    }
-
-    public function empresa(): BelongsTo
-    {
-        return $this->belongsTo(Empresa::class, 'id_empresa');
-    }
-
-    public function pagos(): HasMany
-    {
-        return $this->hasMany(Pago::class, 'id_empeno');
-    }
-
-    public function amortizaciones(): HasMany
-    {
-        return $this->hasMany(Amortizacio::class, 'id_empeno');
-    }
-
-    // ========== ACCESORS PARA CLIENTE ==========
+    public function cliente(): BelongsTo { return $this->belongsTo(Cliente::class, 'id_cliente'); }
+    public function prenda(): BelongsTo { return $this->belongsTo(Prenda::class, 'id_prenda'); }
+    public function aval(): BelongsTo { return $this->belongsTo(Aval::class, 'id_aval'); }
+    public function tasa(): BelongsTo { return $this->belongsTo(TasaInteres::class, 'id_tasa'); }
+    public function empresa(): BelongsTo { return $this->belongsTo(Empresa::class, 'id_empresa'); }
+    public function pagos(): HasMany { return $this->hasMany(Pago::class, 'id_empeno'); }
+    public function amortizaciones(): HasMany { return $this->hasMany(Amortizacio::class, 'id_empeno'); }
 
     /**
-     * Calcula el saldo pendiente del empeño
+     * ✅ Usa la relación 'pagos' ya cargada por el controller (with(['pagos']))
+     * en vez de lanzar queries nuevas. 'saldo_restante' resta solo el
+     * CAPITAL pagado (no el monto_total, que incluye interés/iva), para
+     * reflejar cuánto capital le queda pendiente al cliente.
      */
     public function getSaldoPendienteAttribute(): array
     {
-        $totalPagado = $this->pagos()->sum('monto_total') ?? 0;
-        $totalInteresPagado = $this->pagos()->sum('interes_pagado') ?? 0;
+        if ($this->saldoPendienteCache !== null) {
+            return $this->saldoPendienteCache;
+        }
 
-        return [
-            'saldo_restante' => max(0, $this->monto_prestado - $totalPagado),
-            'total_pagado' => $totalPagado,
-            'intereses_pagados' => $totalInteresPagado,
-            'total_abonado' => $totalPagado + $totalInteresPagado
+        $pagosCollection = $this->relationLoaded('pagos')
+            ? $this->pagos
+            : $this->pagos()->get();
+
+        $capitalPagado = (float) $pagosCollection->sum('capital_pagado');
+        $interesPagado = (float) $pagosCollection->sum('interes_pagado');
+        $totalPagado   = (float) $pagosCollection->sum('monto_total');
+
+        return $this->saldoPendienteCache = [
+            'saldo_restante'    => max(0, (float) $this->monto_prestado - $capitalPagado),
+            'total_pagado'      => $totalPagado,
+            'intereses_pagados' => $interesPagado,
+            'total_abonado'     => $totalPagado, // ya no se duplica el interés
         ];
     }
 
-    /**
-     * Verifica si el empeño está pagado completamente
-     */
     public function getPagadoCompletoAttribute(): bool
     {
         return $this->saldo_pendiente['saldo_restante'] <= 0;
     }
 
-    /**
-     * Verifica si el empeño está en tienda (vencido y no liquidado)
-     */
     public function getEnTiendaAttribute(): bool
     {
-        return $this->estado === 'vencido' && $this->fecha_vencimiento < now();
+        return $this->estado === 'en_tienda';
     }
 
-    /**
-     * Obtiene los abonos formateados para el frontend
-     */
     public function getAbonosFormateadosAttribute(): array
     {
-        return $this->pagos->map(function (Pago $pago) {
+        $pagos = $this->relationLoaded('pagos') ? $this->pagos : $this->pagos()->get();
+
+        return $pagos->map(function (Pago $pago) {
             return [
                 'fecha' => $pago->fecha_pago ? date('d/m/Y', strtotime($pago->fecha_pago)) : 'N/A',
                 'monto' => '$' . number_format($pago->monto_total, 2),
@@ -159,99 +94,64 @@ class MisEmpenos extends Model
     }
 
     /**
-     * Obtiene el total a pagar (monto + intereses), SIN mora
+     * ✅ Ahora incluye IVA (antes solo sumaba capital + interés) y asume
+     * que 'intereses' ya está en pesos (tras el fix de migración de datos),
+     * no en porcentaje crudo.
      */
     public function getTotalPagarAttribute(): float
     {
-        return $this->monto_prestado + ($this->intereses ?? 0);
+        $interes = (float) ($this->intereses ?? 0);
+        $iva = $interes * (((float) ($this->iva_porcentaje ?? 16)) / 100);
+
+        return round((float) $this->monto_prestado + $interes + $iva, 2);
     }
 
-    /**
-     * Días de retraso desde la fecha de vencimiento (0 si no está vencido
-     * o ya está pagado/cancelado)
-     */
     public function getDiasRetrasoAttribute(): int
     {
-        if (!$this->fecha_vencimiento || $this->pagado_completo) {
-            return 0;
-        }
-
-        if (in_array($this->estado, ['pagado', 'cancelado'])) {
-            return 0;
-        }
+        if (!$this->fecha_vencimiento || $this->pagado_completo) return 0;
+        if (in_array($this->estado, ['pagado', 'cancelado'])) return 0;
 
         $hoy = now()->startOfDay();
         $vencimiento = $this->fecha_vencimiento->copy()->startOfDay();
 
-        if ($vencimiento >= $hoy) {
-            return 0;
-        }
+        if ($vencimiento >= $hoy) return 0;
 
         return $vencimiento->diffInDays($hoy);
     }
 
-    /**
-     * Cargo por mora: se aplica sobre el saldo restante, prorrateado por
-     * día de retraso, usando el % moratorio configurado por la empresa en
-     * su tasa de interés (o el default de la plataforma si no hay tasa).
-     * Fórmula: saldo_restante * (porcentaje_moratorio / 100 / 30) * dias_retraso
-     */
     public function getMoraAttribute(): float
     {
         $dias = $this->dias_retraso;
-
-        if ($dias <= 0) {
-            return 0.0;
-        }
+        if ($dias <= 0) return 0.0;
 
         $porcentajeMoratorio = optional($this->tasa)->porcentaje_moratorio
             ?? self::MORA_DEFAULT_PORCENTAJE;
 
         $saldoRestante = $this->saldo_pendiente['saldo_restante'];
-
         $mora = $saldoRestante * ((float) $porcentajeMoratorio / 100 / 30) * $dias;
 
         return round($mora, 2);
     }
 
-    /**
-     * Total a pagar incluyendo la mora acumulada (si aplica)
-     */
     public function getTotalPagarConMoraAttribute(): float
     {
         return round($this->total_pagar + $this->mora, 2);
     }
 
-    /**
-     * Verifica si está próximo a vencer (7 días o menos)
-     */
     public function getProximoAVencerAttribute(): bool
     {
-        if (!$this->fecha_vencimiento || $this->estado !== 'activo') {
-            return false;
-        }
+        if (!$this->fecha_vencimiento || $this->estado !== 'activo') return false;
 
         $dias = now()->diffInDays($this->fecha_vencimiento, false);
         return $dias <= 7 && $dias > 0;
     }
 
-    /**
-     * Obtiene el estado del empeño para el frontend (texto)
-     */
     public function getEstadoFrontendAttribute(): string
     {
-        if ($this->pagado_completo) {
-            return 'PAGADO';
-        }
-        if ($this->en_tienda) {
-            return 'EN TIENDA';
-        }
-        if ($this->estado === 'vencido' || $this->fecha_vencimiento < now()) {
-            return 'VENCIDO';
-        }
-        if ($this->proximo_a_vencer) {
-            return 'PROXIMO A VENCER';
-        }
+        if ($this->pagado_completo) return 'PAGADO';
+        if ($this->en_tienda) return 'EN TIENDA';
+        if ($this->estado === 'vencido' || $this->fecha_vencimiento < now()) return 'VENCIDO';
+        if ($this->proximo_a_vencer) return 'PROXIMO A VENCER';
         return 'ACTIVO';
     }
 }

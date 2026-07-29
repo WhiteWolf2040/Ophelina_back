@@ -59,8 +59,16 @@ class TiendaController extends Controller
 
             $productos = $query->orderBy('fecha_publicacion', 'desc')->get();
 
-            $productos->each(function (ProductoTienda $p) {
-                $p->imagen_url = $this->urlImagenDePrenda($p->prenda);
+           $productos->each(function (ProductoTienda $p) {
+                $imagen = $p->prenda?->imagenPrincipal; // ya viene eager-loaded, sin query nueva
+
+                if ($imagen && !empty($imagen->cloudinary_url)) {
+                    $p->imagen_url = $imagen->cloudinary_url;
+                } elseif ($imagen && !empty($imagen->imagen_data)) {
+                    $p->imagen_url = url('/api/imagen-prenda/' . $p->id_prenda);
+                } else {
+                    $p->imagen_url = null;
+                }
             });
 
             return response()->json([
