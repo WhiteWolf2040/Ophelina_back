@@ -60,7 +60,7 @@ class MisEmpenosController extends Controller
             'descripcion' => $e->prenda->descripcion ?? '',
             'gramos' => $e->prenda->peso_gramos ? $e->prenda->peso_gramos . ' gramos' : null,
             'casaEmpeño' => optional($e->empresa)->nombre_comercial ?? optional($e->empresa)->nombre ?? 'N/A',
-            // ✅ ENVIAR NÚMEROS SIN FORMATO
+            //  ENVIAR NÚMEROS SIN FORMATO
             'prestado' => (float) $e->monto_prestado,
             'prestadoNumerico' => (float) $e->monto_prestado,
             'intereses' => (float) ($e->intereses ?? 0),
