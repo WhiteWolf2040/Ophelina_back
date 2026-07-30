@@ -105,7 +105,7 @@ public function user(Request $request)
     $modulosPorPlan = [
         1 => ['home', 'clientes', 'empenos'],
         2 => ['home', 'clientes', 'pagos', 'empenos', 'configuracion', 'roles', 'permisos', 'inventario'],
-        3 => ['home', 'clientes', 'pagos','inventario', 'empenos', 'tienda', 'reportes', 'roles', 'permisos', 'configuracion']
+        3 => ['home', 'clientes', 'pagos','inventario', 'empenos', 'tienda','apartados', 'reportes', 'roles', 'permisos', 'configuracion']
     ];
     
     $modulos = $modulosPorPlan[$planId] ?? $modulosPorPlan[1];
