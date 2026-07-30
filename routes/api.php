@@ -310,6 +310,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/productos/{id}/destacado', [TiendaController::class, 'toggleDestacado']);
         Route::post('/publicacion-automatica', [TiendaController::class, 'publicacionAutomatica']);
         Route::post('/configurar-dias-gracia', [TiendaController::class, 'configurarDiasGracia']);
+        Route::get('/apartados-admin', [\App\Http\Controllers\API\AdminApartadosController::class, 'index']);
+       Route::post('/apartados-admin/{id}/entregar', [\App\Http\Controllers\API\AdminApartadosController::class, 'marcarEntregado']);
     });
 
     /*

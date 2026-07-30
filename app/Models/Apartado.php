@@ -20,13 +20,19 @@ class Apartado extends Model
         'notas',
         'monto_anticipo',
         'stripe_session_id',
-        'stripe_payment_status'
+        'stripe_payment_status',
+        'codigo_entrega',
+        'entregado',
+        'fecha_entrega',
+        'id_usuario_entrego',
     ];
 
     protected $casts = [
         'fecha_apartado' => 'datetime',
         'fecha_expiracion' => 'date',
         'monto_anticipo' => 'decimal:2',
+         'entregado' => 'boolean',
+       'fecha_entrega' => 'datetime',
     ];
 
     public function cliente()

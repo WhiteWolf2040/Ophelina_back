@@ -233,6 +233,7 @@ class OpheliaTiendaController extends Controller
                 'estado' => 'activo',
                 'monto_anticipo' => $montoAnticipo,
                 'stripe_payment_status' => 'pendiente',
+                'codigo_entrega' => $this->generarCodigoEntrega(),
                 'notas' => 'Anticipo del 50% para apartar el producto',
             ]);
 
@@ -326,62 +327,66 @@ class OpheliaTiendaController extends Controller
      * Apartados del cliente autenticado (pendientes de pago o ya pagados)
      * GET /api/tienda/apartados
      */
-    public function misApartados(Request $request)
-    {
-        try {
-            $user = $request->user();
+ public function misApartados(Request $request)
+{
+    try {
+        $user = $request->user();
 
-            $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
+        $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
 
-            if (!$cliente) {
-                return response()->json(['success' => true, 'data' => []]);
-            }
-
-            $clienteId = $cliente->id_cliente;
-
-            $apartados = Apartado::where('id_cliente', $clienteId)
-                ->whereIn('estado', ['activo', 'completado'])
-                ->with('producto.prenda')
-                ->orderBy('fecha_apartado', 'desc')
-                ->get();
-
-            $data = $apartados->map(function (Apartado $a) {
-                $producto = $a->producto;
-                $precio = $producto ? (float) $producto->precio : 0;
-                $descuento = $producto ? (float) ($producto->descuento ?? 0) : 0;
-                $precioConDescuento = $descuento > 0
-                    ? $precio * (1 - $descuento / 100)
-                    : $precio;
-
-                return [
-                    'id' => $producto->id_producto ?? null,
-                    'id_apartado' => $a->id_apartado,
-                    'nombre' => $producto->nombre ?? 'Producto no disponible',
-                    'descripcion' => $producto->descripcion ?? '',
-                    'precio' => '$' . number_format($precioConDescuento, 2),
-                    'precioOriginal' => '$' . number_format($precio, 2),
-                    'descuento' => $descuento,
-                    'anticipo' => '$' . number_format((float) $a->monto_anticipo, 2),
-                    'imagen' => $producto ? $this->resolverImagenUrl($producto->id_prenda) : null,
-                    'categoria' => $this->obtenerCategoria($producto->prenda ?? null),
-                    'material' => $producto->prenda->material ?? null,
-                    'exclusivo' => $producto ? (bool) $producto->destacado : false,
-                    'estadoPago' => $a->stripe_payment_status,
-                    'fechaApartado' => optional($a->fecha_apartado)->format('d/m/Y'),
-                    'fechaExpiracion' => optional($a->fecha_expiracion)->format('d/m/Y'),
-                ];
-            });
-
-            return response()->json(['success' => true, 'data' => $data]);
-        } catch (\Exception $e) {
-            Log::error('Error en OpheliaTiendaController@misApartados: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al obtener tus apartados',
-                'error' => $e->getMessage(),
-            ], 500);
+        if (!$cliente) {
+            return response()->json(['success' => true, 'data' => []]);
         }
+
+        $clienteId = $cliente->id_cliente;
+
+        $apartados = Apartado::where('id_cliente', $clienteId)
+            ->whereIn('estado', ['activo', 'completado'])
+            ->with('producto.prenda')
+            ->orderBy('fecha_apartado', 'desc')
+            ->get();
+
+        $data = $apartados->map(function (Apartado $a) {
+            $producto = $a->producto;
+            $precio = $producto ? (float) $producto->precio : 0;
+            $descuento = $producto ? (float) ($producto->descuento ?? 0) : 0;
+            $precioConDescuento = $descuento > 0
+                ? $precio * (1 - $descuento / 100)
+                : $precio;
+
+            return [
+                'id' => $producto->id_producto ?? null,
+                'id_apartado' => $a->id_apartado,
+                'nombre' => $producto->nombre ?? 'Producto no disponible',
+                'descripcion' => $producto->descripcion ?? '',
+                'precio' => '$' . number_format($precioConDescuento, 2),
+                'precioOriginal' => '$' . number_format($precio, 2),
+                'descuento' => $descuento,
+                'anticipo' => '$' . number_format((float) $a->monto_anticipo, 2),
+                'imagen' => $producto ? $this->resolverImagenUrl($producto->id_prenda) : null,
+                'categoria' => $this->obtenerCategoria($producto->prenda ?? null),
+                'material' => $producto->prenda->material ?? null,
+                'exclusivo' => $producto ? (bool) $producto->destacado : false,
+                'estadoPago' => $a->stripe_payment_status,
+                'fechaApartado' => optional($a->fecha_apartado)->format('d/m/Y'),
+                'fechaExpiracion' => optional($a->fecha_expiracion)->format('d/m/Y'),
+                // ← NUEVO: solo mostramos el código si ya está pagado
+                'codigoEntrega' => $a->stripe_payment_status === 'pagado' ? $a->codigo_entrega : null,
+                'entregado' => (bool) $a->entregado,
+                'fechaEntrega' => optional($a->fecha_entrega)->format('d/m/Y H:i'),
+            ];
+        });
+
+        return response()->json(['success' => true, 'data' => $data]);
+    } catch (\Exception $e) {
+        Log::error('Error en OpheliaTiendaController@misApartados: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al obtener tus apartados',
+            'error' => $e->getMessage(),
+        ], 500);
     }
+}
 
     /**
      * Determina la categoría del producto según el material/tipo de la prenda
@@ -406,4 +411,14 @@ class OpheliaTiendaController extends Controller
         }
         return 'otros';
     }
+
+    private function generarCodigoEntrega(): string
+{
+    $caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0,O,1,I para evitar confusión
+    $codigo = '';
+    for ($i = 0; $i < 6; $i++) {
+        $codigo .= $caracteres[random_int(0, strlen($caracteres) - 1)];
+    }
+    return $codigo;
+}
 }
