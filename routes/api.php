@@ -229,6 +229,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/clientes', [EmpenoController::class, 'getClientes']);
         Route::get('/prendas-disponibles', [EmpenoController::class, 'getPrendasDisponibles']);
         Route::get('/tasas', [EmpenoController::class, 'getTasasInteres']);
+        Route::post('/prendas/{id}/imagen', [\App\Http\Controllers\API\EmpenoController::class, 'actualizarImagenPrenda']);
     });
 
     /*
@@ -320,6 +321,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}', [PrendaController::class, 'show']);
         Route::put('/{id}', [PrendaController::class, 'update']);
         Route::delete('/{id}', [PrendaController::class, 'destroy']);
+        Route::post('/bulk-imagenes', [PrendaController::class, 'bulkAsignarImagenes']);
     });
 
     /*

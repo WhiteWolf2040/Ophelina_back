@@ -1,7 +1,4 @@
 <?php
-// app/Http/Controllers/API/EmpenoController.php
-// ✅ ÚNICO CAMBIO REAL EN ESTE ARCHIVO: dentro de store(), ver el bloque
-// marcado "FIX BUG RAÍZ" más abajo. El resto del archivo se deja igual.
 
 namespace App\Http\Controllers\API;
 
@@ -12,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Prenda;
 use App\Models\Cliente;
+use App\Models\ImagenPrenda;
 use Carbon\Carbon;
 
 class EmpenoController extends Controller
@@ -137,6 +135,12 @@ class EmpenoController extends Controller
         }
     }
 
+    /**
+     * Crear prenda (con imagen opcional en Cloudinary)
+     * FIX: se agregó DB::beginTransaction() — antes faltaba y el DB::commit()
+     * tronaba porque no había ninguna transacción abierta, rompiendo el guardado
+     * de la imagen.
+     */
     public function storePrenda(Request $request)
     {
         try {
@@ -148,7 +152,10 @@ class EmpenoController extends Controller
                 'material' => 'nullable|string',
                 'peso_gramos' => 'nullable|numeric',
                 'valor_estimado' => 'required|numeric|min:1',
+                'imagen_url' => 'nullable|url|max:500',
             ]);
+
+            DB::beginTransaction(); // <-- FIX: esto faltaba
 
             $prenda = Prenda::create([
                 'id_empresa' => $user->id_empresa,
@@ -162,17 +169,88 @@ class EmpenoController extends Controller
                 'fecha_registro' => now()
             ]);
 
+            // GUARDAR IMAGEN EN imagen_prenda
+            if (!empty($validated['imagen_url'])) {
+                ImagenPrenda::create([
+                    'id_prenda' => $prenda->id_prenda,
+                    'cloudinary_url' => $validated['imagen_url'],
+                    'es_principal' => true,
+                    'orden' => 0,
+                ]);
+            }
+
+            DB::commit();
+
+            // CARGAR LA IMAGEN PARA DEVOLVERLA
+            $prenda->load('imagenPrincipal');
+            $prenda->imagen_url = $validated['imagen_url'] ?? null;
+
             return response()->json([
                 'success' => true,
-                'message' => 'Prenda creada correctamente',
+                'message' => 'Prenda creada correctamente' . (!empty($validated['imagen_url']) ? ' con imagen' : ''),
                 'data' => $prenda
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Error al crear prenda: ' . $e->getMessage());
+            DB::rollBack();
+            Log::error('Error al crear prenda: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error al crear prenda: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * NUEVO: agregar o reemplazar la imagen de una prenda ya existente.
+     * POST /api/prendas/{id}/imagen
+     */
+    public function actualizarImagenPrenda(Request $request, $id)
+    {
+        try {
+            $user = $request->user();
+
+            $prenda = Prenda::where('id_prenda', $id)
+                ->where('id_empresa', $user->id_empresa)
+                ->first();
+
+            if (!$prenda) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Prenda no encontrada'
+                ], 404);
+            }
+
+            $validated = $request->validate([
+                'imagen_url' => 'required|url|max:500',
+            ]);
+
+            DB::beginTransaction();
+
+            // Si ya tenía una imagen, la reemplazamos
+            ImagenPrenda::where('id_prenda', $prenda->id_prenda)->delete();
+
+            ImagenPrenda::create([
+                'id_prenda' => $prenda->id_prenda,
+                'cloudinary_url' => $validated['imagen_url'],
+                'es_principal' => true,
+                'orden' => 0,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Imagen actualizada correctamente',
+                'data' => ['imagen_url' => $validated['imagen_url']]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error al actualizar imagen de prenda: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar imagen: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -214,20 +292,10 @@ class EmpenoController extends Controller
                 'id_tasa' => $validated['tasa_id'],
                 'fecha_empeno' => now(),
                 'monto_prestado' => $validated['monto_prestado'],
-
-                // ==================== FIX BUG RAÍZ ====================
-                // ANTES: 'intereses' => $tasa->porcentaje,  (guardaba el %
-                // crudo, ej. 15.00, como si fueran pesos). Todo lo que leía
-                // empeno.intereses después (MisEmpenos.php, el popup del
-                // cliente) lo mostraba como "$15.00" en vez del interés real.
-                // AHORA: se guarda el monto de interés ya calculado en pesos,
-                // igual que se hace en la tabla `amortizacion`.
                 'intereses' => $interesMonto,
-                // ========================================================
-
                 'iva_porcentaje' => 16.00,
                 'fecha_vencimiento' => $validated['fecha_vencimiento'],
-                   'plazo_meses' => $validated['plazo_meses'], 
+                'plazo_meses' => $validated['plazo_meses'],
                 'estado' => 'activo',
                 'folio' => $folio
             ], 'id_empeno');
@@ -355,13 +423,18 @@ class EmpenoController extends Controller
         }
     }
 
+    /**
+     * FIX: se agregó eager load de la imagen de la prenda y se incluyen
+     * 'id_prenda' e 'imagen_url' en cada resultado, para que el listado
+     * (EmpenosLista.jsx) pueda mostrar y editar la imagen.
+     */
     public function todos(Request $request)
     {
         try {
             $user = $request->user();
 
             $empenos = Empeno::where('id_empresa', $user->id_empresa)
-                ->with(['cliente', 'prenda'])
+                ->with(['cliente', 'prenda', 'prenda.imagenPrincipal'])
                 ->withSum('pagos as total_pagado', 'monto_total')
                 ->orderBy('fecha_empeno', 'desc')
                 ->get();
@@ -376,10 +449,21 @@ class EmpenoController extends Controller
                 $estadoReal = $empeno->estado_real;
                 $diasVencidos = $empeno->dias_vencidos;
 
+                $imagenUrl = null;
+                if ($empeno->prenda && $empeno->prenda->imagenPrincipal) {
+                    if (!empty($empeno->prenda->imagenPrincipal->cloudinary_url)) {
+                        $imagenUrl = $empeno->prenda->imagenPrincipal->cloudinary_url;
+                    } elseif (!empty($empeno->prenda->imagenPrincipal->imagen_data)) {
+                        $imagenUrl = url('/api/imagen-prenda/' . $empeno->prenda->id_prenda);
+                    }
+                }
+
                 $resultados[] = [
                     'id_empeno' => $empeno->id_empeno,
+                    'id_prenda' => $empeno->id_prenda,
                     'cliente' => $empeno->cliente ? $empeno->cliente->nombre . ' ' . $empeno->cliente->apellido : 'Cliente no disponible',
                     'articulo' => $empeno->prenda ? $empeno->prenda->descripcion : 'Sin artículo',
+                    'imagen_url' => $imagenUrl,
                     'monto_prestado' => floatval($empeno->monto_prestado ?? 0),
                     'total_pagado' => floatval($totalPagado),
                     'saldo_total_pendiente' => floatval($saldoTotalPendiente),
