@@ -275,6 +275,8 @@ class EmpenoController extends Controller
             ]);
 
             $tasa = DB::table('tasas_interes')->where('id_tasa', $validated['tasa_id'])->first();
+             $prenda = Prenda::find($validated['prenda_id']);
+             $material = $prenda ? $prenda->material : null;
 
             $interesMonto = $validated['monto_prestado'] * ($tasa->porcentaje / 100) * $validated['plazo_meses'];
             $ivaInteres = $interesMonto * 0.16;
@@ -297,7 +299,8 @@ class EmpenoController extends Controller
                 'fecha_vencimiento' => $validated['fecha_vencimiento'],
                 'plazo_meses' => $validated['plazo_meses'],
                 'estado' => 'activo',
-                'folio' => $folio
+                'folio' => $folio,
+                'material' => $material 
             ], 'id_empeno');
 
             DB::table('prendas')
@@ -437,6 +440,7 @@ class EmpenoController extends Controller
                 ->with(['cliente', 'prenda', 'prenda.imagenPrincipal'])
                 ->withSum('pagos as total_pagado', 'monto_total')
                 ->orderBy('fecha_empeno', 'desc')
+                ->orderBy('id_empeno', 'desc')
                 ->get();
 
             $resultados = [];
