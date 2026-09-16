@@ -8,6 +8,7 @@ use App\Models\Amortizacio;
 use App\Models\Pago;
 use App\Models\Empeno;
 use App\Models\Prenda;
+use App\Models\Empresa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -33,21 +34,44 @@ class StripeWebhookController extends Controller
         }
 
         if ($event->type === 'checkout.session.completed') {
-            $session = $event->data->object;
-            $idApartado = $session->metadata->id_apartado ?? null;
-            $idAmortizacion = $session->metadata->id_amortizacion ?? null;
+             $session = $event->data->object;
+              $idApartado = $session->metadata->id_apartado ?? null;        // ← faltaba
+             $idAmortizacion = $session->metadata->id_amortizacion ?? null; // ← faltaba
 
-            if ($idApartado) {
-                $apartado = Apartado::find($idApartado);
-                if ($apartado) {
-                    $apartado->update(['stripe_payment_status' => 'pagado']);
-                    $producto = $apartado->producto;
-                    if ($producto && $producto->stock > 0) {
-                        $producto->decrement('stock');
-                    }
-                    Log::info('✅ Apartado confirmado como pagado: id_apartado=' . $idApartado);
-                }
+    // ==================== NUEVO: vincular suscripción a la empresa ====================
+    if ($session->mode === 'subscription') {
+        $empresaId = $session->metadata->empresa_id ?? null;
+        $planId = $session->metadata->plan_id ?? null;
+
+        if ($empresaId && $empresaId !== 'nueva') {
+            $empresa = Empresa::find($empresaId);
+            if ($empresa) {
+                $empresa->update([
+                    'id_plan' => $planId ?? $empresa->id_plan,
+                    'plan_activo' => 1,
+                    'stripe_customer_id' => $session->customer,
+                    'stripe_subscription_id' => $session->subscription,
+                    'fecha_inicio_plan' => now(),
+                ]);
+                Log::info('✅ Suscripción vinculada vía webhook: empresa_id=' . $empresa->id_empresa);
+            } else {
+                Log::warning('⚠️ checkout.session.completed: empresa_id no encontrado: ' . $empresaId);
             }
+        }
+    }
+
+    if ($idApartado) {                                              // ← faltaba todo este bloque
+        $apartado = Apartado::find($idApartado);
+        if ($apartado) {
+            $apartado->update(['stripe_payment_status' => 'pagado']);
+            $producto = $apartado->producto;
+            if ($producto && $producto->stock > 0) {
+                $producto->decrement('stock');
+            }
+            Log::info('✅ Apartado confirmado como pagado: id_apartado=' . $idApartado);
+        }
+    }
+    
 
             if ($idAmortizacion) {
                 $this->registrarAbono($session, $idAmortizacion);
@@ -77,6 +101,72 @@ class StripeWebhookController extends Controller
                     }
                     Log::info('⏱️ Sesión expirada, apartado cancelado: id_apartado=' . $idApartado);
                 }
+            }
+        }
+
+        // ==================== NUEVO: RENOVACIÓN DE SUSCRIPCIÓN ====================
+    if ($event->type === 'invoice.paid') {
+    try {
+        $invoice = $event->data->object;
+        $subscriptionId = $invoice->subscription ?? null;
+
+        if ($subscriptionId) {
+            $empresa = Empresa::where('stripe_subscription_id', $subscriptionId)->first();
+
+            if ($empresa) {
+                \Stripe\Stripe::setApiKey(env('STRIPE_SECRET'));
+                $subscription = \Stripe\Subscription::retrieve($subscriptionId);
+
+                // Nuevo modelo: el periodo vive en el subscription item, no en la suscripción
+                $periodoFin = $subscription->items->data[0]->current_period_end
+                    ?? $invoice->lines->data[0]->period->end
+                    ?? null;
+
+                $empresa->update([
+                    'plan_activo' => 1,
+                    'fecha_fin_plan' => $periodoFin
+                        ? \Carbon\Carbon::createFromTimestamp($periodoFin)
+                        : now()->addMonth(),
+                ]);
+
+                Log::info('✅ Renovación de suscripción registrada: empresa_id=' . $empresa->id_empresa);
+            } else {
+                Log::warning('⚠️ invoice.paid sin empresa asociada: subscription=' . $subscriptionId);
+            }
+        }
+    } catch (\Throwable $e) {
+        Log::error('❌ Error procesando invoice.paid: ' . $e->getMessage());
+    }
+}
+
+        // ==================== NUEVO: PAGO DE SUSCRIPCIÓN FALLIDO ====================
+        if ($event->type === 'invoice.payment_failed') {
+            $invoice = $event->data->object;
+            $subscriptionId = $invoice->subscription ?? null;
+
+            if ($subscriptionId) {
+                $empresa = Empresa::where('stripe_subscription_id', $subscriptionId)->first();
+
+                if ($empresa) {
+                    $empresa->update(['plan_activo' => 0]);
+                    Log::warning('⚠️ Pago de suscripción fallido: empresa_id=' . $empresa->id_empresa);
+                } else {
+                    Log::warning('⚠️ invoice.payment_failed sin empresa asociada: subscription=' . $subscriptionId);
+                }
+            }
+        }
+
+        // ==================== NUEVO: SUSCRIPCIÓN CANCELADA ====================
+        if ($event->type === 'customer.subscription.deleted') {
+            $subscription = $event->data->object;
+            $empresa = Empresa::where('stripe_subscription_id', $subscription->id)->first();
+
+            if ($empresa) {
+                $empresa->update([
+                    'plan_activo' => 0,
+                    'stripe_subscription_id' => null,
+                ]);
+                Log::info('ℹ️ Suscripción cancelada: empresa_id=' . $empresa->id_empresa);
             }
         }
 
@@ -110,13 +200,11 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // ✅ REFRENDO: paga intereses del periodo completo y extiende fecha
             if ($tipo === 'refrendo_empeno') {
                 $this->registrarRefrendoWeb($session, $amortizacion, $idEmpeno, $monto);
                 return;
             }
 
-            // ==================== ABONO (Prorrateo) ====================
             $deudaTotal = round((float) $amortizacion->capital + $amortizacion->interes + $amortizacion->iva_interes, 2);
 
             if ($deudaTotal > 0) {
@@ -165,9 +253,6 @@ class StripeWebhookController extends Controller
         });
     }
 
-    /**
-     * ✅ REGISTRA REFRENDO: paga intereses del periodo completo y extiende fecha
-     */
     private function registrarRefrendoWeb($session, Amortizacio $amortizacion, $idEmpeno, float $monto): void
     {
         $empeno = Empeno::find($idEmpeno);
@@ -192,16 +277,12 @@ class StripeWebhookController extends Controller
             'referencia' => $session->id,
         ]);
 
-        // ✅ OBTENER EL PLAZO ORIGINAL
         $plazoMeses = $empeno->plazo_meses ?? 1;
-        
-        // ✅ EXTENDER LA FECHA DE VENCIMIENTO POR EL PLAZO COMPLETO
         $nuevaFechaVencimiento = now()->addMonths($plazoMeses);
         $empeno->update([
             'fecha_vencimiento' => $nuevaFechaVencimiento,
         ]);
-        
-        // ✅ ACTUALIZAR LA AMORTIZACIÓN
+
         $nuevoInteres = max(0, round($amortizacion->interes - $interesPagado, 2));
         $nuevoIva = max(0, round($amortizacion->iva_interes - $ivaPagado, 2));
         $nuevoMontoPagado = $amortizacion->monto_pagado + $monto;
@@ -215,8 +296,8 @@ class StripeWebhookController extends Controller
             'fecha_pago_programado' => $nuevaFechaVencimiento,
         ]);
 
-        Log::info('✅ Refrendo registrado: id_empeno=' . $idEmpeno . 
-                  ' monto=' . $monto . 
+        Log::info('✅ Refrendo registrado: id_empeno=' . $idEmpeno .
+                  ' monto=' . $monto .
                   ' nueva_fecha=' . $nuevaFechaVencimiento->format('Y-m-d'));
     }
 }

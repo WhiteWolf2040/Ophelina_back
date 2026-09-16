@@ -374,7 +374,7 @@ class ReportesController extends Controller
                 ->select(
                     DB::raw('COUNT(*) as cantidad'),
                     DB::raw('SUM(empeno.monto_prestado) as valor_prestado'),
-                    DB::raw('SUM(prendas.valor_estimado) as valor_estimado')
+                    DB::raw('SUM(prendas.valor_estimado) as valor_avaluo')
                 )
                 ->first();
 

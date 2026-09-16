@@ -8,224 +8,50 @@ use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
+    // ====================================
+    //  NUEVO: ENDPOINT CONSOLIDADO
+    // ====================================
+    // Junta dashboard + morosidad + distribución + amortizaciones
+    // en UNA sola petición para reducir el número de round-trips.
+    public function completo(Request $request)
+    {
+        try {
+            $user = $request->user();
+            $idEmpresa = $user->id_empresa;
+
+            return response()->json([
+                "success" => true,
+                "data" => [
+                    "dashboard" => $this->getDashboardData($idEmpresa),
+                    "morosidad" => $this->getMorosidadData($idEmpresa),
+                    "distribucion" => $this->getDistribucionData($idEmpresa),
+                    "amortizaciones" => $this->getAmortizacionesData($idEmpresa),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en dashboard completo: ' . $e->getMessage());
+            return response()->json([
+                "success" => false,
+                "message" => "Error al cargar el dashboard",
+                "error" => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // ====================================
+    // ENDPOINTS INDIVIDUALES (se conservan por compatibilidad
+    // con otras pantallas que puedan seguir llamándolos por separado)
+    // ====================================
+
     public function index(Request $request)
     {
         try {
             $user = $request->user();
             $idEmpresa = $user->id_empresa;
 
-            // Ganancias totales
-            $gananciaTotal = DB::table('pagos')
-                ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
-                ->where('empeno.id_empresa', $idEmpresa)
-                ->where('pagos.tipo_pago', 'liquidacion')
-                ->sum('pagos.interes_pagado');
-
-            // Pérdidas totales
-            $perdidaTotal = DB::table('amortizacion')
-                ->join('empeno', 'empeno.id_empeno', '=', 'amortizacion.id_empeno')
-                ->where('amortizacion.estado', 'pendiente')
-                ->where('amortizacion.fecha_pago_programado', '<', now())
-                ->where('empeno.id_empresa', $idEmpresa)
-                ->select(DB::raw('SUM(amortizacion.monto_total - COALESCE(amortizacion.monto_pagado, 0)) as total'))
-                ->first();
-
-            $perdidaTotal = $perdidaTotal ? floatval($perdidaTotal->total) : 0;
-
-            // Ingresos del mes actual
-            $ingresosMesActual = DB::table('pagos')
-                ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
-                ->where('empeno.id_empresa', $idEmpresa)
-                ->whereYear('pagos.fecha_pago', now()->year)
-                ->whereMonth('pagos.fecha_pago', now()->month)
-                ->sum('pagos.monto_total');
-
-       $hoy = now()->toDateString(); // "2026-07-19"
-
-                $empenosActivos = DB::table('empeno')
-                    ->where('estado', 'activo')
-                    ->where('id_empresa', $idEmpresa)
-                    ->whereDate('fecha_vencimiento', '>=', $hoy)
-                    ->count();
-
-                $empenosVencidos = DB::table('empeno')
-                    ->where('id_empresa', $idEmpresa)
-                    ->where(function($query) use ($hoy) {
-                        $query->where('estado', 'vencido')
-                            ->orWhere(function($sub) use ($hoy) {
-                                $sub->where('estado', 'activo')
-                                    ->whereDate('fecha_vencimiento', '<', $hoy);
-                            });
-                    })
-                    ->count();
-
-            // Próximos a vencer
-            $proximosVencer = DB::table('empeno')
-                ->whereBetween('fecha_vencimiento', [now(), now()->addDays(7)])
-                ->where('estado', 'activo')
-                ->where('id_empresa', $idEmpresa)
-                ->count();
-
-            // Ingresos recientes
-            $ingresosRecientes = DB::table('pagos')
-                ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
-                ->where('empeno.id_empresa', $idEmpresa)
-                ->whereDate('pagos.fecha_pago', '>=', now()->subDays(15))
-                ->sum('pagos.monto_total');
-
-            // Total clientes
-            $totalClientes = DB::table('clientes')
-                ->where('id_empresa', $idEmpresa)
-                ->count();
-
-            // Prendas disponibles
-            $prendasDisponibles = DB::table('prendas')
-                ->where('estado', 'Disponible')
-                ->where('id_empresa', $idEmpresa)
-                ->count();
-
-            // Precio oro
-            $precioOro = DB::table('precio_oro')
-                ->orderBy('fecha_actualizacion', 'desc')
-                ->first();
-
-            $resumen = [
-                "empenos_activos" => $empenosActivos,
-                "empenos_vencidos" => $empenosVencidos,
-                "proximos_vencer" => $proximosVencer,
-                "ingresos_recientes" => floatval($ingresosRecientes),
-                "precio_oro" => $precioOro->precio_gramo_24k ?? 850,
-                "ultima_actualizacion_oro" => $precioOro->fecha_actualizacion ?? null,
-                "total_clientes" => $totalClientes,
-                "prendas_disponibles" => $prendasDisponibles,
-                "ganancia_total" => floatval($gananciaTotal),
-                "perdida_total" => $perdidaTotal,
-                "ingresos_mes_actual" => floatval($ingresosMesActual)
-            ];
-
-            // Top Clientes
-            $topClientes = DB::table('empeno')
-                ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
-                ->leftJoin('pagos', function($join) {
-                    $join->on('pagos.id_empeno', '=', 'empeno.id_empeno')
-                         ->where('pagos.tipo_pago', 'liquidacion');
-                })
-                ->where('empeno.id_empresa', $idEmpresa)
-                ->select(
-                    'clientes.id_cliente',
-                    DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as nombre"),
-                    DB::raw("COUNT(DISTINCT empeno.id_empeno) as empenos"),
-                    DB::raw("SUM(empeno.monto_prestado) as monto_total"),
-                    DB::raw("SUM(COALESCE(pagos.interes_pagado, 0)) as ganancia_realizada"),
-                    DB::raw("MAX(empeno.fecha_empeno) as ultimo_empeno")
-                )
-                ->groupBy('clientes.id_cliente', 'clientes.nombre', 'clientes.apellido')
-                ->orderByDesc('ganancia_realizada')
-                ->limit(5)
-                ->get();
-
-            $topClientes = $topClientes->map(function($cliente) {
-                $montoTotal = floatval($cliente->monto_total);
-                $gananciaRealizada = floatval($cliente->ganancia_realizada);
-                $cliente->porcentaje_ganancia = $montoTotal > 0
-                    ? ($gananciaRealizada / $montoTotal) * 100
-                    : 0;
-                $cliente->ganancia_generada = $gananciaRealizada;
-                $cliente->monto_total = $montoTotal;
-                return $cliente;
-            });
-
-            // Top Artículos
-            $topArticulos = DB::table('empeno')
-                ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
-                ->where('empeno.id_empresa', $idEmpresa)
-                ->select(
-                    'prendas.descripcion as nombre',
-                    'prendas.tipo as categoria',
-                    DB::raw("COUNT(empeno.id_prenda) as cantidad"),
-                    DB::raw("AVG(empeno.monto_prestado) as monto_promedio")
-                )
-                ->groupBy('prendas.descripcion', 'prendas.tipo')
-                ->orderByDesc('cantidad')
-                ->limit(5)
-                ->get();
-
-            // Actividad reciente
-            $actividad = DB::table('pagos')
-                ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
-                ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
-                ->where('empeno.id_empresa', $idEmpresa)
-                ->select(
-                    DB::raw("'pago' as tipo"),
-                    DB::raw("CONCAT('Pago recibido de ',clientes.nombre,' ',clientes.apellido) as descripcion"),
-                    'pagos.fecha_pago as fecha',
-                    'pagos.monto_total as monto'
-                )
-                ->orderByDesc('pagos.fecha_pago')
-                ->limit(10)
-                ->get();
-
-            $actividad = $actividad->map(function($item) {
-                $item->fecha = $item->fecha ? date('d/m/Y', strtotime($item->fecha)) : '';
-                return $item;
-            });
-
-            // ✅ CAPITAL vs RETORNO POR MES (CORREGIDO PARA POSTGRESQL)
-            $prestamosPorMes = DB::table('empeno')
-                ->select(
-                    DB::raw("EXTRACT(MONTH FROM fecha_empeno) as numero_mes"),
-                    DB::raw("TO_CHAR(fecha_empeno, 'Mon') as mes"),
-                    DB::raw("SUM(monto_prestado) as capital"),
-                    DB::raw("COUNT(id_empeno) as total_empenos")
-                )
-                ->whereYear('fecha_empeno', date('Y'))
-                ->where('id_empresa', $idEmpresa)
-                ->groupBy(DB::raw("EXTRACT(MONTH FROM fecha_empeno)"), DB::raw("TO_CHAR(fecha_empeno, 'Mon')"))
-                ->orderBy(DB::raw("EXTRACT(MONTH FROM fecha_empeno)"))
-                ->get();
-
-            $pagosPorMes = DB::table('pagos')
-                ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
-                ->select(
-                    DB::raw("EXTRACT(MONTH FROM pagos.fecha_pago) as numero_mes"),
-                    DB::raw("SUM(pagos.monto_total) as total_pagos"),
-                    DB::raw("SUM(pagos.interes_pagado) as total_intereses")
-                )
-                ->whereYear('pagos.fecha_pago', date('Y'))
-                ->where('empeno.id_empresa', $idEmpresa)
-                ->groupBy(DB::raw("EXTRACT(MONTH FROM pagos.fecha_pago)"))
-                ->get()
-                ->keyBy('numero_mes');
-
-            // Calcular valores ACUMULADOS
-            $capitalAcumulado = 0;
-            $retornoAcumulado = 0;
-            $gananciaAcumulada = 0;
-
-            $capitalRetorno = $prestamosPorMes->map(function($prestamo) use (&$capitalAcumulado, &$retornoAcumulado, &$gananciaAcumulada, $pagosPorMes) {
-                $mesNumero = $prestamo->numero_mes;
-                $pagos = $pagosPorMes->get($mesNumero);
-
-                $capitalAcumulado += floatval($prestamo->capital);
-                $retornoAcumulado += $pagos ? floatval($pagos->total_pagos) : 0;
-                $gananciaAcumulada += $pagos ? floatval($pagos->total_intereses) : 0;
-
-                $prestamo->capital = $capitalAcumulado;
-                $prestamo->retorno = $retornoAcumulado;
-                $prestamo->ganancia = $gananciaAcumulada;
-
-                return $prestamo;
-            });
-
             return response()->json([
                 "success" => true,
-                "data" => [
-                    "resumen" => $resumen,
-                    "top_clientes" => $topClientes,
-                    "top_articulos" => $topArticulos,
-                    "actividad_reciente" => $actividad,
-                    "capital_retorno" => $capitalRetorno
-                ]
+                "data" => $this->getDashboardData($idEmpresa)
             ]);
 
         } catch (\Exception $e) {
@@ -237,108 +63,278 @@ class DashboardController extends Controller
         }
     }
 
-    // ====================================
-    // LISTADOS DETALLADOS
-    // ====================================
-
-    public function activos(Request $request)
-{
-    try {
-        $user = $request->user();
-
-        $data = DB::table('empeno')
-            ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
-            ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
-            ->where('empeno.estado', 'activo')
-            ->where('empeno.fecha_vencimiento', '>=', now()) // ✅ agregado
-            ->where('empeno.id_empresa', $user->id_empresa)
-            ->select(
-                'empeno.id_empeno',
-                DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as cliente"),
-                'prendas.descripcion as nombre',
-                'empeno.monto_prestado as monto',
-                'empeno.fecha_empeno as fecha'
-            )
-            ->get();
-
-        return response()->json(["success" => true, "data" => $data]);
-    } catch (\Exception $e) {
-        return response()->json(["success" => false, "message" => $e->getMessage()], 500);
-    }
-}
-
-  public function vencidos(Request $request)
-{
-    try {
-        $user = $request->user();
-
-        $data = DB::table('empeno')
-            ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
-            ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
-            ->where('empeno.id_empresa', $user->id_empresa)
-            ->where(function($query) {                      // ✅ agregado
-                $query->where('empeno.estado', 'vencido')
-                      ->orWhere(function($sub) {
-                          $sub->where('empeno.estado', 'activo')
-                              ->where('empeno.fecha_vencimiento', '<', now());
-                      });
-            })
-            ->select(
-                'empeno.id_empeno',
-                DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as cliente"),
-                'prendas.descripcion as nombre',
-                'empeno.monto_prestado as monto',
-                'empeno.fecha_vencimiento as fecha',
-                DB::raw("EXTRACT(DAY FROM (NOW() - empeno.fecha_vencimiento)) as dias")
-            )
-            ->get();
-
-        return response()->json(["success" => true, "data" => $data]);
-    } catch (\Exception $e) {
-        return response()->json(["success" => false, "message" => $e->getMessage()], 500);
-    }
-}
-    public function proximos(Request $request)
+    public function morosidad(Request $request)
     {
         try {
             $user = $request->user();
-
-            $data = DB::table('empeno')
-                ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
-                ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
-                ->where('empeno.estado', 'activo')
-                ->where('empeno.id_empresa', $user->id_empresa)
-                ->whereBetween('empeno.fecha_vencimiento', [now(), now()->addDays(7)])
-                ->select(
-                    'empeno.id_empeno',
-                    DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as cliente"),
-                    'prendas.descripcion as nombre',
-                    'empeno.monto_prestado as monto',
-                    'empeno.fecha_vencimiento as fecha',
-                    DB::raw("EXTRACT(DAY FROM (empeno.fecha_vencimiento - NOW())) as dias")
-                )
-                ->get();
-
             return response()->json([
                 "success" => true,
-                "data" => $data
+                "data" => $this->getMorosidadData($user->id_empresa)
             ]);
-
         } catch (\Exception $e) {
+            \Log::error('Error en morosidad: ' . $e->getMessage());
             return response()->json([
                 "success" => false,
-                "message" => $e->getMessage()
+                "message" => "Error al calcular morosidad: " . $e->getMessage()
             ], 500);
         }
     }
 
-  public function morosidad(Request $request)
-{
-    try {
-        $user = $request->user();
-        $idEmpresa = $user->id_empresa;
+    public function distribucionCategorias(Request $request)
+    {
+        try {
+            $user = $request->user();
+            return response()->json([
+                'success' => true,
+                'data' => $this->getDistribucionData($user->id_empresa)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
 
-        // ✅ Consulta SQL corregida para PostgreSQL
+    public function amortizacionPendiente(Request $request)
+    {
+        try {
+            $user = $request->user();
+            return response()->json([
+                'success' => true,
+                'data' => $this->getAmortizacionesData($user->id_empresa)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data' => []
+            ], 500);
+        }
+    }
+
+    // ====================================
+    // ✅ MÉTODOS PRIVADOS CON LA LÓGICA REAL
+    // (usados tanto por completo() como por los endpoints individuales)
+    // ====================================
+
+    private function getDashboardData($idEmpresa)
+    {
+        // Ganancias totales
+        $gananciaTotal = DB::table('pagos')
+            ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->where('pagos.tipo_pago', 'liquidacion')
+            ->sum('pagos.interes_pagado');
+
+        // Pérdidas totales
+        $perdidaTotal = DB::table('amortizacion')
+            ->join('empeno', 'empeno.id_empeno', '=', 'amortizacion.id_empeno')
+            ->where('amortizacion.estado', 'pendiente')
+            ->where('amortizacion.fecha_pago_programado', '<', now())
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->select(DB::raw('SUM(amortizacion.monto_total - COALESCE(amortizacion.monto_pagado, 0)) as total'))
+            ->first();
+
+        $perdidaTotal = $perdidaTotal ? floatval($perdidaTotal->total) : 0;
+
+        // Ingresos del mes actual
+        $ingresosMesActual = DB::table('pagos')
+            ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->whereYear('pagos.fecha_pago', now()->year)
+            ->whereMonth('pagos.fecha_pago', now()->month)
+            ->sum('pagos.monto_total');
+
+        $hoy = now()->toDateString();
+
+        $empenosActivos = DB::table('empeno')
+            ->where('estado', 'activo')
+            ->where('id_empresa', $idEmpresa)
+            ->whereDate('fecha_vencimiento', '>=', $hoy)
+            ->count();
+
+        $empenosVencidos = DB::table('empeno')
+            ->where('id_empresa', $idEmpresa)
+            ->where(function ($query) use ($hoy) {
+                $query->where('estado', 'vencido')
+                    ->orWhere(function ($sub) use ($hoy) {
+                        $sub->where('estado', 'activo')
+                            ->whereDate('fecha_vencimiento', '<', $hoy);
+                    });
+            })
+            ->count();
+
+        // Próximos a vencer
+        $proximosVencer = DB::table('empeno')
+            ->whereBetween('fecha_vencimiento', [now(), now()->addDays(7)])
+            ->where('estado', 'activo')
+            ->where('id_empresa', $idEmpresa)
+            ->count();
+
+        // Ingresos recientes
+        $ingresosRecientes = DB::table('pagos')
+            ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->whereDate('pagos.fecha_pago', '>=', now()->subDays(15))
+            ->sum('pagos.monto_total');
+
+        // Total clientes
+        $totalClientes = DB::table('clientes')
+            ->where('id_empresa', $idEmpresa)
+            ->count();
+
+        // Prendas disponibles
+        $prendasDisponibles = DB::table('prendas')
+            ->where('estado', 'Disponible')
+            ->where('id_empresa', $idEmpresa)
+            ->count();
+
+        // Precio oro (cacheado 5 min — no cambia segundo a segundo)
+        $precioOro = \Cache::remember('precio_oro_actual', 300, function () {
+            return DB::table('precio_oro')
+                ->orderBy('fecha_actualizacion', 'desc')
+                ->first();
+        });
+
+        $resumen = [
+            "empenos_activos" => $empenosActivos,
+            "empenos_vencidos" => $empenosVencidos,
+            "proximos_vencer" => $proximosVencer,
+            "ingresos_recientes" => floatval($ingresosRecientes),
+            "precio_oro" => $precioOro->precio_gramo_24k ?? 850,
+            "ultima_actualizacion_oro" => $precioOro->fecha_actualizacion ?? null,
+            "total_clientes" => $totalClientes,
+            "prendas_disponibles" => $prendasDisponibles,
+            "ganancia_total" => floatval($gananciaTotal),
+            "perdida_total" => $perdidaTotal,
+            "ingresos_mes_actual" => floatval($ingresosMesActual)
+        ];
+
+        // Top Clientes
+        $topClientes = DB::table('empeno')
+            ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
+            ->leftJoin('pagos', function ($join) {
+                $join->on('pagos.id_empeno', '=', 'empeno.id_empeno')
+                     ->where('pagos.tipo_pago', 'liquidacion');
+            })
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->select(
+                'clientes.id_cliente',
+                DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as nombre"),
+                DB::raw("COUNT(DISTINCT empeno.id_empeno) as empenos"),
+                DB::raw("SUM(empeno.monto_prestado) as monto_total"),
+                DB::raw("SUM(COALESCE(pagos.interes_pagado, 0)) as ganancia_realizada"),
+                DB::raw("MAX(empeno.fecha_empeno) as ultimo_empeno")
+            )
+            ->groupBy('clientes.id_cliente', 'clientes.nombre', 'clientes.apellido')
+            ->orderByDesc('ganancia_realizada')
+            ->limit(5)
+            ->get();
+
+        $topClientes = $topClientes->map(function ($cliente) {
+            $montoTotal = floatval($cliente->monto_total);
+            $gananciaRealizada = floatval($cliente->ganancia_realizada);
+            $cliente->porcentaje_ganancia = $montoTotal > 0
+                ? ($gananciaRealizada / $montoTotal) * 100
+                : 0;
+            $cliente->ganancia_generada = $gananciaRealizada;
+            $cliente->monto_total = $montoTotal;
+            return $cliente;
+        });
+
+        // Top Artículos
+        $topArticulos = DB::table('empeno')
+            ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->select(
+                'prendas.descripcion as nombre',
+                'prendas.tipo as categoria',
+                DB::raw("COUNT(empeno.id_prenda) as cantidad"),
+                DB::raw("AVG(empeno.monto_prestado) as monto_promedio")
+            )
+            ->groupBy('prendas.descripcion', 'prendas.tipo')
+            ->orderByDesc('cantidad')
+            ->limit(5)
+            ->get();
+
+        // Actividad reciente
+        $actividad = DB::table('pagos')
+            ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
+            ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->select(
+                DB::raw("'pago' as tipo"),
+                DB::raw("CONCAT('Pago recibido de ',clientes.nombre,' ',clientes.apellido) as descripcion"),
+                'pagos.fecha_pago as fecha',
+                'pagos.monto_total as monto'
+            )
+            ->orderByDesc('pagos.fecha_pago')
+            ->limit(10)
+            ->get();
+
+        $actividad = $actividad->map(function ($item) {
+            $item->fecha = $item->fecha ? date('d/m/Y', strtotime($item->fecha)) : '';
+            return $item;
+        });
+
+        // Capital vs retorno por mes (PostgreSQL)
+        $prestamosPorMes = DB::table('empeno')
+            ->select(
+                DB::raw("EXTRACT(MONTH FROM fecha_empeno) as numero_mes"),
+                DB::raw("TO_CHAR(fecha_empeno, 'Mon') as mes"),
+                DB::raw("SUM(monto_prestado) as capital"),
+                DB::raw("COUNT(id_empeno) as total_empenos")
+            )
+            ->whereYear('fecha_empeno', date('Y'))
+            ->where('id_empresa', $idEmpresa)
+            ->groupBy(DB::raw("EXTRACT(MONTH FROM fecha_empeno)"), DB::raw("TO_CHAR(fecha_empeno, 'Mon')"))
+            ->orderBy(DB::raw("EXTRACT(MONTH FROM fecha_empeno)"))
+            ->get();
+
+        $pagosPorMes = DB::table('pagos')
+            ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
+            ->select(
+                DB::raw("EXTRACT(MONTH FROM pagos.fecha_pago) as numero_mes"),
+                DB::raw("SUM(pagos.monto_total) as total_pagos"),
+                DB::raw("SUM(pagos.interes_pagado) as total_intereses")
+            )
+            ->whereYear('pagos.fecha_pago', date('Y'))
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->groupBy(DB::raw("EXTRACT(MONTH FROM pagos.fecha_pago)"))
+            ->get()
+            ->keyBy('numero_mes');
+
+        $capitalAcumulado = 0;
+        $retornoAcumulado = 0;
+        $gananciaAcumulada = 0;
+
+        $capitalRetorno = $prestamosPorMes->map(function ($prestamo) use (&$capitalAcumulado, &$retornoAcumulado, &$gananciaAcumulada, $pagosPorMes) {
+            $mesNumero = $prestamo->numero_mes;
+            $pagos = $pagosPorMes->get($mesNumero);
+
+            $capitalAcumulado += floatval($prestamo->capital);
+            $retornoAcumulado += $pagos ? floatval($pagos->total_pagos) : 0;
+            $gananciaAcumulada += $pagos ? floatval($pagos->total_intereses) : 0;
+
+            $prestamo->capital = $capitalAcumulado;
+            $prestamo->retorno = $retornoAcumulado;
+            $prestamo->ganancia = $gananciaAcumulada;
+
+            return $prestamo;
+        });
+
+        return [
+            "resumen" => $resumen,
+            "top_clientes" => $topClientes,
+            "top_articulos" => $topArticulos,
+            "actividad_reciente" => $actividad,
+            "capital_retorno" => $capitalRetorno
+        ];
+    }
+
+    private function getMorosidadData($idEmpresa)
+    {
         $morosos = DB::select("
             SELECT 
                 CONCAT(c.nombre, ' ', c.apellido) as nombre,
@@ -361,10 +357,7 @@ class DashboardController extends Controller
         ", [$idEmpresa]);
 
         if (empty($morosos)) {
-            return response()->json([
-                "success" => true,
-                "data" => []
-            ]);
+            return [];
         }
 
         $morosidadFormateada = [];
@@ -412,114 +405,169 @@ class DashboardController extends Controller
             ];
         }
 
-        return response()->json([
-            "success" => true,
-            "data" => $morosidadFormateada
-        ]);
-
-    } catch (\Exception $e) {
-        \Log::error('Error en morosidad: ' . $e->getMessage());
-        return response()->json([
-            "success" => false,
-            "message" => "Error al calcular morosidad: " . $e->getMessage()
-        ], 500);
+        return $morosidadFormateada;
     }
-}
 
-    public function distribucionCategorias(Request $request)
+    private function getDistribucionData($idEmpresa)
     {
-        try {
-            $user = $request->user();
+        $categorias = DB::table('prendas')
+            ->join('empeno', 'empeno.id_prenda', '=', 'prendas.id_prenda')
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->whereYear('empeno.fecha_empeno', date('Y'))
+            ->select('prendas.tipo as categoria', DB::raw('COUNT(empeno.id_empeno) as total'))
+            ->groupBy('prendas.tipo')
+            ->get();
 
-            $categorias = DB::table('prendas')
-                ->join('empeno', 'empeno.id_prenda', '=', 'prendas.id_prenda')
-                ->where('empeno.id_empresa', $user->id_empresa)
-                ->whereYear('empeno.fecha_empeno', date('Y'))
-                ->select('prendas.tipo as categoria', DB::raw('COUNT(empeno.id_empeno) as total'))
-                ->groupBy('prendas.tipo')
-                ->get();
+        if ($categorias->isEmpty()) {
+            $categorias = collect([
+                ['categoria' => 'Joyería', 'total' => 0],
+                ['categoria' => 'Electrónica', 'total' => 0],
+                ['categoria' => 'Relojes', 'total' => 0],
+                ['categoria' => 'Herramientas', 'total' => 0],
+                ['categoria' => 'Instrumentos', 'total' => 0]
+            ]);
+        }
 
-            if ($categorias->isEmpty()) {
-                $categorias = collect([
-                    ['categoria' => 'Joyería', 'total' => 0],
-                    ['categoria' => 'Electrónica', 'total' => 0],
-                    ['categoria' => 'Relojes', 'total' => 0],
-                    ['categoria' => 'Herramientas', 'total' => 0],
-                    ['categoria' => 'Instrumentos', 'total' => 0]
-                ]);
+        return $categorias;
+    }
+
+    private function getAmortizacionesData($idEmpresa)
+    {
+        $amortizaciones = DB::table('amortizacion')
+            ->join('empeno', 'empeno.id_empeno', '=', 'amortizacion.id_empeno')
+            ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
+            ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->where('amortizacion.estado', 'pendiente')
+            ->select(
+                'amortizacion.id_amortizacion',
+                'amortizacion.numero_pago',
+                'amortizacion.fecha_pago_programado',
+                'amortizacion.monto_total',
+                'amortizacion.monto_pagado',
+                'amortizacion.saldo_final',
+                DB::raw("CONCAT(clientes.nombre, ' ', COALESCE(clientes.apellido, '')) as cliente_nombre"),
+                'prendas.descripcion as articulo',
+                'empeno.monto_prestado',
+                'empeno.folio'
+            )
+            ->orderBy('amortizacion.fecha_pago_programado', 'asc')
+            ->limit(20)
+            ->get();
+
+        return $amortizaciones->map(function ($item) {
+            $fechaProgramada = \Carbon\Carbon::parse($item->fecha_pago_programado);
+            $hoy = \Carbon\Carbon::now();
+
+            $diasAtraso = 0;
+            if ($fechaProgramada->lt($hoy)) {
+                $diasAtraso = (int) ceil($fechaProgramada->diffInDays($hoy));
+                if ($diasAtraso < 0) $diasAtraso = 0;
             }
 
-            return response()->json([
-                'success' => true,
-                'data' => $categorias
-            ]);
+            $saldoRestante = $item->saldo_final ?? ($item->monto_total - ($item->monto_pagado ?? 0));
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
-        }
+            $item->dias_atraso = $diasAtraso;
+            $item->status = $diasAtraso > 0 ? 'Atrasado' : 'Pendiente';
+            $item->saldo_restante = $saldoRestante;
+
+            return $item;
+        });
     }
 
-    public function amortizacionPendiente(Request $request)
+    // ====================================
+    // LISTADOS DETALLADOS (modales — se dejan igual)
+    // ====================================
+
+    public function activos(Request $request)
     {
         try {
             $user = $request->user();
-            $idEmpresa = $user->id_empresa;
 
-            $amortizaciones = DB::table('amortizacion')
-                ->join('empeno', 'empeno.id_empeno', '=', 'amortizacion.id_empeno')
+            $data = DB::table('empeno')
                 ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
                 ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
-                ->where('empeno.id_empresa', $idEmpresa)
-                ->where('amortizacion.estado', 'pendiente')
+                ->where('empeno.estado', 'activo')
+                ->where('empeno.fecha_vencimiento', '>=', now())
+                ->where('empeno.id_empresa', $user->id_empresa)
                 ->select(
-                    'amortizacion.id_amortizacion',
-                    'amortizacion.numero_pago',
-                    'amortizacion.fecha_pago_programado',
-                    'amortizacion.monto_total',
-                    'amortizacion.monto_pagado',
-                    'amortizacion.saldo_final',
-                    DB::raw("CONCAT(clientes.nombre, ' ', COALESCE(clientes.apellido, '')) as cliente_nombre"),
-                    'prendas.descripcion as articulo',
-                    'empeno.monto_prestado',
-                    'empeno.folio'
+                    'empeno.id_empeno',
+                    DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as cliente"),
+                    'prendas.descripcion as nombre',
+                    'empeno.monto_prestado as monto',
+                    'empeno.fecha_empeno as fecha'
                 )
-                ->orderBy('amortizacion.fecha_pago_programado', 'asc')
-                ->limit(20)
                 ->get();
 
-            $amortizaciones = $amortizaciones->map(function($item) {
-                $fechaProgramada = \Carbon\Carbon::parse($item->fecha_pago_programado);
-                $hoy = \Carbon\Carbon::now();
+            return response()->json(["success" => true, "data" => $data]);
+        } catch (\Exception $e) {
+            return response()->json(["success" => false, "message" => $e->getMessage()], 500);
+        }
+    }
 
-                $diasAtraso = 0;
-                if ($fechaProgramada->lt($hoy)) {
-                    $diasAtraso = (int) ceil($fechaProgramada->diffInDays($hoy));
-                    if ($diasAtraso < 0) $diasAtraso = 0;
-                }
+    public function vencidos(Request $request)
+    {
+        try {
+            $user = $request->user();
 
-                $saldoRestante = $item->saldo_final ?? ($item->monto_total - ($item->monto_pagado ?? 0));
+            $data = DB::table('empeno')
+                ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
+                ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
+                ->where('empeno.id_empresa', $user->id_empresa)
+                ->where(function ($query) {
+                    $query->where('empeno.estado', 'vencido')
+                        ->orWhere(function ($sub) {
+                            $sub->where('empeno.estado', 'activo')
+                                ->where('empeno.fecha_vencimiento', '<', now());
+                        });
+                })
+                ->select(
+                    'empeno.id_empeno',
+                    DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as cliente"),
+                    'prendas.descripcion as nombre',
+                    'empeno.monto_prestado as monto',
+                    'empeno.fecha_vencimiento as fecha',
+                    DB::raw("EXTRACT(DAY FROM (NOW() - empeno.fecha_vencimiento)) as dias")
+                )
+                ->get();
 
-                $item->dias_atraso = $diasAtraso;
-                $item->status = $diasAtraso > 0 ? 'Atrasado' : 'Pendiente';
-                $item->saldo_restante = $saldoRestante;
+            return response()->json(["success" => true, "data" => $data]);
+        } catch (\Exception $e) {
+            return response()->json(["success" => false, "message" => $e->getMessage()], 500);
+        }
+    }
 
-                return $item;
-            });
+    public function proximos(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            $data = DB::table('empeno')
+                ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
+                ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
+                ->where('empeno.estado', 'activo')
+                ->where('empeno.id_empresa', $user->id_empresa)
+                ->whereBetween('empeno.fecha_vencimiento', [now(), now()->addDays(7)])
+                ->select(
+                    'empeno.id_empeno',
+                    DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as cliente"),
+                    'prendas.descripcion as nombre',
+                    'empeno.monto_prestado as monto',
+                    'empeno.fecha_vencimiento as fecha',
+                    DB::raw("EXTRACT(DAY FROM (empeno.fecha_vencimiento - NOW())) as dias")
+                )
+                ->get();
 
             return response()->json([
-                'success' => true,
-                'data' => $amortizaciones
+                "success" => true,
+                "data" => $data
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-                'data' => []
+                "success" => false,
+                "message" => $e->getMessage()
             ], 500);
         }
     }
-}   
+}

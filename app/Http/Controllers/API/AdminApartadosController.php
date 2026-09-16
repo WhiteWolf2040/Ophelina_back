@@ -19,14 +19,18 @@ class AdminApartadosController extends Controller
         try {
             $user = $request->user();
 
-            $apartados = Apartado::whereHas('producto', function ($q) use ($user) {
-                    $q->where('id_empresa', $user->id_empresa);
-                })
-                ->where('stripe_payment_status', 'pagado') // solo los ya pagados tienen sentido gestionar
-                ->with(['producto.prenda', 'cliente'])
-                ->orderBy('entregado', 'asc')   // pendientes de entregar primero
-                ->orderBy('fecha_apartado', 'desc')
-                ->get();
+           $apartados = Apartado::whereHas('producto', function ($q) use ($user) {
+                $q->where('id_empresa', $user->id_empresa);
+            })
+            ->where('stripe_payment_status', 'pagado')
+            ->where(function ($q) {
+                $q->where('entregado', false)
+                ->orWhere('fecha_entrega', '>=', now()->subDays(30));
+            })
+            ->with(['producto:id_producto,nombre,id_empresa', 'cliente:id_cliente,nombre,apellido'])
+            ->orderBy('entregado', 'asc')
+            ->orderBy('fecha_apartado', 'desc')
+            ->get();
 
             $data = $apartados->map(function (Apartado $a) {
                 return [

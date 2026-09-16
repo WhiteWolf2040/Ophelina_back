@@ -45,6 +45,8 @@ class PrendaController extends Controller
     /**
      * ✅ NUEVO: resuelve la imagen igual que TiendaController/MisEmpenosController,
      * para que Inventario muestre exactamente lo mismo que ven Tienda y el cliente.
+     * Se usa solo para UN registro (show, store, update) — no llames esto
+     * dentro de un loop; para listas usa resolverImagenesEnLote().
      */
     private function resolverImagenUrl($idPrenda): ?string
     {
@@ -59,6 +61,41 @@ class PrendaController extends Controller
         return null;
     }
 
+    /**
+     * ⚡ NUEVO: versión "en lote" de resolverImagenUrl() para usar en listados.
+     * La versión anterior de index() llamaba a resolverImagenUrl() dentro de
+     * un ->each(), lo que hacía 1-2 consultas por prenda (N+1) — con un
+     * inventario grande esto podía tardar varios segundos o incluso fallar
+     * por timeout. Ahora se traen TODAS las imágenes de las prendas
+     * solicitadas en UNA sola consulta y se resuelven en memoria.
+     *
+     * @param \Illuminate\Support\Collection $idsPrendas
+     * @return \Illuminate\Support\Collection  [id_prenda => url|null]
+     */
+    private function resolverImagenesEnLote($idsPrendas)
+    {
+        $imagenesPorPrenda = ImagenPrenda::whereIn('id_prenda', $idsPrendas)
+            ->orderByDesc('es_principal')
+            ->orderBy('orden')
+            ->get()
+            ->groupBy('id_prenda');
+
+        return $idsPrendas->mapWithKeys(function ($id) use ($imagenesPorPrenda) {
+            $imagen = $imagenesPorPrenda->get($id)?->first();
+
+            if (!$imagen) {
+                return [$id => null];
+            }
+            if (!empty($imagen->cloudinary_url)) {
+                return [$id => $imagen->cloudinary_url];
+            }
+            if (!empty($imagen->imagen_data)) {
+                return [$id => url('/api/imagen-prenda/' . $id)];
+            }
+            return [$id => null];
+        });
+    }
+
     public function index(Request $request)
     {
         try {
@@ -71,10 +108,12 @@ class PrendaController extends Controller
                 ->orderBy('fecha_registro', 'desc')
                 ->get();
 
-            // ✅ NUEVO: se sobreescribe imagen_url con la fuente real
-            // (imagen_prenda), para que el frontend siempre reciba lo correcto.
-            $prendas->each(function (Prenda $p) {
-                $p->imagen_url = $this->resolverImagenUrl($p->id_prenda);
+            // ✅ OPTIMIZADO: una sola consulta para las imágenes de TODAS
+            // las prendas, en vez de 1-2 consultas por prenda dentro del loop.
+            $imagenesPorPrenda = $this->resolverImagenesEnLote($prendas->pluck('id_prenda'));
+
+            $prendas->each(function (Prenda $p) use ($imagenesPorPrenda) {
+                $p->imagen_url = $imagenesPorPrenda->get($p->id_prenda);
             });
 
             return response()->json(['success' => true, 'data' => $prendas]);
@@ -144,7 +183,6 @@ class PrendaController extends Controller
                 'fecha_registro' => now()
             ]);
 
-            // ✅ NUEVO: si viene imagen, se guarda TAMBIÉN en imagen_prenda
             if (!empty($validated['imagen_url'])) {
                 $this->upsertImagenPrincipal($prenda->id_prenda, $validated['imagen_url']);
             }
@@ -185,11 +223,10 @@ class PrendaController extends Controller
             ]);
 
             $imagenUrl = $validated['imagen_url'] ?? null;
-            unset($validated['imagen_url']); // no se guarda en prendas, se va a imagen_prenda
+            unset($validated['imagen_url']);
 
             $prenda->update($validated);
 
-            // ✅ NUEVO
             if (!empty($imagenUrl)) {
                 $this->upsertImagenPrincipal($prenda->id_prenda, $imagenUrl);
             }
@@ -223,14 +260,6 @@ class PrendaController extends Controller
         }
     }
 
-    /**
-     * ✅ NUEVO: asignación masiva de imágenes. El frontend sube cada archivo
-     * a Cloudinary (igual que ya hace en otros formularios) y aquí solo se
-     * registran todas las URLs resultantes de un jalón, en una transacción.
-     *
-     * POST /api/prendas/bulk-imagenes
-     * body: { asignaciones: [{ id_prenda: 12, imagen_url: "https://..." }, ...] }
-     */
     public function bulkAsignarImagenes(Request $request)
     {
         try {
@@ -255,7 +284,6 @@ class PrendaController extends Controller
             DB::beginTransaction();
 
             foreach ($validated['asignaciones'] as $item) {
-                // seguridad: solo prendas de la propia empresa
                 if (!in_array((int) $item['id_prenda'], $idsPermitidos, true)) {
                     $rechazados[] = $item['id_prenda'];
                     continue;

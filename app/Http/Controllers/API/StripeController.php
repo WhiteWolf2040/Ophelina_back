@@ -19,12 +19,15 @@ class StripeController extends Controller
         Log::info('📥 Datos recibidos:', $request->all());
         
         // ✅ CONSTRUIR URL CORRECTAMENTE
-        $baseSuccessUrl = env('STRIPE_SUCCESS_URL', 'https://ophelina-front.vercel.app/home');
+      /*   $baseSuccessUrl = env('STRIPE_SUCCESS_URL', 'https://ophelina-front.vercel.app/home');
         // Stripe reemplaza {CHECKOUT_SESSION_ID} automáticamente
-        $successUrl = $baseSuccessUrl . '?session_id={CHECKOUT_SESSION_ID}&payment=success';
+        $successUrl = $baseSuccessUrl . '?session_id={CHECKOUT_SESSION_ID}&payment=success'; */
+        $successUrl = env('STRIPE_SUCCESS_URL', 'https://ophelina-front.vercel.app/home?session_id={CHECKOUT_SESSION_ID}&payment=success');
+
         
-        $baseCancelUrl = env('STRIPE_CANCEL_URL', 'https://ophelina-front.vercel.app/planes');
-        $cancelUrl = $baseCancelUrl . '?payment=canceled';
+      /*   $baseCancelUrl = env('STRIPE_CANCEL_URL', 'https://ophelina-front.vercel.app/planes');
+        $cancelUrl = $baseCancelUrl . '?payment=canceled'; */
+        $cancelUrl = env('STRIPE_CANCEL_URL', 'https://ophelina-front.vercel.app/planes') . '?payment=canceled';
         
         Log::info('📌 Success URL final: ' . $successUrl);
         Log::info('📌 Cancel URL final: ' . $cancelUrl);
@@ -167,8 +170,10 @@ class StripeController extends Controller
             
             // ✅ Recuperar sesión de Stripe
             $stripe = new \Stripe\StripeClient($stripeSecret);
-            $session = $stripe->checkout->sessions->retrieve($sessionId);
-            
+           $session = $stripe->checkout->sessions->retrieve($sessionId, [
+            'expand' => ['subscription']
+        ]);
+                    
             Log::info('📊 Sesión de Stripe:', [
                 'payment_status' => $session->payment_status,
                 'metadata' => $session->metadata->toArray() ?? []
@@ -193,10 +198,12 @@ class StripeController extends Controller
             
             // ✅ Actualizar empresa
             try {
-                $empresa->id_plan = $planId;
+               $empresa->id_plan = $planId;
                 $empresa->plan_activo = 1;
+                $empresa->stripe_customer_id = $session->customer;
+                $empresa->stripe_subscription_id = $session->subscription->id ?? null;
                 $empresa->fecha_inicio_plan = now();
-                $empresa->fecha_fin_plan = now()->addMonth();
+                $empresa->fecha_fin_plan = now()->addMonth(); // esto ya lo tenías, se mantiene para el primer pago
                 $empresa->save();
                 
                 Log::info('✅ Empresa actualizada correctamente');

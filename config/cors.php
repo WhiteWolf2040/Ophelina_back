@@ -9,6 +9,8 @@ return [
     // Lista los dominios exactos que sí conoces (producción):
     'allowed_origins' => [
         'https://ophelina-front.vercel.app',
+        'http://localhost:5173',
+        'http://localhost:5174',
     ],
  
     // Y usa un patrón para cubrir las URLs de preview de Vercel,

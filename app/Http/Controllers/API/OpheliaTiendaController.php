@@ -20,33 +20,24 @@ class OpheliaTiendaController extends Controller
     public function getProductos(Request $request)
     {
         try {
-            // ✅ Obtener el usuario autenticado
-            $user = $request->user();
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Usuario no autenticado'], 401);
+        }
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
-            }
+            //  Obtener el cliente y su empresa
+           $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
+        if (!$cliente) {
+            return response()->json(['success' => false, 'message' => 'Cliente no encontrado'], 404);
+        }
 
-            // ✅ Obtener el cliente y su empresa
-            $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
-
-            if (!$cliente) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cliente no encontrado'
-                ], 404);
-            }
-
-            // ✅ ID de la empresa del cliente
+            //  ID de la empresa del cliente
             $idEmpresa = $cliente->id_empresa;
 
-            // ✅ Filtrar productos SOLO de la empresa del cliente
-            $query = ProductoTienda::with('prenda')
+            //  Filtrar productos SOLO de la empresa del cliente
+             $query = ProductoTienda::with('prenda')
                 ->where('visible', 1)
-                ->where('id_empresa', $idEmpresa); // 🔥 FILTRO POR EMPRESA
+                ->where('id_empresa', $idEmpresa); //  FILTRO POR EMPRESA
 
             // Búsqueda por texto
             if ($request->filled('buscar')) {
@@ -82,85 +73,83 @@ class OpheliaTiendaController extends Controller
                 }
             }
 
-            $productos = $query->orderBy('fecha_publicacion', 'desc')->get();
+           $productos = $query->orderBy('fecha_publicacion', 'desc')->get();
 
-            $data = $productos->map(function (ProductoTienda $p) {
-                $precio = (float) $p->precio;
-                $descuento = (float) ($p->descuento ?? 0);
-                $precioConDescuento = $descuento > 0
-                    ? $precio * (1 - $descuento / 100)
-                    : $precio;
+        // ✅ UNA sola query para TODAS las imágenes, en vez de una por producto
+        $idsPrendas = $productos->pluck('id_prenda')->filter()->unique()->values();
+        $imagenesPorPrenda = \App\Models\ImagenPrenda::whereIn('id_prenda', $idsPrendas)
+            ->orderByDesc('es_principal') // la principal primero
+            ->get()
+            ->groupBy('id_prenda');
 
-                return [
-                    'id' => $p->id_producto,
-                    'nombre' => $p->nombre,
-                    'descripcion' => $p->descripcion,
-                    'precio' => '$' . number_format($precioConDescuento, 2),
-                    'precioOriginal' => '$' . number_format($precio, 2),
-                    'precioNumerico' => $precioConDescuento,
-                    'descuento' => $descuento,
-                    'anticipo' => '$' . number_format($precioConDescuento * 0.5, 2),
-                    'anticipoNumerico' => round($precioConDescuento * 0.5, 2),
-                    'imagen' => $this->resolverImagenUrl($p->id_prenda),
-                    'categoria' => $this->obtenerCategoria($p->prenda),
-                    'material' => $p->prenda->material ?? null,
-                    'exclusivo' => (bool) $p->destacado,
-                    'estado_producto' => $p->estado_producto,
-                    'stock' => $p->stock,
-                ];
-            });
+        $data = $productos->map(function (ProductoTienda $p) use ($imagenesPorPrenda) {
+            $precio = (float) $p->precio;
+            $descuento = (float) ($p->descuento ?? 0);
+            $precioConDescuento = $descuento > 0
+                ? $precio * (1 - $descuento / 100)
+                : $precio;
 
-            return response()->json([
-                'success' => true,
-                'data' => $data,
-                'empresa_id' => $idEmpresa // Opcional: para debug
-            ]);
+            return [
+                'id' => $p->id_producto,
+                'nombre' => $p->nombre,
+                'descripcion' => $p->descripcion,
+                'precio' => '$' . number_format($precioConDescuento, 2),
+                'precioOriginal' => '$' . number_format($precio, 2),
+                'precioNumerico' => $precioConDescuento,
+                'descuento' => $descuento,
+                'anticipo' => '$' . number_format($precioConDescuento * 0.5, 2),
+                'anticipoNumerico' => round($precioConDescuento * 0.5, 2),
+                'imagen' => $this->resolverImagenDesdeColeccion($p->id_prenda, $imagenesPorPrenda),
+                'categoria' => $this->obtenerCategoria($p->prenda),
+                'material' => $p->prenda->material ?? null,
+                'exclusivo' => (bool) $p->destacado,
+                'estado_producto' => $p->estado_producto,
+                'stock' => $p->stock,
+            ];
+        });
 
-        } catch (\Throwable $e) {
-            Log::error('Error en OpheliaTiendaController@getProductos: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al cargar productos',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'data' => $data,
+            'empresa_id' => $idEmpresa
+        ]);
+
+    } catch (\Throwable $e) {
+        Log::error('Error en OpheliaTiendaController@getProductos: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al cargar productos',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
-    /**
-     * ✅ Devuelve la URL pública de la imagen principal de una prenda.
-     * Prioriza Cloudinary; si no existe, cae al endpoint viejo de binario.
-     */
-    private function resolverImagenUrl($idPrenda)
-    {
-        if (empty($idPrenda)) {
-            return null;
-        }
-
-        $imagen = \App\Models\ImagenPrenda::where('id_prenda', $idPrenda)
-            ->where('es_principal', true)
-            ->first();
-
-        if (!$imagen) {
-            $imagen = \App\Models\ImagenPrenda::where('id_prenda', $idPrenda)->first();
-        }
-
-        if (!$imagen) {
-            return null;
-        }
-
-        if (!empty($imagen->cloudinary_url)) {
-            return $imagen->cloudinary_url;
-        }
-
-        if (!empty($imagen->imagen_data)) {
-            return url('/api/imagen-prenda/' . $idPrenda);
-        }
-
+private function resolverImagenDesdeColeccion($idPrenda, $imagenesPorPrenda)
+{
+    if (empty($idPrenda) || !isset($imagenesPorPrenda[$idPrenda])) {
         return null;
     }
 
+    $imagen = $imagenesPorPrenda[$idPrenda]->first();
+
+    if (!$imagen) {
+        return null;
+    }
+
+    if (!empty($imagen->cloudinary_url)) {
+        return $imagen->cloudinary_url;
+    }
+
+    if (!empty($imagen->imagen_data)) {
+        return url('/api/imagen-prenda/' . $idPrenda);
+    }
+
+    return null;
+}
+  
+
     /**
-     * ✅ NUEVO: helper para agregarle un query param a una URL base,
+     * NUEVO: helper para agregarle un query param a una URL base,
      * sin importar si esa URL base ya trae otros parámetros o no.
      * Usado para inyectar &tipo=apartado a las URLs genéricas
      * STRIPE_TIENDA_SUCCESS_URL / STRIPE_TIENDA_CANCEL_URL, que ahora
@@ -327,32 +316,34 @@ class OpheliaTiendaController extends Controller
      * Apartados del cliente autenticado (pendientes de pago o ya pagados)
      * GET /api/tienda/apartados
      */
- public function misApartados(Request $request)
+public function misApartados(Request $request)
 {
     try {
         $user = $request->user();
-
         $cliente = Cliente::where('id_usuario', $user->id_usuario)->first();
 
         if (!$cliente) {
             return response()->json(['success' => true, 'data' => []]);
         }
 
-        $clienteId = $cliente->id_cliente;
-
-        $apartados = Apartado::where('id_cliente', $clienteId)
+        $apartados = Apartado::where('id_cliente', $cliente->id_cliente)
             ->whereIn('estado', ['activo', 'completado'])
             ->with('producto.prenda')
             ->orderBy('fecha_apartado', 'desc')
             ->get();
 
-        $data = $apartados->map(function (Apartado $a) {
+        //  Igual aquí: precargar imágenes de golpe
+        $idsPrendas = $apartados->pluck('producto.id_prenda')->filter()->unique()->values();
+        $imagenesPorPrenda = \App\Models\ImagenPrenda::whereIn('id_prenda', $idsPrendas)
+            ->orderByDesc('es_principal')
+            ->get()
+            ->groupBy('id_prenda');
+
+        $data = $apartados->map(function (Apartado $a) use ($imagenesPorPrenda) {
             $producto = $a->producto;
             $precio = $producto ? (float) $producto->precio : 0;
             $descuento = $producto ? (float) ($producto->descuento ?? 0) : 0;
-            $precioConDescuento = $descuento > 0
-                ? $precio * (1 - $descuento / 100)
-                : $precio;
+            $precioConDescuento = $descuento > 0 ? $precio * (1 - $descuento / 100) : $precio;
 
             return [
                 'id' => $producto->id_producto ?? null,
@@ -363,14 +354,13 @@ class OpheliaTiendaController extends Controller
                 'precioOriginal' => '$' . number_format($precio, 2),
                 'descuento' => $descuento,
                 'anticipo' => '$' . number_format((float) $a->monto_anticipo, 2),
-                'imagen' => $producto ? $this->resolverImagenUrl($producto->id_prenda) : null,
+                'imagen' => $producto ? $this->resolverImagenDesdeColeccion($producto->id_prenda, $imagenesPorPrenda) : null,
                 'categoria' => $this->obtenerCategoria($producto->prenda ?? null),
                 'material' => $producto->prenda->material ?? null,
                 'exclusivo' => $producto ? (bool) $producto->destacado : false,
                 'estadoPago' => $a->stripe_payment_status,
                 'fechaApartado' => optional($a->fecha_apartado)->format('d/m/Y'),
                 'fechaExpiracion' => optional($a->fecha_expiracion)->format('d/m/Y'),
-                // ← NUEVO: solo mostramos el código si ya está pagado
                 'codigoEntrega' => $a->stripe_payment_status === 'pagado' ? $a->codigo_entrega : null,
                 'entregado' => (bool) $a->entregado,
                 'fechaEntrega' => optional($a->fecha_entrega)->format('d/m/Y H:i'),

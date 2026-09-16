@@ -29,7 +29,9 @@ class Empresa extends Model
         'fecha_registro',
         'fecha_inicio_plan',
         'fecha_fin_plan',
-        'plan_activo'
+        'plan_activo',
+        'stripe_customer_id',
+        'stripe_subscription_id'
     ];
 
     protected $casts = [

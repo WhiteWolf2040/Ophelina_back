@@ -34,6 +34,10 @@ use App\Http\Controllers\API\TicketController;
 |--------------------------------------------------------------------------
 */
 
+Route::get('/ping', function () {
+    return response()->json(['ok' => true, 'timestamp' => now()]);
+});
+
 //  RUTA DE PRUEBA DE CLOUDINARY (PÚBLICA)
 Route::get('/test-cloudinary', function () {
     try {
@@ -80,6 +84,7 @@ Route::post('/send-email', [ContactController::class, 'SendEmail']);
 
 // Autenticación
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
 
 //  Stripe - Rutas PÚBLICAS (no requieren token de autenticación)
 Route::prefix('stripe')->group(function () {
@@ -190,6 +195,7 @@ Route::middleware('auth:sanctum')->group(function () {
     ==========================
     */
     Route::prefix('home')->group(function () {
+         Route::get('/completo', [DashboardController::class, 'completo']);
         Route::get('/', [DashboardController::class, 'index']);
         Route::get('/activos', [DashboardController::class, 'activos']);
         Route::get('/vencidos', [DashboardController::class, 'vencidos']);

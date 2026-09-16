@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Empeno;
+use App\Models\Amortizacio;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -67,6 +68,23 @@ class EmpenoController extends Controller
         }
     }
 
+    /**
+     * ⚡ OPTIMIZADO: la versión anterior hacía, dentro del foreach, una
+     * consulta DB::table('amortizacion')->where(...)->first() POR CADA
+     * empeño (N+1 queries) y cargaba la relación 'pagos' completa solo
+     * para sumarla en PHP. Con varios empeños esto podía tardar varios
+     * segundos y disparar el timeout de axios en el frontend (RegistrarPago.jsx),
+     * mostrando "Error al cargar los empeños activos".
+     *
+     * Ahora:
+     * 1. withSum('pagos as total_pagado', 'monto_total') hace la suma en
+     *    la propia base de datos, en vez de traer todas las filas de pagos.
+     * 2. Las amortizaciones pendientes de TODOS los empeños se traen en
+     *    UNA sola consulta (whereIn), agrupadas en memoria por id_empeno,
+     *    con lookup O(1) dentro del map() — cero queries dentro del loop.
+     *
+     * Resultado: de N+1 consultas a 2 consultas totales.
+     */
     public function activosConSaldo(Request $request)
     {
         try {
@@ -80,31 +98,34 @@ class EmpenoController extends Controller
             }
 
             $empenos = Empeno::where('id_empresa', $user->id_empresa)
-                ->with(['cliente', 'prenda', 'pagos'])
+                ->with(['cliente:id_cliente,nombre,apellido', 'prenda:id_prenda,descripcion'])
+                ->withSum('pagos as total_pagado', 'monto_total')
                 ->get();
 
-            $resultados = [];
+            $idsEmpenos = $empenos->pluck('id_empeno');
 
-            foreach ($empenos as $empeno) {
-                $totalPagado = $empeno->pagos->sum('monto_total') ?? 0;
+            $amortizacionesPendientesPorEmpeno = Amortizacio::whereIn('id_empeno', $idsEmpenos)
+                ->where('estado', 'pendiente')
+                ->orderBy('numero_pago', 'asc')
+                ->get()
+                ->groupBy('id_empeno')
+                ->map(fn ($grupo) => $grupo->first());
 
-                $amortizacionPendiente = DB::table('amortizacion')
-                    ->where('id_empeno', $empeno->id_empeno)
-                    ->where('estado', 'pendiente')
-                    ->orderBy('numero_pago', 'asc')
-                    ->first();
+            $resultados = $empenos->map(function (Empeno $empeno) use ($amortizacionesPendientesPorEmpeno) {
+                $totalPagado = $empeno->total_pagado ?? 0;
 
-                $saldoPendienteCuota = 0;
-                if ($amortizacionPendiente) {
-                    $saldoPendienteCuota = ($amortizacionPendiente->monto_total ?? 0) - ($amortizacionPendiente->monto_pagado ?? 0);
-                }
+                $amortizacionPendiente = $amortizacionesPendientesPorEmpeno->get($empeno->id_empeno);
+
+                $saldoPendienteCuota = $amortizacionPendiente
+                    ? (($amortizacionPendiente->monto_total ?? 0) - ($amortizacionPendiente->monto_pagado ?? 0))
+                    : 0;
 
                 $saldoTotalPendiente = max(0, ($empeno->monto_prestado ?? 0) - $totalPagado);
 
                 $estadoReal = $empeno->estado_real;
                 $diasVencidos = $empeno->dias_vencidos;
 
-                $resultados[] = [
+                return [
                     'id_empeno' => $empeno->id_empeno,
                     'cliente' => $empeno->cliente ? $empeno->cliente->nombre . ' ' . $empeno->cliente->apellido : 'Cliente no disponible',
                     'articulo' => $empeno->prenda ? $empeno->prenda->descripcion : 'Sin artículo',
@@ -117,11 +138,11 @@ class EmpenoController extends Controller
                     'estado' => $estadoReal,
                     'dias_vencidos' => $diasVencidos
                 ];
-            }
+            });
 
             return response()->json([
                 'success' => true,
-                'data' => $resultados
+                'data' => $resultados->values()
             ]);
 
         } catch (\Exception $e) {
@@ -137,9 +158,6 @@ class EmpenoController extends Controller
 
     /**
      * Crear prenda (con imagen opcional en Cloudinary)
-     * FIX: se agregó DB::beginTransaction() — antes faltaba y el DB::commit()
-     * tronaba porque no había ninguna transacción abierta, rompiendo el guardado
-     * de la imagen.
      */
     public function storePrenda(Request $request)
     {
@@ -155,7 +173,7 @@ class EmpenoController extends Controller
                 'imagen_url' => 'nullable|url|max:500',
             ]);
 
-            DB::beginTransaction(); // <-- FIX: esto faltaba
+            DB::beginTransaction();
 
             $prenda = Prenda::create([
                 'id_empresa' => $user->id_empresa,
@@ -169,7 +187,6 @@ class EmpenoController extends Controller
                 'fecha_registro' => now()
             ]);
 
-            // GUARDAR IMAGEN EN imagen_prenda
             if (!empty($validated['imagen_url'])) {
                 ImagenPrenda::create([
                     'id_prenda' => $prenda->id_prenda,
@@ -181,7 +198,6 @@ class EmpenoController extends Controller
 
             DB::commit();
 
-            // CARGAR LA IMAGEN PARA DEVOLVERLA
             $prenda->load('imagenPrincipal');
             $prenda->imagen_url = $validated['imagen_url'] ?? null;
 
@@ -201,10 +217,6 @@ class EmpenoController extends Controller
         }
     }
 
-    /**
-     * NUEVO: agregar o reemplazar la imagen de una prenda ya existente.
-     * POST /api/prendas/{id}/imagen
-     */
     public function actualizarImagenPrenda(Request $request, $id)
     {
         try {
@@ -227,7 +239,6 @@ class EmpenoController extends Controller
 
             DB::beginTransaction();
 
-            // Si ya tenía una imagen, la reemplazamos
             ImagenPrenda::where('id_prenda', $prenda->id_prenda)->delete();
 
             ImagenPrenda::create([
@@ -255,10 +266,6 @@ class EmpenoController extends Controller
         }
     }
 
-    /**
-     * Registrar un nuevo empeño
-     * POST /api/empenos
-     */
     public function store(Request $request)
     {
         try {
@@ -275,8 +282,8 @@ class EmpenoController extends Controller
             ]);
 
             $tasa = DB::table('tasas_interes')->where('id_tasa', $validated['tasa_id'])->first();
-             $prenda = Prenda::find($validated['prenda_id']);
-             $material = $prenda ? $prenda->material : null;
+            $prenda = Prenda::find($validated['prenda_id']);
+            $material = $prenda ? $prenda->material : null;
 
             $interesMonto = $validated['monto_prestado'] * ($tasa->porcentaje / 100) * $validated['plazo_meses'];
             $ivaInteres = $interesMonto * 0.16;
@@ -300,7 +307,7 @@ class EmpenoController extends Controller
                 'plazo_meses' => $validated['plazo_meses'],
                 'estado' => 'activo',
                 'folio' => $folio,
-                'material' => $material 
+                'material' => $material
             ], 'id_empeno');
 
             DB::table('prendas')
@@ -426,11 +433,6 @@ class EmpenoController extends Controller
         }
     }
 
-    /**
-     * FIX: se agregó eager load de la imagen de la prenda y se incluyen
-     * 'id_prenda' e 'imagen_url' en cada resultado, para que el listado
-     * (EmpenosLista.jsx) pueda mostrar y editar la imagen.
-     */
     public function todos(Request $request)
     {
         try {

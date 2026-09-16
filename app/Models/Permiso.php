@@ -16,7 +16,7 @@ class Permiso extends Model
         'nombre',
         'descripcion',
         'modulo',
-        'Estado'
+        'estado' //para la nueva bd,
     ];
 
     // Relación con roles (muchos a muchos)
