@@ -60,17 +60,13 @@ class StripeWebhookController extends Controller
         }
     }
 
-    if ($idApartado) {                                              // ← faltaba todo este bloque
-        $apartado = Apartado::find($idApartado);
-        if ($apartado) {
-            $apartado->update(['stripe_payment_status' => 'pagado']);
-            $producto = $apartado->producto;
-            if ($producto && $producto->stock > 0) {
-                $producto->decrement('stock');
+        if ($idApartado) {
+            $apartado = Apartado::find($idApartado);
+            if ($apartado) {
+                $apartado->update(['stripe_payment_status' => 'pagado']);
+                Log::info(' Apartado confirmado como pagado: id_apartado=' . $idApartado);
             }
-            Log::info('✅ Apartado confirmado como pagado: id_apartado=' . $idApartado);
         }
-    }
     
 
             if ($idAmortizacion) {
@@ -82,7 +78,7 @@ class StripeWebhookController extends Controller
             $session = $event->data->object;
             $idApartado = $session->metadata->id_apartado ?? null;
 
-            if ($idApartado) {
+         if ($idApartado) {
                 $apartado = Apartado::find($idApartado);
                 if ($apartado) {
                     $apartado->update([
@@ -91,6 +87,7 @@ class StripeWebhookController extends Controller
                     ]);
                     $producto = $apartado->producto;
                     if ($producto) {
+                      
                         $producto->visible = 1;
                         $producto->save();
                         if ($producto->id_prenda) {

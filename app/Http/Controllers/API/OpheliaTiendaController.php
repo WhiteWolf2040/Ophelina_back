@@ -228,15 +228,14 @@ private function resolverImagenDesdeColeccion($idPrenda, $imagenesPorPrenda)
 
             Stripe::setApiKey(env('STRIPE_SECRET'));
 
-            // ✅ CORREGIDO: STRIPE_TIENDA_SUCCESS_URL / STRIPE_TIENDA_CANCEL_URL
-            // ahora son URLs base GENÉRICAS (ej. https://ophelina-front.vercel.app/homecliente?pago=exitoso)
+            //  CORREGIDO: STRIPE_TIENDA_SUCCESS_URL / STRIPE_TIENDA_CANCEL_URL
             // compartidas también con AbonoController. Aquí le agregamos
             // &tipo=apartado dinámicamente para no pisar el &tipo=abono /
             // &tipo=prorroga que agrega ese otro controlador.
             $successBase = env('STRIPE_TIENDA_SUCCESS_URL', env('STRIPE_SUCCESS_URL'));
             $cancelBase = env('STRIPE_TIENDA_CANCEL_URL', env('STRIPE_CANCEL_URL'));
 
-            // ✅ NUEVO: validación defensiva. Si estas variables vienen null
+            // validación defensiva. Si estas variables vienen null
             // (typo en el nombre en Render, o no se hizo redeploy después de
             // guardarlas), pasar null a agregarParametro() -que exige
             // string- provocaría un TypeError FATAL que no cae en el catch
@@ -281,8 +280,7 @@ private function resolverImagenDesdeColeccion($idPrenda, $imagenesPorPrenda)
             $producto->visible = 0;
             $producto->save();
 
-            // ✅ NUEVO: refleja el apartado también en el inventario del
-            // dueño. Como cada ProductoTienda corresponde 1 a 1 con una
+            // refleja el apartado también en el inventario del dueño. Como cada ProductoTienda corresponde 1 a 1 con una
             // Prenda física (confirmado: no hay múltiples unidades por
             // artículo), marcamos esa prenda como 'Apartado' para que el
             // admin la vea así en /inventario, en vez de que el artículo
