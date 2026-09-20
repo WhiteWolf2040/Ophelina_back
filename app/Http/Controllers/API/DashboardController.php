@@ -114,7 +114,7 @@ class DashboardController extends Controller
     }
 
     // ====================================
-    // ✅ MÉTODOS PRIVADOS CON LA LÓGICA REAL
+    // MÉTODOS PRIVADOS CON LA LÓGICA REAL
     // (usados tanto por completo() como por los endpoints individuales)
     // ====================================
 
@@ -138,12 +138,14 @@ class DashboardController extends Controller
 
         $perdidaTotal = $perdidaTotal ? floatval($perdidaTotal->total) : 0;
 
-        // Ingresos del mes actual
+        //  CAMBIADO: Ingresos del mes actual (whereYear+whereMonth -> whereBetween)
+        $inicioMesActual = now()->startOfMonth();
+        $finMesActual    = now()->endOfMonth();
+
         $ingresosMesActual = DB::table('pagos')
             ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
             ->where('empeno.id_empresa', $idEmpresa)
-            ->whereYear('pagos.fecha_pago', now()->year)
-            ->whereMonth('pagos.fecha_pago', now()->month)
+            ->whereBetween('pagos.fecha_pago', [$inicioMesActual, $finMesActual])
             ->sum('pagos.monto_total');
 
         $hoy = now()->toDateString();
@@ -172,11 +174,11 @@ class DashboardController extends Controller
             ->where('id_empresa', $idEmpresa)
             ->count();
 
-        // Ingresos recientes
+        //  CAMBIADO: Ingresos recientes (whereDate -> comparación directa de rango)
         $ingresosRecientes = DB::table('pagos')
             ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
             ->where('empeno.id_empresa', $idEmpresa)
-            ->whereDate('pagos.fecha_pago', '>=', now()->subDays(15))
+            ->where('pagos.fecha_pago', '>=', now()->subDays(15)->startOfDay())
             ->sum('pagos.monto_total');
 
         // Total clientes
@@ -278,7 +280,10 @@ class DashboardController extends Controller
             return $item;
         });
 
-        // Capital vs retorno por mes (PostgreSQL)
+        //  CAMBIADO: Capital vs retorno por mes (whereYear -> whereBetween)
+        $inicioAnio = now()->startOfYear();
+        $finAnio    = now()->endOfYear();
+
         $prestamosPorMes = DB::table('empeno')
             ->select(
                 DB::raw("EXTRACT(MONTH FROM fecha_empeno) as numero_mes"),
@@ -286,12 +291,13 @@ class DashboardController extends Controller
                 DB::raw("SUM(monto_prestado) as capital"),
                 DB::raw("COUNT(id_empeno) as total_empenos")
             )
-            ->whereYear('fecha_empeno', date('Y'))
+            ->whereBetween('fecha_empeno', [$inicioAnio, $finAnio])
             ->where('id_empresa', $idEmpresa)
             ->groupBy(DB::raw("EXTRACT(MONTH FROM fecha_empeno)"), DB::raw("TO_CHAR(fecha_empeno, 'Mon')"))
             ->orderBy(DB::raw("EXTRACT(MONTH FROM fecha_empeno)"))
             ->get();
 
+        //  CAMBIADO: (whereYear -> whereBetween)
         $pagosPorMes = DB::table('pagos')
             ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
             ->select(
@@ -299,7 +305,7 @@ class DashboardController extends Controller
                 DB::raw("SUM(pagos.monto_total) as total_pagos"),
                 DB::raw("SUM(pagos.interes_pagado) as total_intereses")
             )
-            ->whereYear('pagos.fecha_pago', date('Y'))
+            ->whereBetween('pagos.fecha_pago', [$inicioAnio, $finAnio])
             ->where('empeno.id_empresa', $idEmpresa)
             ->groupBy(DB::raw("EXTRACT(MONTH FROM pagos.fecha_pago)"))
             ->get()
@@ -410,10 +416,14 @@ class DashboardController extends Controller
 
     private function getDistribucionData($idEmpresa)
     {
+        //  CAMBIADO: whereYear -> whereBetween
+        $inicioAnioActual = now()->startOfYear();
+        $finAnioActual    = now()->endOfYear();
+
         $categorias = DB::table('prendas')
             ->join('empeno', 'empeno.id_prenda', '=', 'prendas.id_prenda')
             ->where('empeno.id_empresa', $idEmpresa)
-            ->whereYear('empeno.fecha_empeno', date('Y'))
+            ->whereBetween('empeno.fecha_empeno', [$inicioAnioActual, $finAnioActual])
             ->select('prendas.tipo as categoria', DB::raw('COUNT(empeno.id_empeno) as total'))
             ->groupBy('prendas.tipo')
             ->get();
