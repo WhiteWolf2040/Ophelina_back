@@ -342,23 +342,33 @@ class DashboardController extends Controller
     private function getMorosidadData($idEmpresa)
     {
         $morosos = DB::select("
-            SELECT 
-                CONCAT(c.nombre, ' ', c.apellido) as nombre,
-                COALESCE(SUM(e.monto_prestado), 0) as total_prestado,
-                COALESCE(SUM(a.monto_total - COALESCE(a.monto_pagado, 0)), 0) as deuda,
-                COUNT(DISTINCT a.id_amortizacion) as pagos_atrasados,
-                MIN(a.fecha_pago_programado) as fecha_mas_antigua,
-                MAX(p.fecha_pago) as ultimo_pago_real
-            FROM amortizacion a
-            INNER JOIN empeno e ON e.id_empeno = a.id_empeno
-            INNER JOIN clientes c ON c.id_cliente = e.id_cliente
-            LEFT JOIN pagos p ON p.id_empeno = e.id_empeno
-            WHERE a.estado = 'pendiente'
-            AND a.fecha_pago_programado < NOW()
-            AND e.id_empresa = ?
+            SELECT
+                CONCAT(c.nombre, ' ', c.apellido) AS nombre,
+                SUM(x.monto_prestado) AS total_prestado,
+                SUM(x.deuda) AS deuda,
+                SUM(x.cuotas_atrasadas) AS pagos_atrasados,
+                MIN(x.fecha_mas_antigua) AS fecha_mas_antigua,
+                MAX(x.ultimo_pago) AS ultimo_pago_real
+            FROM (
+                SELECT
+                    e.id_empeno,
+                    e.id_cliente,
+                    e.monto_prestado,
+                    SUM(a.monto_total - COALESCE(a.monto_pagado, 0)) AS deuda,
+                    COUNT(a.id_amortizacion) AS cuotas_atrasadas,
+                    MIN(a.fecha_pago_programado) AS fecha_mas_antigua,
+                    (SELECT MAX(p.fecha_pago) FROM pagos p WHERE p.id_empeno = e.id_empeno) AS ultimo_pago
+                FROM amortizacion a
+                INNER JOIN empeno e ON e.id_empeno = a.id_empeno
+                WHERE a.estado = 'pendiente'
+                AND a.fecha_pago_programado < NOW()
+                AND e.id_empresa = ?
+                GROUP BY e.id_empeno, e.id_cliente, e.monto_prestado
+            ) x
+            INNER JOIN clientes c ON c.id_cliente = x.id_cliente
             GROUP BY c.id_cliente, c.nombre, c.apellido
-            HAVING COALESCE(SUM(a.monto_total - COALESCE(a.monto_pagado, 0)), 0) > 0
-            ORDER BY COALESCE(SUM(a.monto_total - COALESCE(a.monto_pagado, 0)), 0) DESC
+            HAVING SUM(x.deuda) > 0
+            ORDER BY SUM(x.deuda) DESC
             LIMIT 10
         ", [$idEmpresa]);
 
@@ -383,7 +393,7 @@ class DashboardController extends Controller
             if ($item->fecha_mas_antigua) {
                 try {
                     $fechaVencimiento = new \Carbon\Carbon($item->fecha_mas_antigua);
-                    $diasMora = $fechaVencimiento->diffInDays(now());
+                    $diasMora = (int) $fechaVencimiento->diffInDays(now());
                 } catch (\Exception $e) {
                     $diasMora = 0;
                 }

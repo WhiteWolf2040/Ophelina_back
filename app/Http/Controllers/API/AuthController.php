@@ -186,15 +186,24 @@ class AuthController extends Controller
             'precio_oro_gramo' => 0,
         ]);
             // 2. Crear el usuario admin de esa empresa — rol fijo, NUNCA desde el request
-            $usuario = Usuario::create([
-                'id_empresa' => $empresa->id_empresa,
-                'id_rol' => 1, //  pon aquí el id_rol real de "Administrador/Dueño"
-                'nombre' => trim($request->nombre . ' ' . $request->apellido),
-                'correo' => $request->correo,
-                'contrasena' => bcrypt($request->password),
-                'telefono' => $request->telefono,
-                'activo' => 1,
-            ]);
+       $empresa = Empresa::create([
+            'nombre' => $request->negocio_nombre,
+            'email' => $request->correo,
+            'telefono' => $request->telefono,
+            'rfc' => strtoupper($request->rfc),
+            'direccion' => $request->direccion,
+            'ciudad' => $request->ciudad,
+            'estado' => $request->estado,
+            'codigo_postal' => $request->codigo_postal,
+            'colonia' => $request->colonia,
+            'activo' => 1,
+            'plan_activo' => 1,                          //  CAMBIADO de 0 a 1
+            'id_plan' => 1,
+            'fecha_registro' => now(),
+            'fecha_inicio_plan' => now(),                 //  NUEVO
+            'fecha_fin_plan' => now()->addDays(10),        //  NUEVO: 10 días de prueba
+            'precio_oro_gramo' => 0,
+        ]);
 
             $token = $usuario->createToken('auth_token')->plainTextToken;
 

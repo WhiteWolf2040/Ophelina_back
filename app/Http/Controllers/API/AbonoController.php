@@ -13,7 +13,7 @@ use Stripe\StripeClient;
 class AbonoController extends Controller
 {
     /**
-     * ✅ NUEVO: determina si el empeño puede refrendar ahora mismo.
+     *  NUEVO: determina si el empeño puede refrendar ahora mismo.
      * El cliente puede refrendar mientras no haya pagado el plazo completo.
      */
     private function refrendoEsElegible(Empeno $empeno): array
