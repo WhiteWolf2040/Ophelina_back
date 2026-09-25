@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -13,20 +14,31 @@ class DashboardController extends Controller
     // ====================================
     // Junta dashboard + morosidad + distribución + amortizaciones
     // en UNA sola petición para reducir el número de round-trips.
+    //
+    // FIX (timeout / carga lenta): todo el payload se cachea 90s por
+    // empresa. Esto reduce drásticamente el tiempo de respuesta en
+    // cargas repetidas y, de paso, si el frontend llega a disparar dos
+    // peticiones casi simultáneas (por ejemplo por un doble montaje en
+    // React), la segunda lee de caché en vez de volver a golpear la
+    // base de datos con las mismas 4 consultas pesadas.
     public function completo(Request $request)
     {
         try {
             $user = $request->user();
             $idEmpresa = $user->id_empresa;
 
-            return response()->json([
-                "success" => true,
-                "data" => [
+            $data = Cache::remember("dashboard_completo_{$idEmpresa}", 90, function () use ($idEmpresa) {
+                return [
                     "dashboard" => $this->getDashboardData($idEmpresa),
                     "morosidad" => $this->getMorosidadData($idEmpresa),
                     "distribucion" => $this->getDistribucionData($idEmpresa),
                     "amortizaciones" => $this->getAmortizacionesData($idEmpresa),
-                ]
+                ];
+            });
+
+            return response()->json([
+                "success" => true,
+                "data" => $data
             ]);
         } catch (\Exception $e) {
             \Log::error('Error en dashboard completo: ' . $e->getMessage());
@@ -193,7 +205,7 @@ class DashboardController extends Controller
             ->count();
 
         // Precio oro (cacheado 5 min — no cambia segundo a segundo)
-        $precioOro = \Cache::remember('precio_oro_actual', 300, function () {
+        $precioOro = Cache::remember('precio_oro_actual', 300, function () {
             return DB::table('precio_oro')
                 ->orderBy('fecha_actualizacion', 'desc')
                 ->first();

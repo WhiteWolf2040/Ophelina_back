@@ -45,7 +45,7 @@ class AdminApartadosController extends Controller
             }
 
             $apartados = $query
-                // ✅ AMPLIADO: ahora también traemos precio/descuento/id_prenda,
+                //  AMPLIADO: ahora también traemos precio/descuento/id_prenda,
                 // necesarios para calcular el monto pendiente y para SCRUM-358
                 ->with([
                     'producto:id_producto,nombre,id_empresa,precio,descuento,id_prenda',

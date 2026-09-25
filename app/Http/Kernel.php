@@ -30,7 +30,7 @@ class Kernel extends HttpKernel
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             
-            // ✅ CORS DE LARAVEL (opcional, ya está en global)
+            //  CORS DE LARAVEL (opcional, ya está en global)
             // \Illuminate\Http\Middleware\HandleCors::class,
         ],
     ];
@@ -45,7 +45,7 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         
-        // ✅ TUS MIDDLEWARES PERSONALIZADOS (si los tienes)
+        //  TUS MIDDLEWARES PERSONALIZADOS (si los tienes)
         // 'check.permission' => \App\Http\Middleware\CheckPermission::class,
         // 'check.plan' => \App\Http\Middleware\CheckPlanModule::class,
     ];
