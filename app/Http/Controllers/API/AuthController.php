@@ -151,70 +151,90 @@ class AuthController extends Controller
     ===============================
     */
     public function register(Request $request)
-    {
-        $request->validate([
-        'nombre' => 'required|string|max:100',
-        'apellido' => 'nullable|string|max:100',
-        'correo' => 'required|email|unique:usuario,correo',
-        'password' => 'required|string|min:6',
-        'telefono' => 'nullable|string|max:20',
+{
+    $request->validate([
+        'nombre'         => 'required|string|max:100',
+        'apellido'       => 'nullable|string|max:100',
+        'correo'         => 'required|email|unique:usuario,correo',
+        'password'       => 'required|string|min:6',
+        'telefono'       => 'nullable|string|max:20',
         'negocio_nombre' => 'required|string|max:255',
-        'rfc' => 'required|string|min:12|max:13|unique:empresa,rfc|regex:/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/i',
-        'codigo_postal' => 'nullable|string|max:10',
-        'ciudad' => 'nullable|string|max:100',
-        'estado' => 'nullable|string|max:100',
-        'direccion' => 'nullable|string|max:255',
-        'colonia' => 'nullable|string|max:100', // Agregar colonia
+        'rfc'            => 'required|string|min:12|max:13|unique:empresa,rfc|regex:/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/i',
+        'codigo_postal'  => 'nullable|string|max:10',
+        'ciudad'         => 'nullable|string|max:100',
+        'estado'         => 'nullable|string|max:100',
+        'direccion'      => 'nullable|string|max:255',
+        'colonia'        => 'nullable|string|max:100',
     ]);
 
-    
+    try {
         return DB::transaction(function () use ($request) {
-        $empresa = Empresa::create([
-            'nombre' => $request->negocio_nombre,
-            'email' => $request->correo,
-            'telefono' => $request->telefono,
-            'rfc' => strtoupper($request->rfc),
-            'direccion' => $request->direccion,
-            'ciudad' => $request->ciudad,
-            'estado' => $request->estado,
-            'codigo_postal' => $request->codigo_postal,
-            'colonia' => $request->colonia, // Guardar colonia
-            'activo' => 1,
-            'plan_activo' => 0,
-            'id_plan' => 1,
-            'fecha_registro' => now(),
-            'precio_oro_gramo' => 0,
-        ]);
-            // 2. Crear el usuario admin de esa empresa — rol fijo, NUNCA desde el request
-       $empresa = Empresa::create([
-            'nombre' => $request->negocio_nombre,
-            'email' => $request->correo,
-            'telefono' => $request->telefono,
-            'rfc' => strtoupper($request->rfc),
-            'direccion' => $request->direccion,
-            'ciudad' => $request->ciudad,
-            'estado' => $request->estado,
-            'codigo_postal' => $request->codigo_postal,
-            'colonia' => $request->colonia,
-            'activo' => 1,
-            'plan_activo' => 1,                          //  CAMBIADO de 0 a 1
-            'id_plan' => 1,
-            'fecha_registro' => now(),
-            'fecha_inicio_plan' => now(),                 //  NUEVO
-            'fecha_fin_plan' => now()->addDays(10),        //  NUEVO: 10 días de prueba
-            'precio_oro_gramo' => 0,
-        ]);
 
+            // 1. Crear empresa (UNA SOLA VEZ)
+            $empresa = Empresa::create([
+                'nombre'            => $request->negocio_nombre,
+                'email'             => $request->correo,
+                'telefono'          => $request->telefono,
+                'rfc'               => strtoupper($request->rfc),
+                'direccion'         => $request->direccion,
+                'ciudad'            => $request->ciudad,
+                'estado'            => $request->estado,
+                'codigo_postal'     => $request->codigo_postal,
+                'colonia'           => $request->colonia,
+                'activo'            => 1,
+                'plan_activo'       => 1,
+                'id_plan'           => 1,
+                'fecha_registro'    => now(),
+                'fecha_inicio_plan' => now(),
+                'fecha_fin_plan'    => now()->addDays(10),
+                'precio_oro_gramo'  => 0,
+            ]);
+
+            // 2. Crear usuario admin (¡AQUÍ ESTABA EL BUG!)
+            $usuario = Usuario::create([
+                'nombre'     => $request->nombre,
+                'apellido'   => $request->apellido,
+                'correo'     => $request->correo,
+                'contrasena' => Hash::make($request->password),
+                'telefono'   => $request->telefono,
+                'id_empresa' => $empresa->id_empresa,
+                'id_rol'     => 1,        // rol admin
+                'activo'     => 1,
+            ]);
+
+            // 3. Generar token
             $token = $usuario->createToken('auth_token')->plainTextToken;
 
             return response()->json([
                 'success' => true,
-                'token' => $token,
+                'token'   => $token,
                 'usuario' => $usuario,
                 'empresa' => $empresa,
             ], 201);
         });
+
+    } catch (\Illuminate\Database\QueryException $e) {
+        // Errores de BD (unique, FK, etc.)
+        if ($e->getCode() === '23505' || $e->getCode() === '23000') {
+            return response()->json([
+                'success' => false,
+                'message' => 'El RFC o correo ya están registrados.',
+                'error'   => $e->getMessage(),
+            ], 409);
+        }
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al registrar.',
+            'error'   => $e->getMessage(),
+        ], 500);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error inesperado.',
+            'error'   => $e->getMessage(),
+        ], 500);
     }
+}
 
     /*
     ===============================
