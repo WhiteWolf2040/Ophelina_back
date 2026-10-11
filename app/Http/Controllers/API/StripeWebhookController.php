@@ -105,7 +105,9 @@ class StripeWebhookController extends Controller
     if ($event->type === 'invoice.paid') {
     try {
         $invoice = $event->data->object;
-        $subscriptionId = $invoice->subscription ?? null;
+       $subscriptionId = $invoice->subscription
+        ?? $invoice->parent->subscription_details->subscription
+        ?? null;
 
         if ($subscriptionId) {
             $empresa = Empresa::where('stripe_subscription_id', $subscriptionId)->first();
@@ -139,7 +141,9 @@ class StripeWebhookController extends Controller
         // ==================== NUEVO: PAGO DE SUSCRIPCIÓN FALLIDO ====================
         if ($event->type === 'invoice.payment_failed') {
             $invoice = $event->data->object;
-            $subscriptionId = $invoice->subscription ?? null;
+           $subscriptionId = $invoice->subscription
+            ?? $invoice->parent->subscription_details->subscription
+            ?? null;
 
             if ($subscriptionId) {
                 $empresa = Empresa::where('stripe_subscription_id', $subscriptionId)->first();
