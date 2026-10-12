@@ -9,6 +9,7 @@ use App\Models\Pago;
 use App\Models\Empeno;
 use App\Models\Prenda;
 use App\Models\Empresa;
+use App\Services\SuscripcionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -17,6 +18,10 @@ use Stripe\Exception\SignatureVerificationException;
 
 class StripeWebhookController extends Controller
 {
+    public function __construct(private SuscripcionService $suscripciones)
+    {
+    }
+
     public function handle(Request $request)
     {
         $payload = $request->getContent();
@@ -33,52 +38,42 @@ class StripeWebhookController extends Controller
             return response()->json(['error' => 'Payload inválido'], 400);
         }
 
+        // ==================== PAGO DE CHECKOUT COMPLETADO ====================
         if ($event->type === 'checkout.session.completed') {
-             $session = $event->data->object;
-              $idApartado = $session->metadata->id_apartado ?? null;        // ← faltaba
-             $idAmortizacion = $session->metadata->id_amortizacion ?? null; // ← faltaba
+            $session = $event->data->object;
+            $idApartado = $session->metadata->id_apartado ?? null;
+            $idAmortizacion = $session->metadata->id_amortizacion ?? null;
 
-    // ==================== NUEVO: vincular suscripción a la empresa ====================
-    if ($session->mode === 'subscription') {
-        $empresaId = $session->metadata->empresa_id ?? null;
-        $planId = $session->metadata->plan_id ?? null;
-
-        if ($empresaId && $empresaId !== 'nueva') {
-            $empresa = Empresa::find($empresaId);
-            if ($empresa) {
-                $empresa->update([
-                    'id_plan' => $planId ?? $empresa->id_plan,
-                    'plan_activo' => 1,
-                    'stripe_customer_id' => $session->customer,
-                    'stripe_subscription_id' => $session->subscription,
-                    'fecha_inicio_plan' => now(),
-                ]);
-                Log::info('✅ Suscripción vinculada vía webhook: empresa_id=' . $empresa->id_empresa);
-            } else {
-                Log::warning('⚠️ checkout.session.completed: empresa_id no encontrado: ' . $empresaId);
+            // Alta de suscripción (plan SaaS)
+            if ($session->mode === 'subscription') {
+                try {
+                    $this->vincularDesdeCheckout($session);
+                } catch (\Throwable $e) {
+                    Log::error('❌ Error vinculando suscripción: ' . $e->getMessage());
+                    // 500 => Stripe reintenta el aviso más tarde
+                    return response()->json(['error' => 'Error procesando suscripción'], 500);
+                }
             }
-        }
-    }
 
-        if ($idApartado) {
-            $apartado = Apartado::find($idApartado);
-            if ($apartado) {
-                $apartado->update(['stripe_payment_status' => 'pagado']);
-                Log::info(' Apartado confirmado como pagado: id_apartado=' . $idApartado);
+            if ($idApartado) {
+                $apartado = Apartado::find($idApartado);
+                if ($apartado) {
+                    $apartado->update(['stripe_payment_status' => 'pagado']);
+                    Log::info('Apartado confirmado como pagado: id_apartado=' . $idApartado);
+                }
             }
-        }
-    
 
             if ($idAmortizacion) {
                 $this->registrarAbono($session, $idAmortizacion);
             }
         }
 
+        // ==================== SESIÓN EXPIRADA (APARTADOS) ====================
         if ($event->type === 'checkout.session.expired') {
             $session = $event->data->object;
             $idApartado = $session->metadata->id_apartado ?? null;
 
-         if ($idApartado) {
+            if ($idApartado) {
                 $apartado = Apartado::find($idApartado);
                 if ($apartado) {
                     $apartado->update([
@@ -87,7 +82,6 @@ class StripeWebhookController extends Controller
                     ]);
                     $producto = $apartado->producto;
                     if ($producto) {
-                      
                         $producto->visible = 1;
                         $producto->save();
                         if ($producto->id_prenda) {
@@ -101,63 +95,69 @@ class StripeWebhookController extends Controller
             }
         }
 
-        // ==================== NUEVO: RENOVACIÓN DE SUSCRIPCIÓN ====================
-    if ($event->type === 'invoice.paid') {
-    try {
-        $invoice = $event->data->object;
-       $subscriptionId = $invoice->subscription
-        ?? $invoice->parent->subscription_details->subscription
-        ?? null;
+        // ==================== RENOVACIÓN AUTOMÁTICA (cobro mensual exitoso) ====================
+        if ($event->type === 'invoice.paid') {
+            try {
+                $invoice = $event->data->object;
+                $subscriptionId = $this->subscriptionIdDeInvoice($invoice);
 
-        if ($subscriptionId) {
-            $empresa = Empresa::where('stripe_subscription_id', $subscriptionId)->first();
+                if ($subscriptionId) {
+                    $subscription = $this->suscripciones->obtener($subscriptionId);
+                    $periodoFin = $this->suscripciones->periodoFin($subscription)
+                        ?? (isset($invoice->lines->data[0]->period->end)
+                            ? \Carbon\Carbon::createFromTimestamp($invoice->lines->data[0]->period->end)
+                            : null);
 
-            if ($empresa) {
-                \Stripe\Stripe::setApiKey(env('STRIPE_SECRET'));
-                $subscription = \Stripe\Subscription::retrieve($subscriptionId);
+                    $empresa = Empresa::where('stripe_subscription_id', $subscriptionId)->first();
 
-                // Nuevo modelo: el periodo vive en el subscription item, no en la suscripción
-                $periodoFin = $subscription->items->data[0]->current_period_end
-                    ?? $invoice->lines->data[0]->period->end
-                    ?? null;
+                    // Plan B: la empresa nunca quedó ligada (ej. el usuario cerró la pestaña
+                    // antes de volver de Stripe). Se busca por correo y se liga ahora.
+                    if (!$empresa) {
+                        $empresa = $this->buscarEmpresaPorCorreo($invoice->customer_email ?? null);
+                        if ($empresa) {
+                            $this->suscripciones->vincular(
+                                $empresa,
+                                $subscription->metadata->plan_id ?? null,
+                                $invoice->customer ?? null,
+                                $subscriptionId,
+                                $periodoFin
+                            );
+                            Log::info('✅ Suscripción ligada en invoice.paid por correo: empresa_id=' . $empresa->id_empresa);
+                            return response()->json(['success' => true]);
+                        }
+                    }
 
-                $empresa->update([
-                    'plan_activo' => 1,
-                    'fecha_fin_plan' => $periodoFin
-                        ? \Carbon\Carbon::createFromTimestamp($periodoFin)
-                        : now()->addMonth(),
-                ]);
-
-                Log::info('✅ Renovación de suscripción registrada: empresa_id=' . $empresa->id_empresa);
-            } else {
-                Log::warning('⚠️ invoice.paid sin empresa asociada: subscription=' . $subscriptionId);
+                    if ($empresa) {
+                        $this->suscripciones->renovar($empresa, $periodoFin);
+                        Log::info('✅ Renovación registrada: empresa_id=' . $empresa->id_empresa);
+                    } else {
+                        Log::warning('⚠️ invoice.paid sin empresa asociada: subscription=' . $subscriptionId);
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::error('❌ Error procesando invoice.paid: ' . $e->getMessage());
+                // 500 => Stripe reintenta; así una renovación no se pierde
+                return response()->json(['error' => 'Error procesando renovación'], 500);
             }
         }
-    } catch (\Throwable $e) {
-        Log::error('❌ Error procesando invoice.paid: ' . $e->getMessage());
-    }
-}
 
-        // ==================== NUEVO: PAGO DE SUSCRIPCIÓN FALLIDO ====================
+        // ==================== COBRO MENSUAL FALLIDO ====================
+        // Stripe reintenta el cobro varios días. NO se desactiva aquí:
+        // si todos los reintentos fallan, Stripe cancela y llega customer.subscription.deleted.
+        // Mientras tanto el acceso lo controla fecha_fin_plan (+ días de gracia).
         if ($event->type === 'invoice.payment_failed') {
             $invoice = $event->data->object;
-           $subscriptionId = $invoice->subscription
-            ?? $invoice->parent->subscription_details->subscription
-            ?? null;
+            $subscriptionId = $this->subscriptionIdDeInvoice($invoice);
 
             if ($subscriptionId) {
                 $empresa = Empresa::where('stripe_subscription_id', $subscriptionId)->first();
-
-                if ($empresa) {
-                    $empresa->update(['plan_activo' => 0]);
-                    Log::warning('⚠️ Pago de suscripción fallido: empresa_id=' . $empresa->id_empresa);
-                } else {
-                    Log::warning('⚠️ invoice.payment_failed sin empresa asociada: subscription=' . $subscriptionId);
-                }
+                Log::warning('⚠️ Cobro de suscripción fallido (Stripe reintentará): empresa_id='
+                    . ($empresa->id_empresa ?? 'desconocida') . ' intento=' . ($invoice->attempt_count ?? '?'));
+                // Aquí puedes mandar un correo/notificación a la empresa para que actualice su tarjeta.
             }
         }
 
-        // ==================== NUEVO: SUSCRIPCIÓN CANCELADA ====================
+        // ==================== SUSCRIPCIÓN CANCELADA ====================
         if ($event->type === 'customer.subscription.deleted') {
             $subscription = $event->data->object;
             $empresa = Empresa::where('stripe_subscription_id', $subscription->id)->first();
@@ -173,6 +173,61 @@ class StripeWebhookController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    // ------------------------------------------------------------------
+    // Helpers de suscripción
+    // ------------------------------------------------------------------
+
+    private function subscriptionIdDeInvoice($invoice): ?string
+    {
+        return $invoice->subscription
+            ?? $invoice->parent->subscription_details->subscription
+            ?? null;
+    }
+
+    private function buscarEmpresaPorCorreo(?string $correo): ?Empresa
+    {
+        return $correo ? Empresa::where('email', $correo)->first() : null;
+    }
+
+    private function vincularDesdeCheckout($session): void
+    {
+        $empresaId = $session->metadata->empresa_id ?? null;
+        $empresa = ($empresaId && $empresaId !== 'nueva') ? Empresa::find($empresaId) : null;
+
+        // Si no vino empresa_id ("nueva"), se intenta por correo
+        if (!$empresa) {
+            $correo = $session->customer_details->email ?? $session->customer_email ?? null;
+            $empresa = $this->buscarEmpresaPorCorreo($correo);
+        }
+
+        if (!$empresa) {
+            Log::warning('⚠️ checkout.session.completed: no se encontró empresa (empresa_id=' . ($empresaId ?? 'null')
+                . '). Se ligará en verifyPayment o en la primera invoice.paid.');
+            return;
+        }
+
+        $subscriptionId = is_string($session->subscription) ? $session->subscription : ($session->subscription->id ?? null);
+        if (!$subscriptionId) {
+            return;
+        }
+
+        $subscription = $this->suscripciones->obtener($subscriptionId);
+
+        $this->suscripciones->vincular(
+            $empresa,
+            $session->metadata->plan_id ?? null,
+            $session->customer,
+            $subscriptionId,
+            $this->suscripciones->periodoFin($subscription)
+        );
+
+        Log::info('✅ Suscripción vinculada vía webhook: empresa_id=' . $empresa->id_empresa);
+    }
+
+    // ------------------------------------------------------------------
+    // Abonos y refrendos de empeños (sin cambios)
+    // ------------------------------------------------------------------
 
     private function registrarAbono($session, $idAmortizacion)
     {

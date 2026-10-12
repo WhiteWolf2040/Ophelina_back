@@ -8,6 +8,7 @@ use App\Models\Usuario;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Empresa;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class AuthController extends Controller
 {
@@ -120,6 +121,38 @@ class AuthController extends Controller
             $planNombre = 'Premium';
         }
 
+        // ============================================
+        // SUSCRIPCIÓN: fechas, días restantes y estado
+        // ============================================
+        $empresa = $usuario->empresa;
+
+        $fechaInicio = ($empresa && $empresa->fecha_inicio_plan)
+            ? Carbon::parse($empresa->fecha_inicio_plan)->startOfDay()
+            : null;
+
+        $fechaFin = ($empresa && $empresa->fecha_fin_plan)
+            ? Carbon::parse($empresa->fecha_fin_plan)->startOfDay()
+            : null;
+
+        // Positivo = días que faltan, 0 = vence hoy, negativo = ya venció
+        $diasRestantes = $fechaFin
+            ? (int) now()->startOfDay()->diffInDays($fechaFin, false)
+            : null;
+
+        if ($diasRestantes === null) {
+            $estadoSuscripcion = 'sin_plan';
+        } elseif ($diasRestantes < 0) {
+            $estadoSuscripcion = 'vencida';
+        } elseif ($diasRestantes <= 7) {
+            $estadoSuscripcion = 'por_vencer';
+        } else {
+            $estadoSuscripcion = 'activa';
+        }
+
+        $planPrecio = ($empresa && $empresa->plan)
+            ? (float) $empresa->plan->precio_mensual
+            : 0;
+
         return response()->json([
             "success" => true,
             "data" => [
@@ -135,11 +168,21 @@ class AuthController extends Controller
                     "plan_nombre" => $planNombre,
                     "modulos" => $modulos,
                     "permisos" => $permisos,
-                    "empresa" => $usuario->empresa ? [
-                        "id" => $usuario->empresa->id_empresa,
-                        "nombre" => $usuario->empresa->nombre,
+                    "empresa" => $empresa ? [
+                        "id" => $empresa->id_empresa,
+                        "nombre" => $empresa->nombre,
                         "plan" => $planNombre
-                    ] : null
+                    ] : null,
+                    "suscripcion" => [
+                        "plan_id"        => $planId,
+                        "plan_nombre"    => $planNombre,
+                        "precio_mensual" => $planPrecio,
+                        "plan_activo"    => $empresa->plan_activo ?? null,
+                        "fecha_inicio"   => $fechaInicio ? $fechaInicio->toDateString() : null,
+                        "fecha_fin"      => $fechaFin ? $fechaFin->toDateString() : null,
+                        "dias_restantes" => $diasRestantes,
+                        "estado"         => $estadoSuscripcion,
+                    ],
                 ]
             ]
         ]);

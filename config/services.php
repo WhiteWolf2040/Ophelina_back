@@ -50,6 +50,8 @@ return [
         'secret' => env('STRIPE_SECRET'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
         'anticipo_porcentaje' => env('APARTADO_ANTICIPO_PORCENTAJE', 50),
+        'success_url' => env('STRIPE_SUCCESS_URL', 'https://ophelina-front.vercel.app/home?session_id={CHECKOUT_SESSION_ID}&payment=success'),
+    'cancel_url' => env('STRIPE_CANCEL_URL', 'https://ophelina-front.vercel.app/planes')
     ],
 
 ];
