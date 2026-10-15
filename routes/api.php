@@ -34,6 +34,26 @@ use App\Http\Controllers\API\TicketController;
 |--------------------------------------------------------------------------
 */
 
+use App\Mail\RenovacionSuscripcion;
+use App\Models\Empresa;
+use Illuminate\Support\Facades\Mail;
+
+Route::get('/test-correo-renovacion/xk29fj38', function () {
+    $empresa = Empresa::first();
+
+    Mail::to(config('mail.destino_pruebas') ?: $empresa->email)->send(new RenovacionSuscripcion(
+        empresa: $empresa,
+        planNombre: 'Premium',
+        monto: 999.00,
+        moneda: 'mxn',
+        proximoCobro: '15 de noviembre de 2026',
+        facturaUrl: 'https://stripe.com',
+        numeroFactura: 'TEST-0001',
+    ));
+
+    return 'Enviado';
+});
+
 Route::get('/ping', function () {
     return response()->json(['ok' => true, 'timestamp' => now()]);
 });
