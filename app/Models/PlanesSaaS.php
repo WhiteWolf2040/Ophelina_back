@@ -1,5 +1,4 @@
 <?php
-// app/Models/PlanesSaaS.php
 
 namespace App\Models;
 
@@ -24,13 +23,13 @@ class PlanesSaaS extends Model
     ];
 
     protected $casts = [
-        'precio_mensual' => 'decimal:2',
-        'max_empleados' => 'integer',
-        'max_clientes' => 'integer',
-        'max_prendas' => 'integer',
-        'max_empenos_activos' => 'integer',
-        'dias_prueba' => 'integer',
-        'activo' => 'boolean'
+        'precio_mensual'     => 'decimal:2',
+        'max_empleados'      => 'integer',
+        'max_clientes'       => 'integer',
+        'max_prendas'        => 'integer',
+        'max_empenos_activos'=> 'integer',
+        'dias_prueba'        => 'integer',
+        'activo'             => 'boolean'
     ];
 
     // Relación con empresas

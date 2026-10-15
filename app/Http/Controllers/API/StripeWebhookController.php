@@ -15,6 +15,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Stripe\Webhook;
 use Stripe\Exception\SignatureVerificationException;
+use App\Mail\RenovacionSuscripcion;
+use Illuminate\Support\Facades\Mail; 
+use Illuminate\Support\Facades\Cache;
 
 class StripeWebhookController extends Controller
 {
@@ -127,11 +130,14 @@ class StripeWebhookController extends Controller
                         }
                     }
 
-                    if ($empresa) {
+                  if ($empresa) {
                         $this->suscripciones->renovar($empresa, $periodoFin);
                         Log::info('✅ Renovación registrada: empresa_id=' . $empresa->id_empresa);
-                    } else {
-                        Log::warning('⚠️ invoice.paid sin empresa asociada: subscription=' . $subscriptionId);
+
+                        // Solo en renovaciones (no en el primer cobro, que ya muestra Stripe)
+                        if (($invoice->billing_reason ?? null) === 'subscription_cycle') {
+                            $this->notificarRenovacion($empresa, $invoice, $periodoFin);
+                        }
                     }
                 }
             } catch (\Throwable $e) {
@@ -189,6 +195,41 @@ class StripeWebhookController extends Controller
     {
         return $correo ? Empresa::where('email', $correo)->first() : null;
     }
+
+     private function notificarRenovacion(Empresa $empresa, $invoice, ?\Carbon\Carbon $periodoFin): void
+    {
+        try {
+            // Stripe puede reenviar el mismo evento: evita correos duplicados
+            if (!Cache::add('mail_renovacion_' . $invoice->id, true, now()->addDays(2))) {
+                return;
+            }
+
+            // En pruebas, TODO se manda a tu correo real (ver .env abajo)
+            $destino = config('mail.destino_pruebas') ?: $empresa->email;
+            if (!$destino) {
+                return;
+            }
+
+            $empresa->loadMissing('plan');
+
+            Mail::to($destino)->send(new RenovacionSuscripcion(
+                empresa: $empresa,
+                planNombre: $empresa->plan->nombre ?? 'Premium',
+                monto: ($invoice->amount_paid ?? 0) / 100,
+                moneda: $invoice->currency ?? 'mxn',
+                proximoCobro: $periodoFin?->locale('es')->translatedFormat('d \d\e F \d\e Y'),
+                facturaUrl: $invoice->hosted_invoice_url ?? null,
+                numeroFactura: $invoice->number ?? null,
+            ));
+
+            Log::info('📧 Correo de renovación enviado a ' . $destino . ' (empresa_id=' . $empresa->id_empresa . ')');
+        } catch (\Throwable $e) {
+            // Un fallo de correo NO debe devolver 500 (Stripe reintentaría un evento ya procesado)
+            Log::error('❌ No se pudo enviar correo de renovación: ' . $e->getMessage());
+        }
+    }
+
+
 
     private function vincularDesdeCheckout($session): void
     {
