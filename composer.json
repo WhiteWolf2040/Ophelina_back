@@ -9,6 +9,7 @@
         "php": "^8.2",
         "cloudinary-labs/cloudinary-laravel": "^3.0",
         "fakerphp/faker": "^1.24",
+        "firebase/php-jwt": "^7.2",
         "guzzlehttp/guzzle": "^7.10",
         "izzuddinmohsin/laravel-whatsapp": "^1.0",
         "laravel/framework": "^12.0",

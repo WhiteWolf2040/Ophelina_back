@@ -40,6 +40,11 @@ return [
         ],
     ],
 
+    'metabase' => [
+    'secret'       => env('METABASE_SECRET_KEY'),
+    'dashboard_id' => env('METABASE_DASHBOARD_ID', 2),
+],
+
     /*
     |--------------------------------------------------------------------------
     | STRIPE CONFIGURATION

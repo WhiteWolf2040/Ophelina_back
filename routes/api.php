@@ -28,6 +28,8 @@ use App\Http\Controllers\API\OpheliaTiendaController;
 use App\Http\Controllers\API\AbonoController;
 use App\Http\Controllers\API\TicketController;
 
+use App\Http\Controllers\API\MetabaseController;
+
 /*
 |--------------------------------------------------------------------------
 | RUTAS PÚBLICAS (No requieren autenticación)
@@ -155,6 +157,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::put('/user', [AuthController::class, 'updateProfile']); // ✅ AGREGADO
     Route::post('/logout', [AuthController::class, 'logout']);
+
+
+    Route::get('/metabase/token', [MetabaseController::class, 'token']);
 
     /*
     ==========================
