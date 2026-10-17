@@ -41,7 +41,7 @@ use App\Models\Empresa;
 use Illuminate\Support\Facades\Mail;
 
 Route::get('/test-correo-renovacion/xk29fj38', function () {
-    $empresa = Empresa::first();
+    $empresa = Empresa::findOrFail(1);
 
     Mail::to(config('mail.destino_pruebas') ?: $empresa->email)->send(new RenovacionSuscripcion(
         empresa: $empresa,

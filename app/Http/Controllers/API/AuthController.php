@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use App\Models\Empresa;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Services\SuscripcionService;
 
 class AuthController extends Controller
 {
@@ -129,25 +130,14 @@ class AuthController extends Controller
         $fechaInicio = ($empresa && $empresa->fecha_inicio_plan)
             ? Carbon::parse($empresa->fecha_inicio_plan)->startOfDay()
             : null;
+            $info = app(SuscripcionService::class)->estado(
+                $empresa->fecha_fin_plan ?? null,
+                $empresa->plan_activo ?? false
+            );
 
-        $fechaFin = ($empresa && $empresa->fecha_fin_plan)
-            ? Carbon::parse($empresa->fecha_fin_plan)->startOfDay()
-            : null;
-
-        // Positivo = días que faltan, 0 = vence hoy, negativo = ya venció
-        $diasRestantes = $fechaFin
-            ? (int) now()->startOfDay()->diffInDays($fechaFin, false)
-            : null;
-
-        if ($diasRestantes === null) {
-            $estadoSuscripcion = 'sin_plan';
-        } elseif ($diasRestantes < 0) {
-            $estadoSuscripcion = 'vencida';
-        } elseif ($diasRestantes <= 7) {
-            $estadoSuscripcion = 'por_vencer';
-        } else {
-            $estadoSuscripcion = 'activa';
-        }
+            $fechaFin = $info['fecha_fin'];
+            $diasRestantes = $info['dias_restantes'];
+            $estadoSuscripcion = $info['estado'];
 
         $planPrecio = ($empresa && $empresa->plan)
             ? (float) $empresa->plan->precio_mensual

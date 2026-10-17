@@ -57,32 +57,19 @@ class Empresa extends Model
     }
 
     // Verificar si la suscripción está activa
-    public function tieneSuscripcionActiva()
-    {
-        if (!$this->plan_activo) {
-            return false;
+        public function tieneSuscripcionActiva()
+        {
+            return app(\App\Services\SuscripcionService::class)
+                ->estado($this->fecha_fin_plan, $this->plan_activo)['activo'];
         }
-        
-        if (!$this->fecha_fin_plan) {
-            return false;
-        }
-        
-        return $this->fecha_fin_plan >= now();
-    }
 
     // Obtener días restantes de suscripción
     public function getDiasRestantes()
     {
-        if (!$this->fecha_fin_plan || !$this->plan_activo) {
-            return 0;
-        }
-        
-        $hoy = now();
-        if ($this->fecha_fin_plan < $hoy) {
-            return 0;
-        }
-        
-        return $hoy->diffInDays($this->fecha_fin_plan);
+        $info = app(\App\Services\SuscripcionService::class)
+            ->estado($this->fecha_fin_plan, $this->plan_activo);
+
+        return max(0, $info['dias_restantes'] ?? 0);
     }
 
     // Verificar si tiene acceso a un módulo según su plan

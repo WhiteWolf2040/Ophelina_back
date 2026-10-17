@@ -7,6 +7,8 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Stripe\StripeClient;
 
+
+
 /**
  * Concentra todo lo que se hace con la suscripción de una empresa.
  * Lo usan StripeController (verifyPayment) y StripeWebhookController,
@@ -14,6 +16,10 @@ use Stripe\StripeClient;
  */
 class SuscripcionService
 {
+    public const DIAS_GRACIA = 1;
+    public const DIAS_POR_VENCER = 7;
+
+
     public function cliente(): StripeClient
     {
         return new StripeClient(config('services.stripe.secret'));
@@ -92,4 +98,38 @@ class SuscripcionService
             Log::warning('⚠️ No se pudo cancelar la suscripción anterior ' . $subscriptionId . ': ' . $e->getMessage());
         }
     }
+
+    public function estado($fechaFin, $planActivo): array
+{
+    $planActivo = (bool) $planActivo;
+    $fin = $fechaFin ? Carbon::parse($fechaFin)->startOfDay() : null;
+
+    if ($fin === null) {
+        return [
+            'estado' => $planActivo ? 'activa' : 'sin_plan',
+            'activo' => $planActivo,
+            'dias_restantes' => null,
+            'fecha_fin' => null,
+        ];
+    }
+
+    $dias = (int) now()->startOfDay()->diffInDays($fin, false);
+
+    if (!$planActivo || $dias < -self::DIAS_GRACIA) {
+        $estado = 'vencida';
+    } elseif ($dias < 0) {
+        $estado = 'en_gracia';
+    } elseif ($dias <= self::DIAS_POR_VENCER) {
+        $estado = 'por_vencer';
+    } else {
+        $estado = 'activa';
+    }
+
+    return [
+        'estado' => $estado,
+        'activo' => $estado !== 'vencida',
+        'dias_restantes' => $dias,
+        'fecha_fin' => $fin,
+    ];
+}
 }

@@ -7,7 +7,7 @@
         <tr><td>
           <h2 style="margin:0 0 8px;color:#111;">Ophelina</h2>
           <h3 style="margin:0 0 16px;color:#111;">Tu suscripción se renovó ✅</h3>
-          <p style="color:#444;">Hola, {{ $empresa->nombre }}. Te confirmamos que el cobro mensual se realizó correctamente.</p>
+          <p style="color:#444;">Hola. Te confirmamos que el cobro mensual se realizó correctamente.</p>
 
           <table width="100%" cellpadding="8" cellspacing="0" style="border-top:1px solid #eee;margin:16px 0;color:#333;font-size:14px;">
             <tr><td>Plan</td><td align="right"><strong>{{ $planNombre }}</strong></td></tr>

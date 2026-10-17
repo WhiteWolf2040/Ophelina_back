@@ -15,7 +15,7 @@ class StripeController extends Controller
 {
     // Días extra después de la fecha de fin antes de marcar "vencida".
     // Da tiempo a que Stripe cobre y avise por webhook.
-    private const DIAS_GRACIA = 3;
+    
 
     public function __construct(private SuscripcionService $suscripciones)
     {
@@ -221,31 +221,29 @@ class StripeController extends Controller
                 return response()->json(['activo' => false, 'mensaje' => 'Empresa no encontrada'], 404);
             }
 
-            $hoy = now();
-            $fechaFin = $empresa->fecha_fin_plan ? \Carbon\Carbon::parse($empresa->fecha_fin_plan) : null;
+           $info = $this->suscripciones->estado($empresa->fecha_fin_plan, $empresa->plan_activo == 1);
 
-            if ($fechaFin === null) {
-                $activo = $empresa->plan_activo == 1;
-                $diasRestantes = null;
-                $mensaje = $activo ? 'Suscripción activa (sin fecha de vencimiento)' : 'Suscripción inactiva';
-            } else {
-                // Se da gracia: el cobro de Stripe y su aviso llegan después de la fecha de fin
-                $limite = $fechaFin->copy()->endOfDay()->addDays(self::DIAS_GRACIA);
-                $activo = $empresa->plan_activo == 1 && $limite >= $hoy;
-                $diasRestantes = $activo ? max(0, (int) $hoy->diffInDays($fechaFin, false)) : 0;
-                $mensaje = $activo ? 'Suscripción activa' : 'Suscripción vencida';
-            }
+$mensajes = [
+    'activa' => 'Suscripción activa',
+    'por_vencer' => 'Suscripción por vencer',
+    'en_gracia' => 'Pago pendiente: tu acceso sigue activo unos días más',
+    'vencida' => 'Suscripción vencida',
+    'sin_plan' => 'Suscripción inactiva',
+];
 
-            return response()->json([
-                'activo' => $activo,
-                'fecha_fin_plan' => $empresa->fecha_fin_plan,
-                'plan_id' => $empresa->id_plan,
-                'plan_nombre' => $empresa->plan_nombre ?? 'Sin plan',
-                'dias_restantes' => $diasRestantes,
-                'plan_activo' => $empresa->plan_activo,
-                'mensaje' => $mensaje,
-                'suscripcion_indefinida' => $fechaFin === null,
-            ]);
+return response()->json([
+    'activo' => $info['activo'],
+    'estado' => $info['estado'],
+    'fecha_fin_plan' => $empresa->fecha_fin_plan,
+    'plan_id' => $empresa->id_plan,
+    'plan_nombre' => $empresa->plan_nombre ?? 'Sin plan',
+    'dias_restantes' => $info['dias_restantes'] === null
+        ? null
+        : ($info['activo'] ? max(0, $info['dias_restantes']) : 0),
+    'plan_activo' => $empresa->plan_activo,
+    'mensaje' => $mensajes[$info['estado']] ?? 'Suscripción',
+    'suscripcion_indefinida' => $info['fecha_fin'] === null,
+]);
         } catch (\Exception $e) {
             Log::error('❌ Error en checkSubscription: ' . $e->getMessage());
             return response()->json(['activo' => false, 'mensaje' => 'Error al verificar suscripción'], 500);
