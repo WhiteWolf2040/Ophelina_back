@@ -145,10 +145,11 @@ Route::middleware('auth:sanctum')->group(function () {
     ==========================
     */
     Route::prefix('stripe')->group(function () {
-        Route::post('/verify-payment', [StripeController::class, 'verifyPayment']);
-        Route::get('/check-subscription/{empresaId}', [StripeController::class, 'checkSubscription']);
-    });
-
+    Route::post('/verify-payment', [StripeController::class, 'verifyPayment']);
+    Route::get('/check-subscription/{empresaId}', [StripeController::class, 'checkSubscription']);
+    Route::get('/facturacion', [StripeController::class, 'facturacion']);
+    Route::post('/cambiar-plan', [StripeController::class, 'cambiarPlan']);
+});
     /*
     ==========================
     USUARIO ACTUAL, PERFIL & LOGOUT

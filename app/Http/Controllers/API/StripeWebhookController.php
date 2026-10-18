@@ -110,6 +110,7 @@ class StripeWebhookController extends Controller
                         ?? (isset($invoice->lines->data[0]->period->end)
                             ? \Carbon\Carbon::createFromTimestamp($invoice->lines->data[0]->period->end)
                             : null);
+                    $periodoInicio = $this->suscripciones->periodoInicio($subscription);
 
                     $empresa = Empresa::where('stripe_subscription_id', $subscriptionId)->first();
 
@@ -131,7 +132,7 @@ class StripeWebhookController extends Controller
                     }
 
                   if ($empresa) {
-                        $this->suscripciones->renovar($empresa, $periodoFin);
+                       $this->suscripciones->renovar($empresa, $periodoFin, $periodoInicio);
                         Log::info('✅ Renovación registrada: empresa_id=' . $empresa->id_empresa);
 
                         // Solo en renovaciones (no en el primer cobro, que ya muestra Stripe)
@@ -200,7 +201,7 @@ class StripeWebhookController extends Controller
   private function notificarRenovacion(Empresa $empresa, $invoice, ?\Carbon\Carbon $periodoFin): void
 {
     $clave = 'mail_renovacion_' . $invoice->id;
-    $marcado = false;
+    $marcado = false;   
 
     try {
         // Anti-duplicados (Stripe puede reenviar el evento). Si el caché falla, se envía igual.

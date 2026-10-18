@@ -10,12 +10,112 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Stripe\Checkout\Session;
 use Stripe\Stripe;
+use App\Models\PlanesSaaS;
 
 class StripeController extends Controller
 {
     // Días extra después de la fecha de fin antes de marcar "vencida".
     // Da tiempo a que Stripe cobre y avise por webhook.
     
+    private function empresaDelUsuario(Request $request): ?Empresa
+{
+    $user = $request->user();
+    return ($user && $user->id_empresa) ? Empresa::find($user->id_empresa) : null;
+}
+
+// 5. Método de pago, facturas y planes disponibles (tab Plan)
+public function facturacion(Request $request)
+{
+    try {
+        $empresa = $this->empresaDelUsuario($request);
+        if (!$empresa) {
+            return response()->json(['success' => false, 'message' => 'Empresa no encontrada'], 404);
+        }
+
+        $planes = PlanesSaaS::where('activo', true)
+            ->where('precio_mensual', '>', 0)
+            ->orderBy('precio_mensual')
+            ->get(['id_plan', 'nombre', 'precio_mensual']);
+
+        $tieneStripe = !empty($empresa->stripe_customer_id);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'tiene_stripe' => $tieneStripe,
+                'metodo_pago' => $tieneStripe ? $this->suscripciones->metodoPago($empresa) : null,
+                'facturas' => $tieneStripe ? $this->suscripciones->facturas($empresa) : [],
+                'planes' => $planes,
+            ],
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('❌ Error en facturacion: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'No se pudo consultar la facturación'], 500);
+    }
+}
+
+// 6. Cambiar de plan: crea un Checkout con el precio de la BD y la empresa del usuario
+public function cambiarPlan(Request $request)
+{
+    try {
+        $empresa = $this->empresaDelUsuario($request);
+        if (!$empresa) {
+            return response()->json(['error' => 'Empresa no encontrada'], 404);
+        }
+
+        $plan = PlanesSaaS::where('id_plan', $request->plan_id)->where('activo', true)->first();
+        if (!$plan || (float) $plan->precio_mensual <= 0) {
+            return response()->json(['error' => 'Plan no disponible'], 422);
+        }
+
+        $yaEsEstePlan = (int) $empresa->id_plan === (int) $plan->id_plan
+            && $empresa->stripe_subscription_id
+            && $empresa->plan_activo;
+        if ($yaEsEstePlan) {
+            return response()->json(['error' => 'Ya tienes este plan activo'], 422);
+        }
+
+        Stripe::setApiKey(config('services.stripe.secret'));
+
+        $metadata = [
+            'plan_id' => (string) $plan->id_plan,
+            'plan_name' => $plan->nombre,
+            'empresa_id' => (string) $empresa->id_empresa,
+        ];
+
+        $datos = [
+            'payment_method_types' => ['card'],
+            'line_items' => [[
+                'price_data' => [
+                    'currency' => 'mxn',
+                    'product_data' => ['name' => 'Ophelina - Plan ' . $plan->nombre],
+                    'unit_amount' => (int) round($plan->precio_mensual * 100),
+                    'recurring' => ['interval' => 'month'],
+                ],
+                'quantity' => 1,
+            ]],
+            'mode' => 'subscription',
+            'success_url' => config('services.stripe.success_url'),
+            'cancel_url' => config('services.stripe.cancel_url') . '?payment=canceled',
+            'metadata' => $metadata,
+            'subscription_data' => ['metadata' => $metadata],
+        ];
+
+        // Si ya es cliente de Stripe se reutiliza (conserva historial y tarjetas)
+        if ($empresa->stripe_customer_id) {
+            $datos['customer'] = $empresa->stripe_customer_id;
+        } else {
+            $datos['customer_email'] = $empresa->email;
+        }
+
+        $session = Session::create($datos);
+
+        return response()->json(['url' => $session->url]);
+    } catch (\Throwable $e) {
+        Log::error('❌ Error en cambiarPlan: ' . $e->getMessage());
+        return response()->json(['error' => 'No se pudo iniciar el cambio de plan'], 500);
+    }
+}
 
     public function __construct(private SuscripcionService $suscripciones)
     {
@@ -186,7 +286,7 @@ class StripeController extends Controller
                 'telefono' => $request->telefono ?? '',
                 'plan_activo' => 1,
                 'fecha_inicio_plan' => now()->toDateString(),
-                'fecha_fin_plan' => now()->addDays(30)->toDateString(),
+                'fecha_fin_plan' => now()->addDays(SuscripcionService::DIAS_PLAN_FREE)->toDateString(),
                 'id_plan' => 1,
                 'fecha_registro' => now(),
                 'activo' => 1,
@@ -199,7 +299,7 @@ class StripeController extends Controller
             return response()->json([
                 'success' => true,
                 'empresaId' => $empresaId,
-                'message' => 'Plan Free activado por 30 días',
+                'message' => 'Plan Free activado por ' . SuscripcionService::DIAS_PLAN_FREE . ' días',
             ]);
         } catch (\Exception $e) {
             Log::error('❌ Error en activateFreePlan: ' . $e->getMessage());

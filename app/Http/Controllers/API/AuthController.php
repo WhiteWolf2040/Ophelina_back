@@ -130,14 +130,14 @@ class AuthController extends Controller
         $fechaInicio = ($empresa && $empresa->fecha_inicio_plan)
             ? Carbon::parse($empresa->fecha_inicio_plan)->startOfDay()
             : null;
-            $info = app(SuscripcionService::class)->estado(
-                $empresa->fecha_fin_plan ?? null,
-                $empresa->plan_activo ?? false
-            );
+           $info = app(SuscripcionService::class)->estado(
+            $empresa->fecha_fin_plan ?? null,
+            $empresa->plan_activo ?? false
+        );
 
-            $fechaFin = $info['fecha_fin'];
-            $diasRestantes = $info['dias_restantes'];
-            $estadoSuscripcion = $info['estado'];
+        $fechaFin = $info['fecha_fin'];
+        $diasRestantes = $info['dias_restantes'];
+        $estadoSuscripcion = $info['estado'];
 
         $planPrecio = ($empresa && $empresa->plan)
             ? (float) $empresa->plan->precio_mensual
@@ -219,7 +219,7 @@ class AuthController extends Controller
                 'id_plan'           => 1,
                 'fecha_registro'    => now(),
                 'fecha_inicio_plan' => now(),
-                'fecha_fin_plan'    => now()->addDays(10),
+                'fecha_fin_plan'    => now()->addDays(SuscripcionService::DIAS_PLAN_FREE),
                 'precio_oro_gramo'  => 0,
             ]);
 
