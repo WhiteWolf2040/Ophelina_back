@@ -56,6 +56,15 @@ Route::get('/test-correo-renovacion/xk29fj38', function () {
     return 'Enviado';
 });
 
+Route::get('/cron/avisar-vencimientos', function (\Illuminate\Http\Request $request) {
+    abort_unless(
+        hash_equals((string) env('CRON_SECRET'), (string) $request->query('key')),
+        403
+    );
+    \Illuminate\Support\Facades\Artisan::call('empenos:avisar-vencimiento');
+    return response()->json(['ok' => true]);
+});
+
 Route::get('/ping', function () {
     return response()->json(['ok' => true, 'timestamp' => now()]);
 });
