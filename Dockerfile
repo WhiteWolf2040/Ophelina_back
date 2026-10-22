@@ -115,6 +115,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
     echo 'echo "=== 🚀 INICIANDO SERVIDOR ==="' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
+    echo 'echo "PHP: $(php -v | head -n1)"' >> /usr/local/bin/start.sh && \
     echo '# === EXPORTAR TODAS LAS VARIABLES DE ENTORNO ===' >> /usr/local/bin/start.sh && \
     echo 'export DB_HOST=${DB_HOST}' >> /usr/local/bin/start.sh && \
     echo 'export DB_PORT=${DB_PORT}' >> /usr/local/bin/start.sh && \
@@ -245,7 +246,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
         echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
 
     RUN chmod +x /usr/local/bin/start.sh
-    
+    RUN echo "session.upload_progress.enabled=0" > /usr/local/etc/php/conf.d/zz-hardening.ini
 
     EXPOSE 8080
 
