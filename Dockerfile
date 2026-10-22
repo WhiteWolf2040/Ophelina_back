@@ -245,6 +245,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
         echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /usr/local/bin/start.sh
 
     RUN chmod +x /usr/local/bin/start.sh
+    
 
     EXPOSE 8080
 

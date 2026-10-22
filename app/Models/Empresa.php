@@ -31,7 +31,8 @@ class Empresa extends Model
         'fecha_fin_plan',
         'plan_activo',
         'stripe_customer_id',
-        'stripe_subscription_id'
+        'stripe_subscription_id',
+         'dias_gracia_publicacion',
     ];
 
     protected $casts = [
@@ -41,7 +42,8 @@ class Empresa extends Model
         'fecha_inicio_plan' => 'date',
         'fecha_fin_plan' => 'date',
         'precio_oro_gramo' => 'decimal:2',
-        'precio_oro_onza' => 'decimal:2'
+        'precio_oro_onza' => 'decimal:2',
+         'dias_gracia_publicacion' => 'integer',
     ];
 
     // Relación con usuarios
