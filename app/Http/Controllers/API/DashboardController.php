@@ -10,24 +10,23 @@ use Illuminate\Http\Request;
 class DashboardController extends Controller
 {
     // ====================================
-    //  NUEVO: ENDPOINT CONSOLIDADO
+    //  ENDPOINT CONSOLIDADO
     // ====================================
     // Junta dashboard + morosidad + distribución + amortizaciones
-    // en UNA sola petición para reducir el número de round-trips.
-    //
-    // FIX (timeout / carga lenta): todo el payload se cachea 90s por
-    // empresa. Esto reduce drásticamente el tiempo de respuesta en
-    // cargas repetidas y, de paso, si el frontend llega a disparar dos
-    // peticiones casi simultáneas (por ejemplo por un doble montaje en
-    // React), la segunda lee de caché en vez de volver a golpear la
-    // base de datos con las mismas 4 consultas pesadas.
+    // en UNA sola petición. Se cachea 90s por empresa.
+    // Con ?refresh=1 se descarta el caché (lo usa el botón "refrescar").
     public function completo(Request $request)
     {
         try {
             $user = $request->user();
             $idEmpresa = $user->id_empresa;
+            $cacheKey = "dashboard_completo_{$idEmpresa}";
 
-            $data = Cache::remember("dashboard_completo_{$idEmpresa}", 90, function () use ($idEmpresa) {
+            if ($request->boolean('refresh')) {
+                Cache::forget($cacheKey);
+            }
+
+            $data = Cache::remember($cacheKey, 90, function () use ($idEmpresa) {
                 return [
                     "dashboard" => $this->getDashboardData($idEmpresa),
                     "morosidad" => $this->getMorosidadData($idEmpresa),
@@ -51,21 +50,18 @@ class DashboardController extends Controller
     }
 
     // ====================================
-    // ENDPOINTS INDIVIDUALES (se conservan por compatibilidad
-    // con otras pantallas que puedan seguir llamándolos por separado)
+    // ENDPOINTS INDIVIDUALES (compatibilidad)
     // ====================================
 
     public function index(Request $request)
     {
         try {
             $user = $request->user();
-            $idEmpresa = $user->id_empresa;
 
             return response()->json([
                 "success" => true,
-                "data" => $this->getDashboardData($idEmpresa)
+                "data" => $this->getDashboardData($user->id_empresa)
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 "success" => false,
@@ -127,19 +123,21 @@ class DashboardController extends Controller
 
     // ====================================
     // MÉTODOS PRIVADOS CON LA LÓGICA REAL
-    // (usados tanto por completo() como por los endpoints individuales)
     // ====================================
 
     private function getDashboardData($idEmpresa)
     {
-        // Ganancias totales
+        $hoy = now()->toDateString();
+        $en7Dias = now()->addDays(7)->toDateString();
+
+        // Ganancias totales (solo intereses de liquidaciones)
         $gananciaTotal = DB::table('pagos')
             ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
             ->where('empeno.id_empresa', $idEmpresa)
             ->where('pagos.tipo_pago', 'liquidacion')
             ->sum('pagos.interes_pagado');
 
-        // Pérdidas totales
+        // Pérdidas totales (cuotas vencidas sin pagar)
         $perdidaTotal = DB::table('amortizacion')
             ->join('empeno', 'empeno.id_empeno', '=', 'amortizacion.id_empeno')
             ->where('amortizacion.estado', 'pendiente')
@@ -150,7 +148,7 @@ class DashboardController extends Controller
 
         $perdidaTotal = $perdidaTotal ? floatval($perdidaTotal->total) : 0;
 
-        //  CAMBIADO: Ingresos del mes actual (whereYear+whereMonth -> whereBetween)
+        // Ingresos del mes actual
         $inicioMesActual = now()->startOfMonth();
         $finMesActual    = now()->endOfMonth();
 
@@ -160,14 +158,14 @@ class DashboardController extends Controller
             ->whereBetween('pagos.fecha_pago', [$inicioMesActual, $finMesActual])
             ->sum('pagos.monto_total');
 
-        $hoy = now()->toDateString();
-
+        // Empeños activos (vigentes: vencen hoy o después)
         $empenosActivos = DB::table('empeno')
             ->where('estado', 'activo')
             ->where('id_empresa', $idEmpresa)
             ->whereDate('fecha_vencimiento', '>=', $hoy)
             ->count();
 
+        // Empeños vencidos
         $empenosVencidos = DB::table('empeno')
             ->where('id_empresa', $idEmpresa)
             ->where(function ($query) use ($hoy) {
@@ -179,14 +177,15 @@ class DashboardController extends Controller
             })
             ->count();
 
-        // Próximos a vencer
+        // Próximos a vencer (hoy hasta 7 días, comparando por fecha, igual que el modal)
         $proximosVencer = DB::table('empeno')
-            ->whereBetween('fecha_vencimiento', [now(), now()->addDays(7)])
             ->where('estado', 'activo')
             ->where('id_empresa', $idEmpresa)
+            ->whereDate('fecha_vencimiento', '>=', $hoy)
+            ->whereDate('fecha_vencimiento', '<=', $en7Dias)
             ->count();
 
-        //  CAMBIADO: Ingresos recientes (whereDate -> comparación directa de rango)
+        // Ingresos recientes (últimos 15 días)
         $ingresosRecientes = DB::table('pagos')
             ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
             ->where('empeno.id_empresa', $idEmpresa)
@@ -204,7 +203,7 @@ class DashboardController extends Controller
             ->where('id_empresa', $idEmpresa)
             ->count();
 
-        // Precio oro (cacheado 5 min — no cambia segundo a segundo)
+        // Precio oro (cacheado 5 min)
         $precioOro = Cache::remember('precio_oro_actual', 300, function () {
             return DB::table('precio_oro')
                 ->orderBy('fecha_actualizacion', 'desc')
@@ -216,7 +215,9 @@ class DashboardController extends Controller
             "empenos_vencidos" => $empenosVencidos,
             "proximos_vencer" => $proximosVencer,
             "ingresos_recientes" => floatval($ingresosRecientes),
-            "precio_oro" => $precioOro->precio_gramo_24k ?? 850,
+            // null si no hay registro: el frontend muestra "No disponible"
+            // en lugar de un 850 inventado que parece un dato real.
+            "precio_oro" => $precioOro->precio_gramo_24k ?? null,
             "ultima_actualizacion_oro" => $precioOro->fecha_actualizacion ?? null,
             "total_clientes" => $totalClientes,
             "prendas_disponibles" => $prendasDisponibles,
@@ -226,19 +227,23 @@ class DashboardController extends Controller
         ];
 
         // Top Clientes
+        // Los pagos de liquidación se agregan por empeño ANTES del join para
+        // que un empeño con varios pagos no duplique filas e infle SUM(monto_prestado).
+        $pagosLiquidacion = DB::table('pagos')
+            ->select('id_empeno', DB::raw('SUM(interes_pagado) as interes'))
+            ->where('tipo_pago', 'liquidacion')
+            ->groupBy('id_empeno');
+
         $topClientes = DB::table('empeno')
             ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
-            ->leftJoin('pagos', function ($join) {
-                $join->on('pagos.id_empeno', '=', 'empeno.id_empeno')
-                     ->where('pagos.tipo_pago', 'liquidacion');
-            })
+            ->leftJoinSub($pagosLiquidacion, 'pl', 'pl.id_empeno', '=', 'empeno.id_empeno')
             ->where('empeno.id_empresa', $idEmpresa)
             ->select(
                 'clientes.id_cliente',
                 DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as nombre"),
                 DB::raw("COUNT(DISTINCT empeno.id_empeno) as empenos"),
                 DB::raw("SUM(empeno.monto_prestado) as monto_total"),
-                DB::raw("SUM(COALESCE(pagos.interes_pagado, 0)) as ganancia_realizada"),
+                DB::raw("SUM(COALESCE(pl.interes, 0)) as ganancia_realizada"),
                 DB::raw("MAX(empeno.fecha_empeno) as ultimo_empeno")
             )
             ->groupBy('clientes.id_cliente', 'clientes.nombre', 'clientes.apellido')
@@ -292,24 +297,24 @@ class DashboardController extends Controller
             return $item;
         });
 
-        //  CAMBIADO: Capital vs retorno por mes (whereYear -> whereBetween)
+        // ------------------------------------
+        // Capital vs retorno por mes (año actual)
+        // ------------------------------------
         $inicioAnio = now()->startOfYear();
         $finAnio    = now()->endOfYear();
 
         $prestamosPorMes = DB::table('empeno')
             ->select(
                 DB::raw("EXTRACT(MONTH FROM fecha_empeno) as numero_mes"),
-                DB::raw("TO_CHAR(fecha_empeno, 'Mon') as mes"),
                 DB::raw("SUM(monto_prestado) as capital"),
                 DB::raw("COUNT(id_empeno) as total_empenos")
             )
             ->whereBetween('fecha_empeno', [$inicioAnio, $finAnio])
             ->where('id_empresa', $idEmpresa)
-            ->groupBy(DB::raw("EXTRACT(MONTH FROM fecha_empeno)"), DB::raw("TO_CHAR(fecha_empeno, 'Mon')"))
-            ->orderBy(DB::raw("EXTRACT(MONTH FROM fecha_empeno)"))
-            ->get();
+            ->groupBy(DB::raw("EXTRACT(MONTH FROM fecha_empeno)"))
+            ->get()
+            ->keyBy(fn ($p) => (int) $p->numero_mes);
 
-        //  CAMBIADO: (whereYear -> whereBetween)
         $pagosPorMes = DB::table('pagos')
             ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
             ->select(
@@ -321,26 +326,43 @@ class DashboardController extends Controller
             ->where('empeno.id_empresa', $idEmpresa)
             ->groupBy(DB::raw("EXTRACT(MONTH FROM pagos.fecha_pago)"))
             ->get()
-            ->keyBy('numero_mes');
+            ->keyBy(fn ($p) => (int) $p->numero_mes);
+
+        // Se recorren TODOS los meses desde enero hasta el actual, así un mes
+        // con pagos pero sin préstamos nuevos (o al revés) no se pierde,
+        // y los nombres de mes salen en español.
+        $nombresMes = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
         $capitalAcumulado = 0;
         $retornoAcumulado = 0;
         $gananciaAcumulada = 0;
+        $capitalRetorno = [];
 
-        $capitalRetorno = $prestamosPorMes->map(function ($prestamo) use (&$capitalAcumulado, &$retornoAcumulado, &$gananciaAcumulada, $pagosPorMes) {
-            $mesNumero = $prestamo->numero_mes;
-            $pagos = $pagosPorMes->get($mesNumero);
+        for ($m = 1; $m <= now()->month; $m++) {
+            $prestamo = $prestamosPorMes->get($m);
+            $pago     = $pagosPorMes->get($m);
 
-            $capitalAcumulado += floatval($prestamo->capital);
-            $retornoAcumulado += $pagos ? floatval($pagos->total_pagos) : 0;
-            $gananciaAcumulada += $pagos ? floatval($pagos->total_intereses) : 0;
+            $capitalMes = $prestamo ? floatval($prestamo->capital) : 0;
+            $retornoMes = $pago ? floatval($pago->total_pagos) : 0;
+            $interesMes = $pago ? floatval($pago->total_intereses) : 0;
 
-            $prestamo->capital = $capitalAcumulado;
-            $prestamo->retorno = $retornoAcumulado;
-            $prestamo->ganancia = $gananciaAcumulada;
+            $capitalAcumulado  += $capitalMes;
+            $retornoAcumulado  += $retornoMes;
+            $gananciaAcumulada += $interesMes;
 
-            return $prestamo;
-        });
+            $capitalRetorno[] = [
+                'numero_mes'    => $m,
+                'mes'           => $nombresMes[$m - 1],
+                'total_empenos' => $prestamo ? intval($prestamo->total_empenos) : 0,
+                'capital'       => $capitalAcumulado,
+                'retorno'       => $retornoAcumulado,
+                'ganancia'      => $gananciaAcumulada,
+                // valores del mes (no acumulados), para la gráfica de tendencia
+                'retorno_mes'   => $retornoMes,
+                'capital_mes'   => $capitalMes,
+                'ganancia_mes'  => $interesMes,
+            ];
+        }
 
         return [
             "resumen" => $resumen,
@@ -438,7 +460,6 @@ class DashboardController extends Controller
 
     private function getDistribucionData($idEmpresa)
     {
-        //  CAMBIADO: whereYear -> whereBetween
         $inicioAnioActual = now()->startOfYear();
         $finAnioActual    = now()->endOfYear();
 
@@ -448,19 +469,16 @@ class DashboardController extends Controller
             ->whereBetween('empeno.fecha_empeno', [$inicioAnioActual, $finAnioActual])
             ->select('prendas.tipo as categoria', DB::raw('COUNT(empeno.id_empeno) as total'))
             ->groupBy('prendas.tipo')
-            ->get();
+            ->orderByDesc('total')
+            ->get()
+            ->map(function ($c) {
+                $c->total = (int) $c->total; // siempre numérico para la gráfica
+                return $c;
+            });
 
-        if ($categorias->isEmpty()) {
-            $categorias = collect([
-                ['categoria' => 'Joyería', 'total' => 0],
-                ['categoria' => 'Electrónica', 'total' => 0],
-                ['categoria' => 'Relojes', 'total' => 0],
-                ['categoria' => 'Herramientas', 'total' => 0],
-                ['categoria' => 'Instrumentos', 'total' => 0]
-            ]);
-        }
-
-        return $categorias;
+        // Si no hay datos se devuelve vacío (antes se inventaban categorías
+        // con 0). El frontend muestra "Sin empeños este año".
+        return $categorias->values();
     }
 
     private function getAmortizacionesData($idEmpresa)
@@ -497,7 +515,9 @@ class DashboardController extends Controller
                 if ($diasAtraso < 0) $diasAtraso = 0;
             }
 
-            $saldoRestante = $item->saldo_final ?? ($item->monto_total - ($item->monto_pagado ?? 0));
+            // Lo que falta de ESTA cuota. (saldo_final normalmente es el saldo
+            // de capital después del pago, no lo que resta de la cuota.)
+            $saldoRestante = max(0, floatval($item->monto_total) - floatval($item->monto_pagado ?? 0));
 
             $item->dias_atraso = $diasAtraso;
             $item->status = $diasAtraso > 0 ? 'Atrasado' : 'Pendiente';
@@ -508,19 +528,21 @@ class DashboardController extends Controller
     }
 
     // ====================================
-    // LISTADOS DETALLADOS (modales — se dejan igual)
+    // LISTADOS DETALLADOS (modales)
+    // Usan whereDate igual que las tarjetas, para que los números coincidan.
     // ====================================
 
     public function activos(Request $request)
     {
         try {
             $user = $request->user();
+            $hoy = now()->toDateString();
 
             $data = DB::table('empeno')
                 ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
                 ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
                 ->where('empeno.estado', 'activo')
-                ->where('empeno.fecha_vencimiento', '>=', now())
+                ->whereDate('empeno.fecha_vencimiento', '>=', $hoy)
                 ->where('empeno.id_empresa', $user->id_empresa)
                 ->select(
                     'empeno.id_empeno',
@@ -529,6 +551,7 @@ class DashboardController extends Controller
                     'empeno.monto_prestado as monto',
                     'empeno.fecha_empeno as fecha'
                 )
+                ->orderBy('empeno.fecha_vencimiento', 'asc')
                 ->get();
 
             return response()->json(["success" => true, "data" => $data]);
@@ -541,16 +564,17 @@ class DashboardController extends Controller
     {
         try {
             $user = $request->user();
+            $hoy = now()->toDateString();
 
             $data = DB::table('empeno')
                 ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
                 ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
                 ->where('empeno.id_empresa', $user->id_empresa)
-                ->where(function ($query) {
+                ->where(function ($query) use ($hoy) {
                     $query->where('empeno.estado', 'vencido')
-                        ->orWhere(function ($sub) {
+                        ->orWhere(function ($sub) use ($hoy) {
                             $sub->where('empeno.estado', 'activo')
-                                ->where('empeno.fecha_vencimiento', '<', now());
+                                ->whereDate('empeno.fecha_vencimiento', '<', $hoy);
                         });
                 })
                 ->select(
@@ -559,8 +583,9 @@ class DashboardController extends Controller
                     'prendas.descripcion as nombre',
                     'empeno.monto_prestado as monto',
                     'empeno.fecha_vencimiento as fecha',
-                    DB::raw("EXTRACT(DAY FROM (NOW() - empeno.fecha_vencimiento)) as dias")
+                    DB::raw("GREATEST(0, CURRENT_DATE - CAST(empeno.fecha_vencimiento AS DATE)) as dias")
                 )
+                ->orderBy('empeno.fecha_vencimiento', 'asc')
                 ->get();
 
             return response()->json(["success" => true, "data" => $data]);
@@ -573,28 +598,31 @@ class DashboardController extends Controller
     {
         try {
             $user = $request->user();
+            $hoy = now()->toDateString();
+            $en7Dias = now()->addDays(7)->toDateString();
 
             $data = DB::table('empeno')
                 ->join('clientes', 'clientes.id_cliente', '=', 'empeno.id_cliente')
                 ->join('prendas', 'prendas.id_prenda', '=', 'empeno.id_prenda')
                 ->where('empeno.estado', 'activo')
                 ->where('empeno.id_empresa', $user->id_empresa)
-                ->whereBetween('empeno.fecha_vencimiento', [now(), now()->addDays(7)])
+                ->whereDate('empeno.fecha_vencimiento', '>=', $hoy)
+                ->whereDate('empeno.fecha_vencimiento', '<=', $en7Dias)
                 ->select(
                     'empeno.id_empeno',
                     DB::raw("CONCAT(clientes.nombre,' ',clientes.apellido) as cliente"),
                     'prendas.descripcion as nombre',
                     'empeno.monto_prestado as monto',
                     'empeno.fecha_vencimiento as fecha',
-                    DB::raw("EXTRACT(DAY FROM (empeno.fecha_vencimiento - NOW())) as dias")
+                    DB::raw("(CAST(empeno.fecha_vencimiento AS DATE) - CURRENT_DATE) as dias")
                 )
+                ->orderBy('empeno.fecha_vencimiento', 'asc')
                 ->get();
 
             return response()->json([
                 "success" => true,
                 "data" => $data
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 "success" => false,
