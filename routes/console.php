@@ -11,6 +11,7 @@ Artisan::command('inspire', function () {
 // Programar actualización del precio del oro
 Schedule::command('gold:update-price')->dailyAt('08:00');
 
-Schedule::command('empenos:avisar-vencimiento')
-    ->dailyAt('09:00')
-    ->timezone('America/Mexico_City');
+Schedule::command('empenos:avisar-vencimiento --dias=3')
+    ->dailyAt('06:00')
+    ->timezone('America/Mexico_City')
+    ->withoutOverlapping();

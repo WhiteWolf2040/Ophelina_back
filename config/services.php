@@ -14,11 +14,6 @@ return [
     |
     */
 
-    'callmebot' => [
-        'apikey' => env('CALLMEBOT_APIKEY'),
-        'phone' => env('CALLMEBOT_PHONE'),
-    ],
-
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],
@@ -44,7 +39,7 @@ return [
     'secret'       => env('METABASE_SECRET_KEY'),
     'dashboard_id' => env('METABASE_DASHBOARD_ID', 2),
 ],
-
+      'cron_secret' => env('CRON_SECRET'),
     /*
     |--------------------------------------------------------------------------
     | STRIPE CONFIGURATION

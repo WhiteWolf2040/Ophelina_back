@@ -1,9 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tu empeño está por vencer</title>
+</head>
 <body style="margin:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="padding:24px 0;">
     <tr><td align="center">
-      <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:32px;">
+      <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:32px;max-width:100%;">
         <tr><td>
           <h2 style="margin:0 0 8px;color:#111;">{{ $nombreEmpresa }}</h2>
           <h3 style="margin:0 0 16px;color:#b45309;">Tu empeño está por vencer ⏰</h3>

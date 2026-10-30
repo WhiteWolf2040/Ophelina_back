@@ -57,12 +57,17 @@ Route::get('/test-correo-renovacion/xk29fj38', function () {
 });
 
 Route::get('/cron/avisar-vencimientos', function (\Illuminate\Http\Request $request) {
-    abort_unless(
-        hash_equals((string) env('CRON_SECRET'), (string) $request->query('key')),
-        403
-    );
-    \Illuminate\Support\Facades\Artisan::call('empenos:avisar-vencimiento');
-    return response()->json(['ok' => true]);
+    $key = (string) ($request->header('X-Cron-Key') ?: $request->query('key'));
+
+    abort_unless(hash_equals((string) config('services.cron_secret'), $key), 403);
+
+    try {
+        \Illuminate\Support\Facades\Artisan::call('empenos:avisar-vencimiento', ['--dias' => 3]);
+        return response()->json(['ok' => true]);
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::error('Cron avisar-vencimientos: ' . $e->getMessage());
+        return response()->json(['ok' => false], 500);
+    }
 });
 
 Route::get('/ping', function () {
