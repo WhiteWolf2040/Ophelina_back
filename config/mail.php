@@ -116,6 +116,6 @@ return [
     ],
 
 
-    'destino_pruebas' => env('MAIL_DESTINO_PRUEBAS'),
+   'destino_pruebas' => array_filter(array_map('trim', explode(',', env('MAIL_DESTINO_PRUEBAS', '')))),
 
 ];

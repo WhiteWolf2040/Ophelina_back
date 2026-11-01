@@ -34,6 +34,10 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'mail_relay' => [
+    'url'    => env('MAIL_RELAY_URL'),
+    'secret' => env('MAIL_RELAY_SECRET'),
+],
 
     'metabase' => [
     'secret'       => env('METABASE_SECRET_KEY'),

@@ -285,4 +285,43 @@ class AuthController extends Controller
         ]);
     }
 
+
+    public function updateProfile(Request $request)
+{
+    $usuario = $request->user();
+
+    $data = $request->validate([
+        'correo'   => 'sometimes|required|email|max:100|unique:usuario,correo,' . $usuario->id_usuario . ',id_usuario',
+        'telefono' => 'sometimes|required|string|max:20',
+    ]);
+
+    DB::transaction(function () use ($usuario, $data) {
+        $usuario->fill($data)->save();
+
+        // Mantener sincronizado el registro de cliente (si lo tiene)
+        if (!empty($data)) {
+            DB::table('clientes')
+                ->where('id_usuario', $usuario->id_usuario)
+                ->update($data);
+        }
+    });
+
+    $usuario->load('rol');
+
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'usuario' => [
+                'id'         => $usuario->id_usuario,
+                'nombre'     => $usuario->nombre,
+                'correo'     => $usuario->correo,
+                'telefono'   => $usuario->telefono,
+                'rol'        => $usuario->rol->nombre ?? null,
+                'rol_id'     => $usuario->id_rol,
+                'id_empresa' => $usuario->id_empresa,
+            ],
+        ],
+    ]);
+}
+
 }
