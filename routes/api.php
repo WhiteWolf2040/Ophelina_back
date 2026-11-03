@@ -61,13 +61,19 @@ Route::get('/cron/avisar-vencimientos', function (\Illuminate\Http\Request $requ
 
     abort_unless(hash_equals((string) config('services.cron_secret'), $key), 403);
 
-    try {
-        \Illuminate\Support\Facades\Artisan::call('empenos:avisar-vencimiento', ['--dias' => 3]);
-        return response()->json(['ok' => true]);
-    } catch (\Throwable $e) {
-        \Illuminate\Support\Facades\Log::error('Cron avisar-vencimientos: ' . $e->getMessage());
-        return response()->json(['ok' => false], 500);
+    $resultado = [];
+
+    foreach (['empenos:avisar-vencimiento', 'empenos:avisar-whatsapp'] as $comando) {
+        try {
+            \Illuminate\Support\Facades\Artisan::call($comando, ['--dias' => 3]);
+            $resultado[$comando] = 'ok';
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Cron {$comando}: " . $e->getMessage());
+            $resultado[$comando] = 'error';
+        }
     }
+
+    return response()->json(['ok' => !in_array('error', $resultado, true), 'detalle' => $resultado]);
 });
 
 Route::get('/ping', function () {
