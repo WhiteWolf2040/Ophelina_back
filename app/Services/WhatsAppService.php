@@ -2,35 +2,47 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Http;
+use Twilio\Rest\Client;
 
 class WhatsAppService
 {
-    protected $apiKey;
-    protected $defaultPhone;
+    protected Client $client;
 
     public function __construct()
     {
-        $this->apiKey = config('services.callmebot.apikey');
-        $this->defaultPhone = config('services.callmebot.phone');
+        $this->client = new Client(
+            config('services.twilio.sid'),
+            config('services.twilio.token')
+        );
     }
 
-    public function sendMessage($phone, $message)
+    // Convierte 9991234567 o +529991234567 a +5219991234567
+    public function normalizar(string $telefono): string
     {
-        // Limpiar número: eliminar cualquier carácter no numérico
-        $phone = preg_replace('/[^0-9]/', '', $phone);
-        
-        // Asegurar formato internacional (código país 52 para México)
-        if (strlen($phone) === 10) {
-            $phone = '52' . $phone;
-        }
+        $digitos = preg_replace('/\D/', '', $telefono);
+        return '+521' . substr($digitos, -10);
+    }
 
-        $response = Http::get('https://api.callmebot.com/whatsapp.php', [
-            'phone' => $phone,
-            'text' => $message,
-            'apikey' => $this->apiKey
-        ]);
+    public function enviarTexto(string $telefono, string $mensaje): string
+    {
+        return $this->client->messages->create(
+            'whatsapp:' . $this->normalizar($telefono),
+            [
+                'from' => config('services.twilio.from'),
+                'body' => $mensaje,
+            ]
+        )->sid;
+    }
 
-        return $response->successful();
+    public function enviarPlantilla(string $telefono, string $contentSid, array $variables): string
+    {
+        return $this->client->messages->create(
+            'whatsapp:' . $this->normalizar($telefono),
+            [
+                'from'             => config('services.twilio.from'),
+                'contentSid'       => $contentSid,
+                'contentVariables' => json_encode($variables),
+            ]
+        )->sid;
     }
 }

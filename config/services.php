@@ -22,6 +22,16 @@ return [
         'key' => env('RESEND_API_KEY'),
     ],
 
+    'twilio' => [
+    'sid'         => env('TWILIO_SID'),
+    'token'       => env('TWILIO_TOKEN'),
+    'from'        => env('TWILIO_WHATSAPP_FROM'),
+    'modo'        => env('WHATSAPP_MODO', 'texto'),
+    'content_sid' => env('TWILIO_CONTENT_SID'),
+    'url_app'          => env('FRONTEND_URL'),
+    'destino_pruebas'  => env('WHATSAPP_DESTINO_PRUEBAS'),
+],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
