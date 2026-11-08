@@ -4,6 +4,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\Apartado;
 use App\Models\Empresa;
 use App\Models\ImagenPrenda;
 use App\Models\Prenda;
@@ -64,15 +65,9 @@ class TiendaController extends Controller
             $productos = $query->orderBy('fecha_publicacion', 'desc')->get();
 
             $productos->each(function (ProductoTienda $p) {
-                $imagen = $p->prenda?->imagenPrincipal; // ya viene eager-loaded, sin query nueva
-
-                if ($imagen && !empty($imagen->cloudinary_url)) {
-                    $p->imagen_url = $imagen->cloudinary_url;
-                } elseif ($imagen && !empty($imagen->imagen_data)) {
-                    $p->imagen_url = url('/api/imagen-prenda/' . $p->id_prenda);
-                } else {
-                    $p->imagen_url = null;
-                }
+                // imagenPrincipal ya viene eager-loaded; url_publica cubre
+                // Cloudinary, rutas relativas y base64 antiguo.
+                $p->imagen_url = $p->prenda?->imagenPrincipal?->url_publica;
             });
 
             return response()->json([
@@ -124,6 +119,10 @@ class TiendaController extends Controller
                 ->where('publicacion_automatica', true)
                 ->count();
 
+            // Días de gracia guardados, para que el modal los muestre al abrir
+            $empresa = Empresa::find($empresaId);
+            $diasGracia = $empresa->dias_gracia_publicacion ?? 5;
+
             return response()->json([
                 'success' => true,
                 'total' => $total,
@@ -131,8 +130,9 @@ class TiendaController extends Controller
                 'ocultos' => $ocultos,
                 'destacados' => $destacados,
                 'bajo_stock' => 0,
-                'valor_total' => round((float) $valorTotal, 2), // número real, no string
-                'publicaciones_automaticas' => $publicacionesAutomaticas
+                'valor_total' => round((float) $valorTotal, 2),
+                'publicaciones_automaticas' => $publicacionesAutomaticas,
+                'dias_gracia' => (int) $diasGracia,
             ]);
 
         } catch (\Throwable $e) {
@@ -244,8 +244,7 @@ class TiendaController extends Controller
 
     /**
      * Actualizar producto
-     * (Si el frontend manda FormData, usar POST + _method=PUT; PHP no lee
-     *  multipart en peticiones PUT.)
+     * (El frontend manda POST + _method=PUT; PHP no lee multipart en PUT real.)
      */
     public function update(Request $request, $id)
     {
@@ -278,21 +277,42 @@ class TiendaController extends Controller
             ]);
 
             DB::transaction(function () use ($producto, $validated) {
+
+                // Si la prenda la comparte otro producto activo, este producto
+                // recibe una prenda propia (con copia de sus imágenes) para que
+                // editar uno no pise al otro.
+                if ($producto->id_prenda && $this->prendaCompartida($producto)) {
+                    $this->separarPrenda($producto);
+                }
+
+                // Un producto apartado se oculta de la tienda (apartar() lo hace).
+                // Si tiene un apartado vigente, editarlo no debe volver a mostrarlo.
+                $tieneApartadoVigente = Apartado::where('id_producto', $producto->id_producto)
+                    ->where('estado', 'activo')
+                    ->whereIn('stripe_payment_status', ['pendiente', 'pagado'])
+                    ->exists();
+
                 $producto->nombre = $validated['nombre'];
                 $producto->categoria = $validated['categoria'];
                 $producto->precio = $validated['precio'];
                 $producto->stock = $validated['stock'];
                 $producto->descripcion = $validated['descripcion'] ?? '';
                 $producto->estado_producto = $validated['estado'];
-                $producto->visible = $validated['visible'] ?? true;
+                $producto->visible = $tieneApartadoVigente
+                    ? $producto->visible
+                    : ($validated['visible'] ?? true);
                 $producto->destacado = $validated['destacado'] ?? false;
                 $producto->descuento = $validated['descuento'] ?? 0;
                 $producto->save();
 
-                // index() filtra por prenda.tipo, así que hay que mantenerlo sincronizado
+                // Mantener sincronizada la prenda (tipo para los filtros,
+                // descripcion para que Empeños muestre el mismo nombre)
                 if ($producto->id_prenda) {
                     Prenda::where('id_prenda', $producto->id_prenda)
-                        ->update(['tipo' => $validated['categoria']]);
+                        ->update([
+                            'tipo' => $validated['categoria'],
+                            'descripcion' => $validated['nombre'],
+                        ]);
                 }
 
                 // Imagen nueva (ya subida a Cloudinary desde el frontend): reemplaza la anterior
@@ -308,7 +328,7 @@ class TiendaController extends Controller
                 }
             });
 
-            $producto->load('prenda');
+            $producto->refresh()->load('prenda');
             $producto->imagen_url = $this->urlImagenDePrenda($producto->prenda);
 
             return response()->json([
@@ -337,15 +357,50 @@ class TiendaController extends Controller
     }
 
     /**
+     * ¿Otro producto activo usa la misma prenda?
+     */
+    private function prendaCompartida(ProductoTienda $producto): bool
+    {
+        return ProductoTienda::where('id_prenda', $producto->id_prenda)
+            ->where('id_producto', '!=', $producto->id_producto)
+            ->whereNull('deleted_at')
+            ->exists();
+    }
+
+    /**
+     * Le da al producto una prenda propia (copia de la actual) y le copia
+     * las imágenes, para dejar de compartirla con otros productos.
+     */
+    private function separarPrenda(ProductoTienda $producto): void
+    {
+        $original = Prenda::find($producto->id_prenda);
+        if (!$original) {
+            return;
+        }
+
+        $copia = $original->replicate();
+        $copia->codigo_barras = 'PRN-' . strtoupper(uniqid());
+        $copia->save();
+
+        foreach (ImagenPrenda::where('id_prenda', $original->id_prenda)->get() as $img) {
+            $nueva = $img->replicate();
+            $nueva->id_prenda = $copia->id_prenda;
+            $nueva->save();
+        }
+
+        $producto->id_prenda = $copia->id_prenda;
+        $producto->save();
+    }
+
+    /**
      * Helper: guarda una imagen codificada en base64 (texto) en imagen_prenda.imagen_data.
      *
      * IMPORTANTE: imagen_data debe ser columna `text` (NO `bytea`). En este entorno
      * (PHP 8.4-fpm-alpine + pdo_pgsql), bindear binario crudo contra una columna bytea
-     * provoca un crash a nivel de proceso en PHP-FPM. Guardar como base64/texto evita
-     * ese binding binario por completo y es seguro para imágenes <1MB.
+     * provoca un crash a nivel de proceso en PHP-FPM.
      *
-     * (Actualmente no se usa en store/update porque las imágenes van a Cloudinary,
-     *  pero se conserva por compatibilidad con imágenes antiguas.)
+     * (Actualmente no se usa porque las imágenes van a Cloudinary; se conserva
+     *  por compatibilidad con imágenes antiguas.)
      */
     private function guardarImagenEnBD(int $idPrenda, $file, bool $esPrincipal = true, int $orden = 0): bool
     {
@@ -358,7 +413,7 @@ class TiendaController extends Controller
             ImagenPrenda::create([
                 'id_prenda' => $idPrenda,
                 'ruta_archivo' => $file->getClientOriginalName(),
-                'imagen_data' => base64_encode($binario), // texto puro, no binario
+                'imagen_data' => base64_encode($binario),
                 'imagen_mime' => $file->getMimeType(),
                 'es_principal' => $esPrincipal,
                 'orden' => $orden,
@@ -373,7 +428,7 @@ class TiendaController extends Controller
 
     /**
      * Sirve los bytes de la imagen desde la BD (imágenes antiguas en base64)
-     * GET /api/imagen-prenda/{id}
+     * GET /api/imagen-prenda/{id}   (debe ser ruta PÚBLICA, fuera de auth:sanctum)
      */
     public function verImagen($id)
     {
@@ -397,7 +452,7 @@ class TiendaController extends Controller
     }
 
     /**
-     * Helper: obtiene la URL de la imagen
+     * Helper: URL pública de la imagen principal de una prenda
      */
     private function urlImagenDePrenda(?Prenda $prenda): ?string
     {
@@ -405,28 +460,9 @@ class TiendaController extends Controller
             return null;
         }
 
-        $imagen = ImagenPrenda::where('id_prenda', $prenda->id_prenda)
-            ->where('es_principal', true)
-            ->first();
-
-        if (!$imagen) {
-            $imagen = ImagenPrenda::where('id_prenda', $prenda->id_prenda)->first();
-        }
-
-        if (!$imagen) {
-            return null;
-        }
-
-        // Prioridad: cloudinary_url > imagen_data (BD)
-        if (!empty($imagen->cloudinary_url)) {
-            return $imagen->cloudinary_url;
-        }
-
-        if (!empty($imagen->imagen_data)) {
-            return url('/api/imagen-prenda/' . $prenda->id_prenda);
-        }
-
-        return null;
+        return ImagenPrenda::where('id_prenda', $prenda->id_prenda)
+            ->orderByDesc('es_principal')
+            ->first()?->url_publica;
     }
 
     /**
@@ -657,7 +693,7 @@ class TiendaController extends Controller
             );
 
             $fechaLimite = now()->subDays($diasGracia)->toDateString();
-            $tablaPrendas = (new Prenda)->getTable(); // evita fijar el nombre de la tabla
+            $tablaPrendas = (new Prenda)->getTable();
 
             $creados = DB::transaction(function () use ($user, $fechaLimite, $tablaPrendas) {
 
@@ -668,7 +704,8 @@ class TiendaController extends Controller
                     ->whereDate('fecha_vencimiento', '<', now()->toDateString())
                     ->update(['estado' => 'vencido']);
 
-                // 2) Candidatos: vencidos, con gracia cumplida y sin producto_tienda activo
+                // 2) Candidatos: vencidos, con gracia cumplida, sin producto_tienda
+                //    activo por empeño Y cuya prenda no esté ya en la tienda
                 $empenosElegibles = DB::table('empeno as e')
                     ->join("{$tablaPrendas} as p", 'p.id_prenda', '=', 'e.id_prenda')
                     ->where('e.id_empresa', $user->id_empresa)
@@ -680,6 +717,13 @@ class TiendaController extends Controller
                           ->whereColumn('pt.id_empeno_original', 'e.id_empeno')
                           ->whereNull('pt.deleted_at');
                     })
+                    ->whereNotExists(function ($q) {
+                        // Evita que dos productos compartan la misma prenda
+                        $q->select(DB::raw(1))
+                          ->from('producto_tienda as pt2')
+                          ->whereColumn('pt2.id_prenda', 'e.id_prenda')
+                          ->whereNull('pt2.deleted_at');
+                    })
                     ->select(
                         'e.id_empeno', 'e.id_prenda', 'e.folio', 'e.fecha_vencimiento',
                         'p.descripcion', 'p.tipo', 'p.valor_estimado'
@@ -690,7 +734,6 @@ class TiendaController extends Controller
 
                 foreach ($empenosElegibles as $item) {
                     // La imagen no se copia: el producto la hereda de su prenda
-                    // (imagen_prenda), igual que los productos creados a mano.
                     DB::table('producto_tienda')->insert([
                         'id_empresa'                 => $user->id_empresa,
                         'id_prenda'                  => $item->id_prenda,
@@ -709,12 +752,10 @@ class TiendaController extends Controller
                         'fecha_publicacion'          => now()->format('Y-m-d'),
                     ]);
 
-                    // La prenda pasa a 'Vencido' (ya no está en empeño, está en venta)
                     DB::table($tablaPrendas)
                         ->where('id_prenda', $item->id_prenda)
                         ->update(['estado' => 'Vencido']);
 
-                    // El empeño se marca 'en_tienda' -> sale de los empeños activos
                     DB::table('empeno')
                         ->where('id_empeno', $item->id_empeno)
                         ->update(['estado' => 'en_tienda']);
@@ -744,7 +785,7 @@ class TiendaController extends Controller
 
     /**
      * Configurar días de gracia
-     * (requiere la columna empresa.dias_gracia_publicacion: ver migración)
+     * (requiere la columna empresa.dias_gracia_publicacion)
      */
     public function configurarDiasGracia(Request $request)
     {
