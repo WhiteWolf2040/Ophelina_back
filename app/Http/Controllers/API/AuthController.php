@@ -48,6 +48,7 @@ class AuthController extends Controller
                 "message" => "La empresa no está activa"
             ], 401);
         }
+        $usuario->forceFill(['ultimo_acceso' => now()])->save();
 
         $token = $usuario->createToken("auth_token")->plainTextToken;
 

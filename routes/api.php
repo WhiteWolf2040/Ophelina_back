@@ -15,7 +15,7 @@ use App\Http\Controllers\API\StripeController;
 use App\Http\Controllers\API\ContactController;
 use App\Http\Controllers\API\TiendaController;
 use App\Http\Controllers\API\ReportesController;
-use App\Http\Controllers\API\ConfiguracionController;
+use App\Http\Controllers\API\ConfiguracionEmpresaController;
 use App\Http\Controllers\API\PrendaController;
 
 //  NUEVOS IMPORTS PARA CLIENTE
@@ -27,6 +27,7 @@ use App\Http\Controllers\API\StripeWebhookController;
 use App\Http\Controllers\API\OpheliaTiendaController;
 use App\Http\Controllers\API\AbonoController;
 use App\Http\Controllers\API\TicketController;
+use App\Http\Controllers\API\SucursalController;
 
 use App\Http\Controllers\API\MetabaseController;
 
@@ -284,6 +285,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/prendas/{id}/imagen', [\App\Http\Controllers\API\EmpenoController::class, 'actualizarImagenPrenda']);
     });
 
+    Route::prefix('sucursales')->group(function () {
+    Route::get('/', [SucursalController::class, 'index']);
+    Route::post('/', [SucursalController::class, 'store']);
+    Route::put('/{id}', [SucursalController::class, 'update']);
+    Route::delete('/{id}', [SucursalController::class, 'destroy']);
+});
+
     /*
     ==========================
     PAGOS (ADMIN) - Todos los planes pueden ver, pero verificamos permiso
@@ -316,6 +324,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/prendas/disponibles', [EmpenoController::class, 'getPrendasDisponibles']);
     Route::post('/prendas', [EmpenoController::class, 'storePrenda']);
     
+
+    Route::prefix('configuracion')->group(function () {
+    Route::get('/', [ConfiguracionEmpresaController::class, 'index']);
+    Route::put('/operacion', [ConfiguracionEmpresaController::class, 'operacion']);
+    Route::put('/fiscal', [ConfiguracionEmpresaController::class, 'fiscal']);
+    Route::put('/notificaciones', [ConfiguracionEmpresaController::class, 'notificaciones']);
+    Route::put('/portal', [ConfiguracionEmpresaController::class, 'portal']);
+    Route::post('/categorias', [ConfiguracionEmpresaController::class, 'storeCategoria']);
+    Route::put('/categorias/{id}', [ConfiguracionEmpresaController::class, 'updateCategoria']);
+    Route::delete('/categorias/{id}', [ConfiguracionEmpresaController::class, 'destroyCategoria']);
+});
 
     /*
     ==========================
