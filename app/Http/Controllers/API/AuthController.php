@@ -53,10 +53,12 @@ class AuthController extends Controller
         $token = $usuario->createToken("auth_token")->plainTextToken;
 
         // Obtener permisos del rol
+              // Obtener permisos del rol
         $permisos = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
 
-        // Obtener módulos a los que tiene acceso (módulos únicos)
-        $modulos = $usuario->rol ? $usuario->rol->permisos->pluck('modulo')->unique()->toArray() : [];
+        // Módulos según el PLAN de la empresa (no según el rol)
+        $planId  = (int) ($usuario->empresa->id_plan ?? 1);
+        $modulos = app(SuscripcionService::class)->modulosDelPlan($planId);
 
         return response()->json([
             "success" => true,
@@ -69,6 +71,7 @@ class AuthController extends Controller
                     "rol" => $usuario->rol->nombre ?? null,
                     "rol_id" => $usuario->id_rol,
                     "id_empresa" => $usuario->id_empresa,
+                    "plan_id" => $planId,
                     "permisos" => $permisos,
                     "modulos" => $modulos,
                     "empresa" => [
@@ -89,29 +92,17 @@ class AuthController extends Controller
     */
     public function user(Request $request)
     {
-        $usuario = $request->user()->load(['rol', 'rol.permisos', 'empresa.plan']);
+       $usuario = $request->user()->load(['rol', 'rol.permisos', 'empresa.plan']);
+        $empresa = $usuario->empresa;
 
-        // Obtener módulos únicos de los permisos
-        $modulos = $usuario->rol ? $usuario->rol->permisos->pluck('modulo')->unique()->toArray() : [];
+        $suscripciones = app(SuscripcionService::class);
 
-        if (empty($modulos)) {
-            $modulos = ['home'];
-        }
-
-        // Obtener información del plan
-        $planId = $usuario->empresa->id_plan ?? 1;
-
-        // Módulos permitidos por plan
-        $modulosPorPlan = [
-            1 => ['home', 'clientes', 'empenos'],
-            2 => ['home', 'clientes', 'pagos', 'empenos', 'configuracion', 'roles', 'permisos', 'inventario'],
-            3 => ['home', 'clientes', 'pagos', 'inventario', 'empenos', 'tienda', 'apartados', 'reportes', 'roles', 'permisos', 'configuracion']
-        ];
-
-        $modulos = $modulosPorPlan[$planId] ?? $modulosPorPlan[1];
+        $planId  = (int) ($empresa->id_plan ?? 1);
+        $modulos = $suscripciones->modulosDelPlan($planId);
 
         // Obtener permisos del rol
         $permisos = $usuario->rol ? $usuario->rol->permisos->pluck('nombre')->toArray() : [];
+
 
         // Obtener nombre del plan
         $planNombre = 'Free';
@@ -128,16 +119,18 @@ class AuthController extends Controller
         // ============================================
         $empresa = $usuario->empresa;
 
+        // Suscripción: fechas, días restantes y estado
         $fechaInicio = ($empresa && $empresa->fecha_inicio_plan)
             ? Carbon::parse($empresa->fecha_inicio_plan)->startOfDay()
             : null;
-           $info = app(SuscripcionService::class)->estado(
+
+        $info = $suscripciones->estado(
             $empresa->fecha_fin_plan ?? null,
             $empresa->plan_activo ?? false
         );
 
-        $fechaFin = $info['fecha_fin'];
-        $diasRestantes = $info['dias_restantes'];
+        $fechaFin          = $info['fecha_fin'];
+        $diasRestantes     = $info['dias_restantes'];
         $estadoSuscripcion = $info['estado'];
 
         $planPrecio = ($empresa && $empresa->plan)

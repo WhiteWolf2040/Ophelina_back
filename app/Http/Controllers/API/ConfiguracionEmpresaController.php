@@ -87,6 +87,48 @@ class ConfiguracionEmpresaController extends Controller
         ]);
     }
 
+// ---------- Tasa de interés (tabla tasas_interes) ----------
+public function intereses(Request $request)
+{
+    $user = $request->user();
+
+    $data = $request->validate([
+        'porcentaje' => 'required|numeric|min:0|max:100',
+    ]);
+
+    // Buscar la tasa activa de esta empresa
+    $tasa = DB::table('tasas_interes')
+        ->where('id_empresa', $user->id_empresa)
+        ->where('activo', true)
+        ->orderBy('id_tasa', 'desc')
+        ->first();
+
+    if ($tasa) {
+        DB::table('tasas_interes')
+            ->where('id_tasa', $tasa->id_tasa)
+            ->update(['porcentaje' => $data['porcentaje']]);
+    } else {
+        DB::table('tasas_interes')->insert([
+            'id_empresa' => $user->id_empresa,
+            'nombre'     => 'Tasa general',
+            'porcentaje' => $data['porcentaje'],
+            'plazo_dias' => 30,
+            'activo'     => true,
+        ]);
+    }
+
+    $tasaActual = DB::table('tasas_interes')
+        ->where('id_empresa', $user->id_empresa)
+        ->where('activo', true)
+        ->orderBy('id_tasa', 'desc')
+        ->first();
+
+    return response()->json([
+        'success' => true,
+        'data'    => $tasaActual,
+    ]);
+}
+
     // ---------- Operación (plazos, mora, avalúo) ----------
     public function operacion(Request $request)
     {

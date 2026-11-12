@@ -20,6 +20,17 @@ class SuscripcionService
     public const DIAS_POR_VENCER = 7;
     public const DIAS_PLAN_FREE = 30;
 
+  // Única fuente de verdad: qué módulos incluye cada plan
+    public const MODULOS_POR_PLAN = [
+        1 => ['home', 'clientes', 'empenos'],
+        2 => ['home', 'clientes', 'pagos', 'inventario', 'empenos', 'roles', 'permisos', 'configuracion'],
+        3 => ['home', 'clientes', 'pagos', 'inventario', 'empenos', 'tienda', 'apartados', 'reportes', 'roles', 'permisos', 'configuracion'],
+    ];
+
+    public function modulosDelPlan($planId): array
+    {
+        return self::MODULOS_POR_PLAN[(int) $planId] ?? self::MODULOS_POR_PLAN[1];
+    }
 
     public function cliente(): StripeClient
     {

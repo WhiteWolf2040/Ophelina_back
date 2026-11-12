@@ -410,28 +410,37 @@ class EmpenoController extends Controller
             ], 500);
         }
     }
+public function getTasasInteres(Request $request)
+{
+    try {
+        $user = $request->user();
 
-    public function getTasasInteres(Request $request)
-    {
-        try {
-            $tasas = DB::table('tasas_interes')
-                ->where('activo', 1)
-                ->select('id_tasa', 'nombre', 'porcentaje', 'plazo_dias')
-                ->orderBy('porcentaje')
-                ->get();
-
-            return response()->json([
-                'success' => true,
-                'data' => $tasas
-            ]);
-
-        } catch (\Exception $e) {
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
+                'message' => 'Usuario no autenticado'
+            ], 401);
         }
+
+        $tasas = DB::table('tasas_interes')
+            ->where('id_empresa', $user->id_empresa)
+            ->where('activo', 1)
+            ->select('id_tasa', 'nombre', 'porcentaje', 'plazo_dias')
+            ->orderBy('id_tasa', 'desc')   // la más reciente primero
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $tasas
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
     }
+}
 
     public function todos(Request $request)
     {

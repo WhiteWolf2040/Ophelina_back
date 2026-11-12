@@ -328,6 +328,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('configuracion')->group(function () {
     Route::get('/', [ConfiguracionEmpresaController::class, 'index']);
     Route::put('/operacion', [ConfiguracionEmpresaController::class, 'operacion']);
+    Route::put('/intereses', [ConfiguracionEmpresaController::class, 'intereses']);
     Route::put('/fiscal', [ConfiguracionEmpresaController::class, 'fiscal']);
     Route::put('/notificaciones', [ConfiguracionEmpresaController::class, 'notificaciones']);
     Route::put('/portal', [ConfiguracionEmpresaController::class, 'portal']);
