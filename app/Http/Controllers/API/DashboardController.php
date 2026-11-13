@@ -27,12 +27,26 @@ class DashboardController extends Controller
             }
 
             $data = Cache::remember($cacheKey, 90, function () use ($idEmpresa) {
-                return [
+                $planId = (int) DB::table('empresa')
+                    ->where('id_empresa', $idEmpresa)
+                    ->value('id_plan');
+
+                $payload = [
                     "dashboard" => $this->getDashboardData($idEmpresa),
                     "morosidad" => $this->getMorosidadData($idEmpresa),
                     "distribucion" => $this->getDistribucionData($idEmpresa),
                     "amortizaciones" => $this->getAmortizacionesData($idEmpresa),
+                    // Antigüedad de la Cartera (todos los planes)
+                    "cohortes" => $this->getCohortesData($idEmpresa),
                 ];
+
+                // Meta del Mes + Proyección de Cobranza: solo plan Premium (id_plan = 3).
+                // "clientes_riesgo" va vacío: esa sección está deshabilitada en el front.
+                if ($planId === 3) {
+                    $payload["premium"] = $this->getPremiumData($idEmpresa);
+                }
+
+                return $payload;
             });
 
             return response()->json([
@@ -158,6 +172,14 @@ class DashboardController extends Controller
             ->whereBetween('pagos.fecha_pago', [$inicioMesActual, $finMesActual])
             ->sum('pagos.monto_total');
 
+        // Ingresos del mes anterior (para "% vs mes ant." y para la Meta del Mes)
+        $mesAnterior = now()->subMonthNoOverflow();
+        $ingresosMesAnterior = DB::table('pagos')
+            ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
+            ->where('empeno.id_empresa', $idEmpresa)
+            ->whereBetween('pagos.fecha_pago', [$mesAnterior->copy()->startOfMonth(), $mesAnterior->copy()->endOfMonth()])
+            ->sum('pagos.monto_total');
+
         // Empeños activos (vigentes: vencen hoy o después)
         $empenosActivos = DB::table('empeno')
             ->where('estado', 'activo')
@@ -223,7 +245,8 @@ class DashboardController extends Controller
             "prendas_disponibles" => $prendasDisponibles,
             "ganancia_total" => floatval($gananciaTotal),
             "perdida_total" => $perdidaTotal,
-            "ingresos_mes_actual" => floatval($ingresosMesActual)
+            "ingresos_mes_actual" => floatval($ingresosMesActual),
+            "ingresos_mes_anterior" => floatval($ingresosMesAnterior)
         ];
 
         // Top Clientes
@@ -370,6 +393,132 @@ class DashboardController extends Controller
             "top_articulos" => $topArticulos,
             "actividad_reciente" => $actividad,
             "capital_retorno" => $capitalRetorno
+        ];
+    }
+
+    // ------------------------------------
+    // Antigüedad de la cartera (cohortes)
+    // Misma población que las tarjetas: activos (vigentes) + vencidos
+    // => la suma de cohortes = empenos_activos + empenos_vencidos.
+    // ------------------------------------
+    private function getCohortesData($idEmpresa)
+    {
+        $rangos = [
+            ['rango' => '0-30 días',        'min' => 0,   'max' => 30,     'color' => '#10b981'],
+            ['rango' => '31-60 días',       'min' => 31,  'max' => 60,     'color' => '#3b82f6'],
+            ['rango' => '61-90 días',       'min' => 61,  'max' => 90,     'color' => '#f59e0b'],
+            ['rango' => '91-180 días',      'min' => 91,  'max' => 180,    'color' => '#f97316'],
+            ['rango' => 'Más de 180 días',  'min' => 181, 'max' => 999999, 'color' => '#ef4444'],
+        ];
+
+        $empenos = DB::table('empeno')
+            ->where('id_empresa', $idEmpresa)
+            ->whereIn('estado', ['activo', 'vencido'])
+            ->select('fecha_empeno', 'monto_prestado')
+            ->get();
+
+        $hoy = now()->startOfDay();
+        $resultado = array_map(fn ($r) => $r + ['cantidad' => 0, 'monto' => 0.0], $rangos);
+
+        foreach ($empenos as $e) {
+            if (!$e->fecha_empeno) continue;
+            $dias = (int) \Carbon\Carbon::parse($e->fecha_empeno)->startOfDay()->diffInDays($hoy, false);
+            if ($dias < 0) $dias = 0;
+
+            foreach ($resultado as $i => $r) {
+                if ($dias >= $r['min'] && $dias <= $r['max']) {
+                    $resultado[$i]['cantidad']++;
+                    $resultado[$i]['monto'] += floatval($e->monto_prestado);
+                    break;
+                }
+            }
+        }
+
+        return array_map(fn ($r) => [
+            'rango'    => $r['rango'],
+            'cantidad' => $r['cantidad'],
+            'monto'    => round($r['monto'], 2),
+            'color'    => $r['color'],
+        ], $resultado);
+    }
+
+    // ------------------------------------
+    // Datos exclusivos Premium: Meta del Mes + Proyección de Cobranza
+    // ------------------------------------
+    private function getPremiumData($idEmpresa)
+    {
+        $ingresos = function ($desde, $hasta) use ($idEmpresa) {
+            return floatval(DB::table('pagos')
+                ->join('empeno', 'empeno.id_empeno', '=', 'pagos.id_empeno')
+                ->where('empeno.id_empresa', $idEmpresa)
+                ->whereBetween('pagos.fecha_pago', [$desde, $hasta])
+                ->sum('pagos.monto_total'));
+        };
+
+        // META DEL MES: objetivo = ingresos del mes anterior (igual que resumen)
+        $mesAnterior = now()->subMonthNoOverflow();
+        $objetivo = $ingresos($mesAnterior->copy()->startOfMonth(), $mesAnterior->copy()->endOfMonth());
+        $actual   = $ingresos(now()->startOfMonth(), now()->endOfMonth());
+
+        $diasTranscurridos = (int) now()->day;
+        $diasTotales       = (int) now()->daysInMonth;
+        $proyeccionMes     = $diasTranscurridos > 0
+            ? ($actual / $diasTranscurridos) * $diasTotales
+            : 0;
+
+        // PROYECCIÓN DE COBRANZA (próximos 30 días)
+        $hoy  = now()->toDateString();
+        $en30 = now()->addDays(30)->toDateString();
+
+        $cuotas = function () use ($idEmpresa) {
+            return DB::table('amortizacion')
+                ->join('empeno', 'empeno.id_empeno', '=', 'amortizacion.id_empeno')
+                ->where('empeno.id_empresa', $idEmpresa)
+                ->where('amortizacion.estado', 'pendiente');
+        };
+        $saldoSql = 'COALESCE(SUM(amortizacion.monto_total - COALESCE(amortizacion.monto_pagado, 0)), 0)';
+
+        // Por cobrar: cuotas pendientes que vencen de hoy a 30 días
+        $porCobrar = $cuotas()
+            ->whereDate('amortizacion.fecha_pago_programado', '>=', $hoy)
+            ->whereDate('amortizacion.fecha_pago_programado', '<=', $en30)
+            ->selectRaw("$saldoSql as total, COUNT(*) as n")
+            ->first();
+
+        // Ya atrasado: misma condición que resumen.perdida_total / morosidad
+        $yaAtrasado = $cuotas()
+            ->where('amortizacion.fecha_pago_programado', '<', now())
+            ->selectRaw("$saldoSql as total")
+            ->first();
+
+        // En riesgo: lo que vence en 30 días de empeños que YA tienen cuotas atrasadas
+        $enRiesgo = $cuotas()
+            ->whereDate('amortizacion.fecha_pago_programado', '>=', $hoy)
+            ->whereDate('amortizacion.fecha_pago_programado', '<=', $en30)
+            ->whereIn('amortizacion.id_empeno', function ($q) {
+                $q->select('a2.id_empeno')
+                    ->from('amortizacion as a2')
+                    ->where('a2.estado', 'pendiente')
+                    ->where('a2.fecha_pago_programado', '<', now());
+            })
+            ->selectRaw("$saldoSql as total")
+            ->first();
+
+        return [
+            'meta' => [
+                'objetivo'           => round($objetivo, 2),
+                'actual'             => round($actual, 2),
+                'proyeccion'         => round($proyeccionMes, 2),
+                'dias_transcurridos' => $diasTranscurridos,
+                'dias_totales'       => $diasTotales,
+            ],
+            'proyeccion' => [
+                'por_cobrar_30d'    => round(floatval($porCobrar->total ?? 0), 2),
+                'cuotas_vencen_30d' => (int) ($porCobrar->n ?? 0),
+                'en_riesgo'         => round(floatval($enRiesgo->total ?? 0), 2),
+                'ya_atrasado'       => round(floatval($yaAtrasado->total ?? 0), 2),
+            ],
+            'clientes_riesgo' => [],
         ];
     }
 

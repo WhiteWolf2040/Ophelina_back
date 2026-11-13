@@ -149,6 +149,19 @@ class StripeWebhookController extends Controller
             }
         }
 
+        // ==================== SUSCRIPCIÓN ACTUALIZADA (cancelar / reanudar) ====================
+        // Mantiene empresa.cancela_al_vencer sincronizada, también si el cliente
+        // cancela o reanuda desde el portal de Stripe.
+        if ($event->type === 'customer.subscription.updated') {
+            $subscription = $event->data->object;
+            $empresa = Empresa::where('stripe_subscription_id', $subscription->id)->first();
+
+            if ($empresa) {
+                $programada = !empty($subscription->cancel_at_period_end) || !empty($subscription->cancel_at);
+                $empresa->update(['cancela_al_vencer' => $programada]);
+            }
+        }
+
         // ==================== COBRO MENSUAL FALLIDO ====================
         // Stripe reintenta el cobro varios días. NO se desactiva aquí:
         // si todos los reintentos fallan, Stripe cancela y llega customer.subscription.deleted.
@@ -165,17 +178,24 @@ class StripeWebhookController extends Controller
             }
         }
 
-        // ==================== SUSCRIPCIÓN CANCELADA ====================
+        // ==================== SUSCRIPCIÓN TERMINADA ====================
+        // Llega al fin del periodo pagado (si se canceló con cancel_at_period_end)
+        // o cuando Stripe agota los reintentos de cobro. Solo se apaga el plan si
+        // ya no le quedan días a favor; si le quedan, el acceso lo sigue dando fecha_fin_plan.
         if ($event->type === 'customer.subscription.deleted') {
             $subscription = $event->data->object;
             $empresa = Empresa::where('stripe_subscription_id', $subscription->id)->first();
 
             if ($empresa) {
+                $conDiasAFavor = $empresa->fecha_fin_plan
+                    && \Carbon\Carbon::parse($empresa->fecha_fin_plan)->endOfDay()->isFuture();
+
                 $empresa->update([
-                    'plan_activo' => 0,
+                    'plan_activo'            => $conDiasAFavor ? $empresa->plan_activo : 0,
                     'stripe_subscription_id' => null,
+                    'cancela_al_vencer'      => false,
                 ]);
-                Log::info('ℹ️ Suscripción cancelada: empresa_id=' . $empresa->id_empresa);
+                Log::info('ℹ️ Suscripción terminada: empresa_id=' . $empresa->id_empresa);
             }
         }
 
@@ -286,6 +306,9 @@ class StripeWebhookController extends Controller
             $subscriptionId,
             $this->suscripciones->periodoFin($subscription)
         );
+
+        // Suscripción nueva (alta o cambio de plan): ya no está cancelada
+        $empresa->update(['cancela_al_vencer' => false]);
 
         Log::info('✅ Suscripción vinculada vía webhook: empresa_id=' . $empresa->id_empresa);
     }

@@ -133,6 +133,8 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::prefix('stripe')->group(function () {
     Route::post('/create-checkout-session', [StripeController::class, 'createCheckoutSession']);
     Route::post('/activate-free-plan', [StripeController::class, 'activateFreePlan']);
+    Route::post('/cancelar-suscripcion', [StripeController::class, 'cancelarSuscripcion']);
+Route::post('/reanudar-suscripcion', [StripeController::class, 'reanudarSuscripcion']);
 });
 
 //  WEBHOOK DE STRIPE - DEBE SER PÚBLICO

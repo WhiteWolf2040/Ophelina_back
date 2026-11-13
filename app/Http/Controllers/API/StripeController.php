@@ -264,6 +264,56 @@ public function cambiarPlan(Request $request)
         }
     }
 
+    public function cancelarSuscripcion(Request $request)
+{
+    // Si tienes roles, aquí valida que sea el dueño/administrador.
+    $empresa = \App\Models\Empresa::findOrFail($request->user()->id_empresa);
+
+    if (!$empresa->stripe_subscription_id) {
+        return response()->json(['success' => false, 'message' => 'No hay una suscripción de Stripe activa.'], 422);
+    }
+
+    try {
+        \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+        \Stripe\Subscription::update($empresa->stripe_subscription_id, [
+            'cancel_at_period_end' => true,
+        ]);
+
+        $empresa->update(['cancela_al_vencer' => true]);
+
+        return response()->json([
+            'success'      => true,
+            'acceso_hasta' => $empresa->fecha_fin_plan,   // sigue igual: no se pierden días
+            'message'      => 'Suscripción cancelada. Conservas el acceso hasta el fin del periodo pagado.',
+        ]);
+    } catch (\Throwable $e) {
+        \Log::error('Error al cancelar suscripción: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'No se pudo cancelar la suscripción.'], 500);
+    }
+}
+
+public function reanudarSuscripcion(Request $request)
+{
+    $empresa = \App\Models\Empresa::findOrFail($request->user()->id_empresa);
+
+    if (!$empresa->stripe_subscription_id) {
+        return response()->json(['success' => false, 'message' => 'La suscripción ya terminó; contrata el plan de nuevo.'], 422);
+    }
+
+    try {
+        \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+        \Stripe\Subscription::update($empresa->stripe_subscription_id, [
+            'cancel_at_period_end' => false,
+        ]);
+        $empresa->update(['cancela_al_vencer' => false]);
+
+        return response()->json(['success' => true, 'message' => 'Suscripción reanudada.']);
+    } catch (\Throwable $e) {
+        \Log::error('Error al reanudar suscripción: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => 'No se pudo reanudar.'], 500);
+    }
+}
+
     // 3. Activar plan free (30 días, no se renueva solo)
     public function activateFreePlan(Request $request)
     {
