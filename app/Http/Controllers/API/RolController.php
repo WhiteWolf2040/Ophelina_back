@@ -13,43 +13,41 @@ class RolController extends Controller
      * Obtener todos los roles (SOLO DE LA EMPRESA DEL USUARIO)
      * GET /api/roles
      */
-    public function index(Request $request)
-    {
-        try {
-            $user = $request->user();
-            
-            // Filtrar roles por la empresa del usuario
-            $roles = Rol::where('id_empresa', $user->id_empresa)
-                ->with(['usuarios', 'permisos'])
-                ->orderBy('nivel', 'asc')
-                ->get()
-                ->map(function ($rol) {
-                    return [
-                        'id' => $rol->id_rol,
-                        'nombre' => $rol->nombre,
-                        'nivel' => $rol->nivel,
-                        'nivel_texto' => $rol->nivel_texto,
-                        'descripcion' => $rol->descripcion,
-                        'usuarios' => $rol->usuarios->count(),
-                        'permisos' => $rol->permisos->count(),
-                        'fecha_creacion' => $rol->fecha_registro ?? date('d/m/Y')
-                    ];
-                });
-            
-            return response()->json([
-                'success' => true,
-                'data' => $roles
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error('Error al obtener roles: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al obtener roles'
-            ], 500);
-        }
-    }
+ public function index(Request $request)
+{
+    try {
+        $user = $request->user();
 
+        $roles = Rol::where('id_empresa', $user->id_empresa)
+            ->withCount(['usuarios', 'permisos'])   // ← CAMBIO AQUÍ
+            ->orderBy('nivel', 'asc')
+            ->get()
+            ->map(function ($rol) {
+                return [
+                    'id' => $rol->id_rol,
+                    'nombre' => $rol->nombre,
+                    'nivel' => $rol->nivel,
+                    'nivel_texto' => $rol->nivel_texto,
+                    'descripcion' => $rol->descripcion,
+                    'usuarios' => $rol->usuarios_count,   // ← CAMBIO
+                    'permisos' => $rol->permisos_count,   // ← CAMBIO
+                    'fecha_creacion' => $rol->fecha_registro ?? date('d/m/Y')
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $roles
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error al obtener roles: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al obtener roles'
+        ], 500);
+    }
+}
     /**
      * Obtener un rol específico (VERIFICANDO EMPRESA)
      * GET /api/roles/{id}

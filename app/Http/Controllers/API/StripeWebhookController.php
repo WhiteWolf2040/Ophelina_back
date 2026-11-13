@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers\API;
-
+use Illuminate\Support\Facades\Http;
 use App\Http\Controllers\Controller;
 use App\Models\Apartado;
 use App\Models\Amortizacio;
@@ -201,10 +201,9 @@ class StripeWebhookController extends Controller
   private function notificarRenovacion(Empresa $empresa, $invoice, ?\Carbon\Carbon $periodoFin): void
 {
     $clave = 'mail_renovacion_' . $invoice->id;
-    $marcado = false;   
+    $marcado = false;
 
     try {
-        // Anti-duplicados (Stripe puede reenviar el evento). Si el caché falla, se envía igual.
         try {
             if (!Cache::add($clave, true, now()->addDays(2))) {
                 return;
@@ -214,14 +213,15 @@ class StripeWebhookController extends Controller
             Log::warning('⚠️ Caché no disponible, se envía sin anti-duplicados: ' . $e->getMessage());
         }
 
-        $destino = config('mail.destino_pruebas') ?: $empresa->email;
-        if (!$destino) {
+        $prueba  = array_filter((array) config('mail.destino_pruebas'));
+        $destino = !empty($prueba) ? $prueba : array_filter([$empresa->email]);
+        if (empty($destino)) {
             return;
         }
 
         $empresa->loadMissing('plan');
 
-        Mail::to($destino)->send(new RenovacionSuscripcion(
+        $mailable = new RenovacionSuscripcion(
             empresa: $empresa,
             planNombre: $empresa->plan->nombre ?? 'Premium',
             monto: ($invoice->amount_paid ?? 0) / 100,
@@ -229,9 +229,23 @@ class StripeWebhookController extends Controller
             proximoCobro: $periodoFin?->locale('es')->translatedFormat('d \d\e F \d\e Y'),
             facturaUrl: $invoice->hosted_invoice_url ?? null,
             numeroFactura: $invoice->number ?? null,
-        ));
+        );
 
-        Log::info('📧 Correo de renovación enviado a ' . $destino . ' (empresa_id=' . $empresa->id_empresa . ')');
+        if (config('services.mail_relay.url')) {
+            $resp = Http::timeout(30)->asJson()->post(config('services.mail_relay.url'), [
+                'secret'  => config('services.mail_relay.secret'),
+                'to'      => implode(',', $destino),
+                'subject' => $mailable->envelope()->subject,
+                'html'    => $mailable->render(),
+            ]);
+            if (!$resp->json('ok')) {
+                throw new \RuntimeException('El relé de correo respondió error');
+            }
+        } else {
+            Mail::to($destino)->send($mailable);
+        }
+
+        Log::info('📧 Correo de renovación enviado a ' . implode(', ', $destino) . ' (empresa_id=' . $empresa->id_empresa . ')');
     } catch (\Throwable $e) {
         if ($marcado) {
             try { Cache::forget($clave); } catch (\Throwable $ignorar) {}
@@ -239,7 +253,6 @@ class StripeWebhookController extends Controller
         Log::error('❌ No se pudo enviar correo de renovación: ' . $e->getMessage());
     }
 }
-
 
 
     private function vincularDesdeCheckout($session): void
