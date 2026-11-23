@@ -8,12 +8,14 @@ return [
     // ⚠️ Con supports_credentials = true, NUNCA se puede usar '*' aquí.
     // Lista los dominios exactos que sí conoces (producción):
     'allowed_origins' => [
-        'https://ophelina-front.vercel.app',
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://localhost:5175',
-    ],
- 
+    'https://ophelina-front.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+    'https://localhost',        // Capacitor Android
+    'capacitor://localhost',    // Capacitor iOS
+    'http://localhost',         // Capacitor (config alternativa)
+],
     // Y usa un patrón para cubrir las URLs de preview de Vercel,
     // que cambian en cada deploy (ej. ophelina-front-XXXXX-test-...vercel.app)
     'allowed_origins_patterns' => [
