@@ -57,6 +57,11 @@ Route::get('/test-correo-renovacion/xk29fj38', function () {
     return 'Enviado';
 });
 
+Route::prefix('v1/pos')->middleware(['api.key', 'throttle:60,1'])->group(function () {
+    Route::get('/productos', [PosProductosController::class, 'index']);
+    Route::get('/productos/{id}', [PosProductosController::class, 'show']);
+});
+
 Route::get('/cron/avisar-vencimientos', function (\Illuminate\Http\Request $request) {
     $key = (string) ($request->header('X-Cron-Key') ?: $request->query('key'));
 
