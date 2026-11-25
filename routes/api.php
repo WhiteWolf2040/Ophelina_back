@@ -28,6 +28,7 @@ use App\Http\Controllers\API\OpheliaTiendaController;
 use App\Http\Controllers\API\AbonoController;
 use App\Http\Controllers\API\TicketController;
 use App\Http\Controllers\API\SucursalController;
+use App\Http\Controllers\API\PosProductosController;
 
 use App\Http\Controllers\API\MetabaseController;
 
