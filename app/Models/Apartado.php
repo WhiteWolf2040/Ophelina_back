@@ -25,6 +25,9 @@ class Apartado extends Model
         'entregado',
         'fecha_entrega',
         'id_usuario_entrego',
+        'impulsapay_pedido_id',
+        'metodo_pago'
+
     ];
 
     protected $casts = [

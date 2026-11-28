@@ -12,6 +12,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Stripe\Checkout\Session;
 use Stripe\Stripe;
+use App\Services\ImpulsaPayService;
+use Illuminate\Support\Facades\DB;
 
 class OpheliaTiendaController extends Controller
 {
@@ -223,6 +225,10 @@ class OpheliaTiendaController extends Controller
 
             $montoAnticipo = round($precioFinal * 0.5, 2);
 
+            if (config('services.impulsapay.activo')) {
+                return $this->apartarConImpulsaPay($cliente, $producto, $montoAnticipo);
+            }
+
             // Validar la configuración ANTES de crear nada en la BD,
             // para no dejar un apartado huérfano si faltan las URLs.
             $successBase = env('STRIPE_TIENDA_SUCCESS_URL', env('STRIPE_SUCCESS_URL'));
@@ -305,6 +311,134 @@ class OpheliaTiendaController extends Controller
         }
     }
 
+    private function apartarConImpulsaPay(Cliente $cliente, ProductoTienda $producto, float $montoAnticipo)
+{
+    $apartado = Apartado::create([
+        'id_cliente'            => $cliente->id_cliente,
+        'id_producto'           => $producto->id_producto,
+        'fecha_apartado'        => now(),
+        'fecha_expiracion'      => now()->addDays(3),
+        'estado'                => 'activo',
+        'monto_anticipo'        => $montoAnticipo,
+        'stripe_payment_status' => 'pendiente',
+        'codigo_entrega'        => $this->generarCodigoEntrega(),
+        'notas'                 => 'Anticipo del 50% para apartar el producto (ImpulsaPay)',
+        'metodo_pago'           => 'impulsapay',
+    ]);
+
+    try {
+        $ip = app(ImpulsaPayService::class);
+
+        $pedido   = $ip->crearPedido($montoAnticipo, 'apartado-' . $apartado->id_apartado);
+        $pedidoId = (int) ($pedido['pedido_id'] ?? 0);
+        if (!$pedidoId) {
+            throw new \RuntimeException('ImpulsaPay no devolvió pedido_id');
+        }
+
+        $apartado->update(['impulsapay_pedido_id' => $pedidoId]);
+
+        $pago = $ip->crearPago($pedidoId, config('services.impulsapay.return_url'));
+        $checkoutUrl = $pago['checkout_url'] ?? null;
+        if (!$checkoutUrl) {
+            throw new \RuntimeException('ImpulsaPay no devolvió checkout_url');
+        }
+    } catch (\Throwable $e) {
+        Log::error('Error ImpulsaPay en apartar: ' . $e->getMessage());
+        // No dejar un apartado fantasma
+        $apartado->update(['stripe_payment_status' => 'fallido', 'estado' => 'cancelado']);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'No se pudo iniciar el pago. Intenta de nuevo en unos minutos.',
+        ], 502);
+    }
+
+    // Solo si el cobro se creó bien, se oculta el producto
+    $producto->visible = 0;
+    $producto->save();
+
+    if ($producto->id_prenda) {
+        Prenda::where('id_prenda', $producto->id_prenda)->update(['estado' => 'Apartado']);
+    }
+
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'checkout_url' => $checkoutUrl,
+            'id_apartado'  => $apartado->id_apartado,
+            'anticipo'     => '$' . number_format($montoAnticipo, 2),
+        ],
+    ]);
+}
+
+/**
+ * Consulta a ImpulsaPay y, si el pago está confirmado y coincide con lo
+ * esperado, marca el apartado como pagado. Seguro de llamar varias veces.
+ */
+private function sincronizarPagoImpulsaPay(Apartado $apartado): void
+{
+    if ($apartado->metodo_pago !== 'impulsapay'
+        || !$apartado->impulsapay_pedido_id
+        || $apartado->stripe_payment_status !== 'pendiente') {
+        return;
+    }
+
+    try {
+        $estado = app(ImpulsaPayService::class)->estado((int) $apartado->impulsapay_pedido_id);
+    } catch (\Throwable $e) {
+        Log::warning('No se pudo consultar ImpulsaPay: ' . $e->getMessage());
+        return;
+    }
+
+    if (($estado['status'] ?? null) !== 'pagado') {
+        return;
+    }
+
+    // Validar que el pago corresponde a ESTE apartado y a ESTE monto
+    $refEsperada = 'apartado-' . $apartado->id_apartado;
+    $montoOk = abs((float) ($estado['monto'] ?? 0) - (float) $apartado->monto_anticipo) < 0.01;
+
+    if (($estado['referencia_externa'] ?? null) !== $refEsperada || !$montoOk) {
+        Log::error('ImpulsaPay: pago no coincide con el apartado', [
+            'id_apartado' => $apartado->id_apartado,
+            'respuesta'   => $estado,
+        ]);
+        return;
+    }
+
+    DB::transaction(function () use ($apartado) {
+        $a = Apartado::where('id_apartado', $apartado->id_apartado)->lockForUpdate()->first();
+        if ($a && $a->stripe_payment_status === 'pendiente') {
+            $a->update(['stripe_payment_status' => 'pagado']);
+            Log::info('Apartado pagado vía ImpulsaPay: id_apartado=' . $a->id_apartado);
+        }
+    });
+}
+
+/**
+ * GET /api/tienda/apartados/{id}/verificar-pago
+ */
+public function verificarPago(Request $request, $id)
+{
+    $cliente = Cliente::where('id_usuario', $request->user()->id_usuario)->first();
+
+    $apartado = $cliente
+        ? Apartado::where('id_apartado', $id)->where('id_cliente', $cliente->id_cliente)->first()
+        : null;
+
+    if (!$apartado) {
+        return response()->json(['success' => false, 'message' => 'Apartado no encontrado'], 404);
+    }
+
+    $this->sincronizarPagoImpulsaPay($apartado);
+    $apartado->refresh();
+
+    return response()->json([
+        'success' => true,
+        'data' => ['estadoPago' => $apartado->stripe_payment_status],
+    ]);
+}
+
     /**
      * Apartados del cliente autenticado (pendientes de pago o ya pagados)
      * GET /api/tienda/apartados
@@ -324,6 +458,10 @@ class OpheliaTiendaController extends Controller
                 ->with('producto.prenda')
                 ->orderBy('fecha_apartado', 'desc')
                 ->get();
+
+                foreach ($apartados as $a) {
+                    $this->sincronizarPagoImpulsaPay($a);
+                }
 
             $imagenesPorPrenda = $this->cargarImagenes(
                 $apartados->map(fn ($a) => $a->producto?->id_prenda)->filter()->unique()->values()

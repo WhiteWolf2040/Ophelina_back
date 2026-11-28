@@ -17,7 +17,7 @@ use App\Http\Controllers\API\TiendaController;
 use App\Http\Controllers\API\ReportesController;
 use App\Http\Controllers\API\ConfiguracionEmpresaController;
 use App\Http\Controllers\API\PrendaController;
-
+use App\Http\Controllers\API\SupersetController;
 //  NUEVOS IMPORTS PARA CLIENTE
 use App\Http\Controllers\API\OpheliaHomeController;
 use App\Http\Controllers\API\NotificacionController;
@@ -190,7 +190,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     Route::get('/metabase/token', [MetabaseController::class, 'token']);
-
+    Route::get('/superset/token', [SupersetController::class, 'token']);
     /*
     ==========================
     NOTIFICACIONES (CLIENTE)
@@ -242,6 +242,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('tienda')->group(function () {
         Route::post('/productos/{id}/apartar', [OpheliaTiendaController::class, 'apartar']);
         Route::get('/apartados', [OpheliaTiendaController::class, 'misApartados']);
+        Route::get('/apartados/{id}/verificar-pago', [OpheliaTiendaController::class, 'verificarPago']);
     });
 
     /*

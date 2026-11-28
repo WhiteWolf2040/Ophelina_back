@@ -68,4 +68,18 @@ return [
     'cancel_url' => env('STRIPE_CANCEL_URL', 'https://ophelina-front.vercel.app/planes')
     ],
 
+    'impulsapay' => [
+    'activo'     => env('IMPULSAPAY_ACTIVO', false),
+    'url'        => env('IMPULSAPAY_URL'),
+    'key'        => env('IMPULSAPAY_API_KEY'),
+    'return_url' => env('IMPULSAPAY_RETURN_URL'),
+],
+
+    'superset' => [
+    'url'       => env('SUPERSET_URL'),
+    'username'  => env('SUPERSET_USERNAME'),
+    'password'  => env('SUPERSET_PASSWORD'),
+    'dashboard' => env('SUPERSET_DASHBOARD_UUID'),
+],
+
 ];
