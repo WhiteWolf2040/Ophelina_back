@@ -338,7 +338,8 @@ class OpheliaTiendaController extends Controller
         $apartado->update(['impulsapay_pedido_id' => $pedidoId]);
 
         $pago = $ip->crearPago($pedidoId, config('services.impulsapay.return_url'));
-        $checkoutUrl = $pago['checkout_url'] ?? null;
+        $checkoutUrl = $pago['checkout_url']
+         ?? ('https://fluxpay-frontend-dun.vercel.app/pagar-pedido-externo?pedido_id=' . $pedidoId);
         if (!$checkoutUrl) {
             throw new \RuntimeException('ImpulsaPay no devolvió checkout_url');
         }
